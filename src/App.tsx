@@ -297,7 +297,7 @@ export default function App() {
         }
 
         // Restore contact sidebar visibility
-        const savedContactSidebar = await getSetting("contact_sidebar_visible");
+        const savedContactSidebar = await getSetting("details_pane_visible");
         if (savedContactSidebar === "false") {
           ui.setContactSidebarVisible(false);
         }
@@ -677,7 +677,7 @@ export default function App() {
   }
 
   return (
-    <div className="app-workspace relative m-3 flex h-[calc(100vh-1.5rem)] flex-col overflow-hidden rounded-[1.75rem] text-text-primary">
+    <div className="app-workspace relative m-2 flex h-[calc(100vh-1rem)] flex-col overflow-hidden rounded-[1.25rem] text-text-primary">
       <OfflineBanner />
       <ToastHost />
       <DndProvider>

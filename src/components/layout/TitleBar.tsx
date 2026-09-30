@@ -29,18 +29,22 @@ export function WindowControls() {
   return (
     <div
       data-tauri-drag-region
-      className="flex h-9 items-center justify-center gap-2 select-none"
+      className={`flex h-9 items-center justify-center gap-2 select-none ${isMac ? "w-[4.5rem]" : ""}`}
       aria-label="Window controls"
     >
-      <button onClick={handleClose} title="Close" className="window-light window-light-close" aria-label="Close window">
-        <X size={9} />
-      </button>
-      <button onClick={handleMinimize} title="Minimize" className="window-light window-light-minimize" aria-label="Minimize window">
-        <Minus size={9} />
-      </button>
-      <button onClick={handleMaximize} title={maximized ? "Restore" : "Maximize"} className="window-light window-light-maximize" aria-label={maximized ? "Restore window" : "Maximize window"}>
-        {maximized ? <Copy size={8} /> : <Square size={8} />}
-      </button>
+      {!isMac && (
+        <>
+          <button onClick={handleClose} title="Close" className="window-light window-light-close" aria-label="Close window">
+            <X size={9} />
+          </button>
+          <button onClick={handleMinimize} title="Minimize" className="window-light window-light-minimize" aria-label="Minimize window">
+            <Minus size={9} />
+          </button>
+          <button onClick={handleMaximize} title={maximized ? "Restore" : "Maximize"} className="window-light window-light-maximize" aria-label={maximized ? "Restore window" : "Maximize window"}>
+            {maximized ? <Copy size={8} /> : <Square size={8} />}
+          </button>
+        </>
+      )}
       {!isMac && (
         <span className="ml-1 text-[0.625rem] font-medium text-text-tertiary">sndmail</span>
       )}

@@ -25,6 +25,20 @@ import { quickLookAttachments } from "@/services/attachments/attachmentActions";
 import type { DbAttachment } from "@/services/db/attachments";
 import { useTimeFormat } from "@/hooks/useTimeFormat";
 
+export function DetailsPlaceholder({ onClose }: { onClose: () => void }) {
+  return (
+    <aside className="absolute right-0 top-0 bottom-0 z-20 flex w-[15rem] h-full shrink-0 flex-col border-l border-border-secondary bg-bg-primary shadow-lg @[640px]:relative @[640px]:z-auto @[640px]:shadow-none">
+      <div className="flex h-12 items-center justify-between border-b border-border-secondary px-3">
+        <h2 className="text-xs font-semibold text-text-primary">Details</h2>
+        <button onClick={onClose} aria-label="Hide details" className="toolbar-icon-button h-7 w-7">
+          <X size={14} />
+        </button>
+      </div>
+      <p className="px-3 py-4 text-xs leading-5 text-text-tertiary">Select a conversation to see contact details.</p>
+    </aside>
+  );
+}
+
 /** Shared-files rows come from the contacts query; the attachment tools want the attachments-table shape. */
 function toDbAttachment(att: ContactAttachment): DbAttachment {
   return {
@@ -223,8 +237,8 @@ export function ContactSidebar({ email, name, accountId, threadId, ownAddresses,
   const domain = email.includes("@") ? email.split("@")[1] : null;
 
   return (
-    <div className="w-72 h-full border-l border-border-primary bg-bg-secondary overflow-y-auto shrink-0">
-      <div className="p-4">
+    <div className="w-[15rem] h-full border-l border-border-secondary bg-bg-primary overflow-y-auto shrink-0">
+      <div className="p-3">
         {/* Pin state + close */}
         <div className="flex items-center justify-between gap-2 -mt-1 -mr-1 mb-1 min-h-[1.5rem]">
           {isPinned ? (

@@ -37,12 +37,24 @@ function ResizableEmailLayout() {
     document.body.style.userSelect = "none";
   }, [emailListWidth, setEmailListWidth]);
 
+  const handleResizeKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    e.preventDefault();
+    const delta = e.key === "ArrowLeft" ? -16 : 16;
+    setEmailListWidth(Math.min(800, Math.max(240, emailListWidth + delta)));
+  }, [emailListWidth, setEmailListWidth]);
+
   return (
-    <div ref={containerRef} className="workspace-canvas flex flex-1 min-w-0 flex-row gap-2 p-2 pt-0">
+    <div ref={containerRef} className="workspace-canvas flex flex-1 min-w-0 flex-row">
       <EmailList width={emailListWidth} listRef={listRef} />
       <div
         onMouseDown={handleMouseDown}
-        className="w-1 cursor-col-resize rounded-full bg-transparent hover:bg-accent/35 active:bg-accent transition-colors shrink-0 my-8"
+        onKeyDown={handleResizeKeyDown}
+        tabIndex={0}
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize message list"
+        className="w-1 cursor-col-resize bg-transparent hover:bg-border-primary active:bg-text-tertiary transition-colors shrink-0"
       />
       <ReadingPane />
     </div>
@@ -61,7 +73,7 @@ export function MailLayout() {
   }
 
   return (
-    <div className={`workspace-canvas flex flex-1 min-w-0 gap-2 p-2 pt-0 ${readingPanePosition === "bottom" ? "flex-col" : "flex-row"}`}>
+    <div className={`workspace-canvas flex flex-1 min-w-0 ${readingPanePosition === "bottom" ? "flex-col" : "flex-row"}`}>
       <ErrorBoundary name="EmailList">
         <EmailList />
       </ErrorBoundary>

@@ -20,8 +20,10 @@
         "minHeight": 600,
         "resizable": true,
         "fullscreen": false,
-        "decorations": false,
+        "decorations": true,
         "transparent": true,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
         "visible": false,
         "dragDropEnabled": false
       },
@@ -59,7 +61,7 @@
       "files": {
         "Helpers/SndmailWorker.app": "binaries/SndmailWorker.app"
       },
-      "bundleVersion": "012"
+      "bundleVersion": "013"
     },
     "resources": {
       "../LICENSE": "LICENSE",

@@ -35,8 +35,8 @@
   --glass-highlight: inset 0 1px 0 0 rgba(255, 255, 255, 0.4);
   --backdrop-blur-overlay: 16px;
 
-  /* Flat window surface the translucent panel tokens sit on */
-  --color-app-bg: #eee9e2;
+  /* Neutral window canvas behind the rounded mail surfaces. */
+  --color-app-bg: #f4f4f5;
 }
 
 @custom-variant dark (&:where(.dark, .dark *));
@@ -100,36 +100,39 @@ body {
   overflow: hidden;
 }
 
-/* Workspace surfaces give the mail tri-pane layout a softer, deliberately
-   separated feel without changing its data or navigation model. */
+/* One compact, rounded mail workspace with a narrow rail and shared surfaces. */
 .workspace-canvas {
-  background: transparent;
+  background: var(--color-bg-primary);
 }
 
 .workspace-panel {
+  background: var(--color-bg-primary);
   border: 0;
-  border-radius: 1.45rem;
-  box-shadow: 0 12px 34px rgba(19, 25, 33, 0.13), var(--glass-highlight);
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .reference-sidebar {
   position: relative;
   z-index: 1;
-  --color-sidebar-text: #eef0f7;
-  --color-sidebar-hover: rgba(255, 255, 255, 0.09);
-  --color-sidebar-active: #a5b4fc;
+  --color-sidebar-text: #52525b;
+  --color-sidebar-hover: rgba(24, 24, 27, 0.06);
+  --color-sidebar-active: var(--color-accent);
+  border-right: 1px solid var(--color-border-secondary);
   box-shadow: none;
 }
 
 .canvas-shell {
-  background: color-mix(in srgb, #343c47 82%, var(--color-accent));
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border-secondary);
+  border-radius: 1rem;
   box-shadow: none;
 }
 
 .canvas-nav {
-  --color-sidebar-text: #eef0f7;
-  --color-sidebar-hover: rgba(255, 255, 255, 0.09);
-  --color-sidebar-active: #a5b4fc;
+  --color-sidebar-text: #52525b;
+  --color-sidebar-hover: rgba(24, 24, 27, 0.06);
+  --color-sidebar-active: var(--color-accent);
 }
 
 .canvas-nav > div > div {
@@ -137,18 +140,18 @@ body {
 }
 
 .canvas-nav > div > div > button {
-  color: #eef0f7;
+  color: #52525b;
 }
 
 .app-workspace {
-  background: color-mix(in srgb, #343c47 82%, var(--color-accent));
-  box-shadow: 0 20px 60px rgba(9, 13, 18, 0.28);
+  background: var(--color-app-bg);
+  box-shadow: none;
 }
 
 .workspace-toolbar {
-  --color-sidebar-text: #eef0f7;
-  --color-sidebar-hover: rgba(255, 255, 255, 0.09);
-  background: color-mix(in srgb, #343c47 82%, var(--color-accent));
+  --color-sidebar-text: #52525b;
+  --color-sidebar-hover: rgba(24, 24, 27, 0.06);
+  background: transparent;
   box-shadow: none;
 }
 
@@ -158,15 +161,14 @@ body {
 
 .toolbar-compose {
   color: #fff;
-  background: var(--color-accent);
-  box-shadow: 0 8px 18px color-mix(in srgb, var(--color-accent) 28%, transparent);
+  background: #27272a;
+  box-shadow: none;
 }
 
-.toolbar-compose:hover { background: var(--color-accent-hover); }
+.toolbar-compose:hover { background: #3f3f46; }
 
-/* Dark themes use deliberately bright accents. Dark ink keeps every selected
-   primary color readable when it is used as a control on the dark shell. */
-.dark .toolbar-compose { color: #18202c; }
+.dark .toolbar-compose { color: #18181b; background: #e4e4e7; }
+.dark .toolbar-compose:hover { background: #d4d4d8; }
 
 .toolbar-icon-button {
   display: inline-flex;
@@ -175,11 +177,11 @@ body {
   align-items: center;
   justify-content: center;
   border-radius: 0.7rem;
-  color: rgba(238, 240, 247, 0.72);
+  color: var(--color-text-secondary);
   transition: background 150ms ease, color 150ms ease;
 }
 
-.toolbar-icon-button:hover { background: rgba(255, 255, 255, 0.09); color: #fff; }
+.toolbar-icon-button:hover { background: var(--color-bg-hover); color: var(--color-text-primary); }
 .toolbar-icon-button:disabled { cursor: default; opacity: 0.32; }
 
 .workspace-toolbar .relative.p-2 { padding: 0; }
@@ -206,47 +208,37 @@ body {
 .window-light-minimize { background: #febc2e; }
 .window-light-maximize { background: #28c840; }
 
-/* The message controls belong to the message, not a separate app header.
-   They stay available as a slim utility rail beside the paper-like reading
-   surface and yield the upper area back to the content. */
+/* Message actions live in a compact horizontal toolbar above the conversation. */
 .action-rail {
-  position: absolute;
-  inset: 1.1rem 0.7rem 1.1rem auto;
+  position: relative;
   z-index: 10;
-  width: 2.5rem;
-  flex-direction: column;
-  overflow-y: auto;
-  border-radius: 1.25rem;
-  padding: 0.45rem 0.25rem;
-  scrollbar-width: none;
+  min-height: 2.75rem;
+  flex-direction: row;
+  padding: 0.35rem 0.75rem;
+  border-bottom: 1px solid var(--color-border-secondary);
+  background: var(--color-bg-primary);
 }
 
 .action-rail::-webkit-scrollbar { display: none; }
 
 .action-rail > div {
-  flex-direction: column;
+  flex-direction: row;
 }
 
 .action-rail button {
-  border-radius: 0.75rem;
+  border-radius: 0.55rem;
 }
 
 @media (max-width: 760px) {
   .action-rail {
-    position: static;
-    width: auto;
-    flex-direction: row;
     overflow-x: auto;
     overflow-y: hidden;
-    padding: 0.5rem 0.75rem;
   }
 
-  .action-rail > div { flex-direction: row; }
-  .action-rail .mt-auto { margin-top: 0; margin-left: auto; }
 }
 
 .reference-sidebar button {
-  border-radius: 0.85rem;
+  border-radius: 0.65rem;
 }
 
 .reference-sidebar nav {
@@ -258,13 +250,16 @@ body {
   margin-bottom: 0.2rem;
 }
 
-.reference-sidebar nav > div > button:where(.bg-accent\/10),
-.reference-sidebar nav > button:where(.bg-accent\/10) {
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-accent) 9%, transparent);
+.dark .reference-sidebar,
+.dark .canvas-nav,
+.dark .workspace-toolbar {
+  --color-sidebar-text: #cbd5e1;
+  --color-sidebar-hover: rgba(255, 255, 255, 0.07);
+  --color-sidebar-active: var(--color-accent);
 }
 
-.dark .workspace-panel {
-  border-color: var(--color-border-primary);
+.dark .canvas-shell {
+  border-color: var(--color-border-secondary);
 }
 
 .task-row:hover {

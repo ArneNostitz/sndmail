@@ -1,8 +1,6 @@
 import { memo, useMemo } from "react";
 import { useDraggable } from "@dnd-kit/core";
 import type { Thread } from "@/stores/threadStore";
-import { useAccountStore } from "@/stores/accountStore";
-import { accountColor } from "@/constants/accountColors";
 import { useThreadStore } from "@/stores/threadStore";
 import { useUIStore } from "@/stores/uiStore";
 import { useActiveLabel } from "@/hooks/useRouteNavigation";
@@ -53,16 +51,6 @@ export const ThreadCard = memo(function ThreadCard({ thread, isSelected, onClick
   const toggleThreadSelection = useThreadStore((s) => s.toggleThreadSelection);
   const selectThreadRange = useThreadStore((s) => s.selectThreadRange);
   const activeLabel = useActiveLabel();
-  // Only in the unified list is it ambiguous which mailbox a thread came from
-  const unifiedInbox = useAccountStore((s) => s.unifiedInbox);
-  const accounts = useAccountStore((s) => s.accounts);
-  const threadAccountIndex = unifiedInbox
-    ? accounts.findIndex((a) => a.id === thread.accountId)
-    : -1;
-  const threadAccount = threadAccountIndex >= 0 ? accounts[threadAccountIndex] : undefined;
-  const threadAccountColor = threadAccount
-    ? accountColor(threadAccount.color, threadAccountIndex)
-    : null;
   const emailDensity = useUIStore((s) => s.emailDensity);
   // Repaint when the 12/24-hour preference changes
   useTimeFormat();
@@ -118,40 +106,31 @@ export const ThreadCard = memo(function ThreadCard({ thread, isSelected, onClick
       onContextMenu={handleContextMenu}
       aria-label={`${thread.isRead ? "" : "Unread "}email from ${thread.fromName ?? thread.fromAddress ?? "Unknown"}: ${thread.subject ?? "(No subject)"}`}
       aria-selected={isSelected}
-      className={`relative mx-2 mb-1.5 w-[calc(100%-1rem)] overflow-hidden rounded-xl border border-transparent text-left group hover-lift press-scale transition-[background-color,box-shadow,transform,border-color] duration-200 ${
+      className={`relative w-full border-b border-border-secondary px-3 text-left transition-colors duration-150 ${
         isRemoving ? "thread-exit " : ""
       }${
-        emailDensity === "compact" ? "px-3 py-1.5" : emailDensity === "spacious" ? "px-4 py-4" : "px-4 py-3"
+        emailDensity === "compact" ? "py-1.5" : emailDensity === "spacious" ? "py-2.5" : "py-2"
       } ${
         isDragging
           ? "opacity-50"
           : isMultiSelected
-            ? "bg-accent/10 border-accent/10"
+            ? "bg-bg-tertiary"
             : isSelected
-              ? "bg-bg-selected border-accent/10 shadow-[0_8px_20px_rgba(79,70,229,0.08)]"
-              : "bg-white/30 hover:bg-white/75 hover:border-white/80 hover:shadow-[0_5px_16px_rgba(80,66,50,0.06)] dark:bg-white/[0.02] dark:hover:bg-white/[0.06]"
+              ? "bg-bg-tertiary"
+              : "bg-bg-primary hover:bg-bg-hover"
       } ${isSpam ? "bg-red-500/8 dark:bg-red-500/10" : ""}`}
     >
-      {/* Which mailbox this belongs to — only ambiguous in the unified list */}
-      {threadAccount && threadAccountColor && (
-        <span
-          className="absolute left-0 top-0 bottom-0 w-1"
-          style={{ backgroundColor: threadAccountColor.hex }}
-          title={threadAccount.email}
-        />
-      )}
-
-      <div className="flex items-start gap-3">
+      <div className="flex items-start gap-2">
         {/* Avatar (sender photo → domain logo → initial); unread is a ring
             around it plus a dot below, so the avatar itself never changes.
             The column stretches to the row's height so the dot can sit in the
             space under the avatar rather than hanging off its edge. */}
-        <div className="flex flex-col items-center self-stretch shrink-0">
+        <div className="flex items-center self-start shrink-0 pt-0.5">
           {isMultiSelected ? (
-            <div
-              className={`rounded-full flex items-center justify-center font-medium text-white bg-accent ${
-                emailDensity === "compact" ? "w-7 h-7 text-xs" : emailDensity === "spacious" ? "w-10 h-10 text-sm" : "w-9 h-9 text-sm"
-              }`}
+              <div
+                className={`rounded-full flex items-center justify-center font-medium text-text-secondary bg-bg-tertiary ${
+                  emailDensity === "compact" ? "w-7 h-7 text-xs" : "w-7 h-7 text-xs"
+                }`}
             >
               <Check size={emailDensity === "compact" ? 14 : 16} />
             </div>
@@ -159,21 +138,8 @@ export const ThreadCard = memo(function ThreadCard({ thread, isSelected, onClick
             <SenderAvatar
               email={thread.fromAddress}
               name={thread.fromName}
-              className={`${
-                emailDensity === "compact" ? "w-7 h-7 text-xs" : emailDensity === "spacious" ? "w-10 h-10 text-sm" : "w-9 h-9 text-sm"
-              } ${
-                // Unread rings the avatar rather than recolouring it: a photo or
-                // a company logo cannot be tinted, so only the ring is a mark
-                // every sender can carry. Offset transparent so the row's own
-                // background — hover, selected, spam — shows through the gap.
-                thread.isRead ? "" : "ring-2 ring-accent ring-offset-1 ring-offset-transparent"
-              }`}
+              className="w-7 h-7 text-xs"
             />
-          )}
-          {!thread.isRead && !isMultiSelected && (
-            <div aria-hidden="true" className="flex-1 flex items-center">
-              <span className="w-1.5 h-1.5 rounded-full bg-accent" />
-            </div>
           )}
         </div>
 
@@ -182,12 +148,13 @@ export const ThreadCard = memo(function ThreadCard({ thread, isSelected, onClick
           {/* First row: sender + date */}
           <div className="flex items-center justify-between gap-2">
             <span
-              className={`text-sm truncate ${
+              className={`text-[0.8125rem] truncate ${
                 thread.isRead
                   ? "text-text-secondary"
                   : "font-semibold text-text-primary"
               }`}
             >
+              {!thread.isRead && <span aria-hidden="true" className="inline-block w-1.5 h-1.5 mr-1.5 rounded-full bg-text-tertiary align-middle" />}
               <HighlightedText
                 text={thread.fromName ?? thread.fromAddress ?? "Unknown"}
                 terms={highlightTerms}
@@ -213,7 +180,7 @@ export const ThreadCard = memo(function ThreadCard({ thread, isSelected, onClick
 
           {/* Subject */}
           <div
-            className={`text-sm truncate mt-0.5 ${
+            className={`text-[0.8125rem] truncate mt-0.5 ${
               thread.isRead ? "text-text-secondary" : "text-text-primary"
             }`}
           >
@@ -225,12 +192,12 @@ export const ThreadCard = memo(function ThreadCard({ thread, isSelected, onClick
 
           {/* Snippet + indicators */}
           <div className={`flex items-center gap-1.5 mt-0.5 ${emailDensity === "compact" ? "hidden" : ""}`}>
-            <span className="text-xs text-text-tertiary truncate flex-1">
+            <span className="text-[0.6875rem] text-text-tertiary truncate flex-1">
               {/* Who spoke last — a thread waiting on them reads differently
                   from one waiting on you */}
               {searchExcerpt == null && thread.lastFromMe && (
                 <span
-                  className="mr-1 px-1 py-px bg-blue-500/15 text-blue-600 dark:text-blue-300 font-medium align-baseline"
+                  className="mr-1 px-1 py-px bg-bg-tertiary text-text-secondary font-medium align-baseline"
                   style={{ borderRadius: "5px" }}
                   title="You sent the last message"
                 >

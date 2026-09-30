@@ -23,7 +23,7 @@ import { PastConversations } from "./PastConversations";
 import { useOwnAddresses } from "@/hooks/useOwnAddresses";
 import { SmartReplySuggestions } from "./SmartReplySuggestions";
 import { InlineReply } from "./InlineReply";
-import { ContactSidebar } from "./ContactSidebar";
+import { ContactSidebar, DetailsPlaceholder } from "./ContactSidebar";
 import { TaskSidebar } from "@/components/tasks/TaskSidebar";
 import { AiTaskExtractDialog } from "@/components/tasks/AiTaskExtractDialog";
 import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
@@ -525,8 +525,8 @@ export function ThreadView({ thread }: ThreadViewProps) {
   const peerName = pinnedPeer?.name ?? (peerMessage ? peerMessage.from_name : null);
 
   return (
-    <div className="flex h-full @container relative">
-      <div className="flex flex-col flex-1 min-w-0 pr-16">
+    <div className="flex h-full w-full min-w-0 flex-1 @container relative">
+      <div className="flex flex-col flex-1 min-w-0">
         {/* Unified action bar */}
         <ActionBar
           thread={thread}
@@ -576,8 +576,8 @@ export function ThreadView({ thread }: ThreadViewProps) {
         )}
 
         {/* Thread subject */}
-        <div className="px-10 py-8 bg-gradient-to-br from-white/55 to-transparent dark:from-white/[0.02]">
-          <h1 className="font-serif text-3xl font-semibold tracking-[-0.025em] text-text-primary flex items-center gap-2">
+        <div className="px-5 py-4 border-b border-border-secondary">
+          <h1 className="text-xl font-semibold tracking-tight text-text-primary flex items-center gap-2">
             {thread.subject ?? "(No subject)"}
             {thread.isMuted && (
               <span className="text-warning shrink-0" title="Muted">
@@ -585,7 +585,7 @@ export function ThreadView({ thread }: ThreadViewProps) {
               </span>
             )}
           </h1>
-          <div className="text-xs text-text-tertiary mt-2">
+          <div className="text-xs text-text-tertiary mt-1">
             {messages.length} message{messages.length !== 1 ? "s" : ""} in this thread
           </div>
         </div>
@@ -696,6 +696,9 @@ export function ThreadView({ thread }: ThreadViewProps) {
             />
           </div>
         </>
+      )}
+      {contactSidebarVisible && (!peerAddress || !threadAccountId) && (
+        <DetailsPlaceholder onClose={toggleContactSidebar} />
       )}
 
       {/* Task companion — a gentle overlay in compact spaces and part of the

@@ -14,18 +14,28 @@ export function ResizableDetailsPane({ children }: ResizableDetailsPaneProps) {
     event.preventDefault();
     const startX = event.clientX;
     const startWidth = paneRef.current?.offsetWidth ?? width;
+    let latestX = startX;
+    let frame = 0;
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
-      const nextWidth = Math.min(400, Math.max(200, startWidth + startX - moveEvent.clientX));
-      if (paneRef.current) paneRef.current.style.width = `${nextWidth}px`;
+      latestX = moveEvent.clientX;
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        const nextWidth = Math.min(400, Math.max(200, startWidth + startX - latestX));
+        if (paneRef.current) paneRef.current.style.width = `${nextWidth}px`;
+      });
     };
 
     const handleMouseUp = (upEvent: MouseEvent) => {
       document.removeEventListener("mousemove", handleMouseMove);
       document.removeEventListener("mouseup", handleMouseUp);
+      if (frame) cancelAnimationFrame(frame);
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
-      setWidth(Math.min(400, Math.max(200, startWidth + startX - upEvent.clientX)));
+      const nextWidth = Math.min(400, Math.max(200, startWidth + startX - upEvent.clientX));
+      if (paneRef.current) paneRef.current.style.width = `${nextWidth}px`;
+      setWidth(nextWidth);
     };
 
     document.addEventListener("mousemove", handleMouseMove);
@@ -45,7 +55,12 @@ export function ResizableDetailsPane({ children }: ResizableDetailsPaneProps) {
   }, [setWidth, width]);
 
   return (
-    <div className="absolute inset-y-0 right-0 z-20 flex h-full shrink-0 shadow-xl @[640px]:relative @[640px]:inset-auto @[640px]:z-auto @[640px]:shadow-none">
+    <div
+      ref={paneRef}
+      id="details-pane"
+      style={{ width }}
+      className="group absolute inset-y-0 right-0 z-20 h-full shrink-0 border-l border-border-secondary bg-bg-primary shadow-xl group-hover:border-l-text-tertiary @[640px]:relative @[640px]:inset-auto @[640px]:z-auto @[640px]:shadow-none"
+    >
       <div
         role="separator"
         aria-orientation="vertical"
@@ -56,16 +71,9 @@ export function ResizableDetailsPane({ children }: ResizableDetailsPaneProps) {
         tabIndex={0}
         onMouseDown={handleMouseDown}
         onKeyDown={handleKeyDown}
-        className="group flex w-2 shrink-0 cursor-col-resize items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-text-tertiary"
-      >
-        <span className="h-full w-px bg-transparent transition-colors group-hover:bg-border-primary group-active:bg-text-tertiary" />
-      </div>
-      <div
-        ref={paneRef}
-        id="details-pane"
-        style={{ width }}
-        className="h-full min-w-0 shrink-0 overflow-hidden border-l border-border-secondary bg-bg-primary"
-      >
+        className="absolute inset-y-0 left-[-8.5px] z-10 flex w-4 cursor-col-resize items-stretch justify-center bg-transparent outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-text-tertiary"
+      />
+      <div className="h-full w-full min-w-0 overflow-hidden">
         {children}
       </div>
     </div>

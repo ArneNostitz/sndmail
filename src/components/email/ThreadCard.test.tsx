@@ -30,6 +30,19 @@ vi.mock("@/stores/uiStore", () => ({
     selector({ emailDensity: "default" }),
 }));
 
+vi.mock("@/stores/accountStore", () => ({
+  useAccountStore: (selector: (s: Record<string, unknown>) => unknown) =>
+    selector({
+      accounts: [{
+        id: "a1",
+        email: "inbox@example.com",
+        displayName: "Work",
+        avatarUrl: null,
+        color: "emerald",
+      }],
+    }),
+}));
+
 vi.mock("@/hooks/useRouteNavigation", () => ({
   useActiveLabel: () => "inbox",
 }));
@@ -70,6 +83,11 @@ describe("ThreadCard", () => {
     render(<ThreadCard thread={makeThread()} isSelected={false} onClick={onClick} />);
     expect(screen.getByText("Alice")).toBeInTheDocument();
     expect(screen.getByText("Test subject")).toBeInTheDocument();
+  });
+
+  it("shows the account that received the message beside its timestamp", () => {
+    render(<ThreadCard thread={makeThread()} isSelected={false} onClick={onClick} />);
+    expect(screen.getByLabelText("Received by Work")).toBeInTheDocument();
   });
 
   it("replaces the latest snippet with the matching line and highlights it", () => {

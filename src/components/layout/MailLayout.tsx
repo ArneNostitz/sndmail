@@ -7,27 +7,34 @@ import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 function ResizableEmailLayout() {
   const emailListWidth = useUIStore((s) => s.emailListWidth);
   const setEmailListWidth = useUIStore((s) => s.setEmailListWidth);
-  const containerRef = useRef<HTMLDivElement | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     const startX = e.clientX;
     const startWidth = listRef.current?.offsetWidth ?? emailListWidth;
+    let latestX = startX;
+    let frame = 0;
 
     const handleMouseMove = (ev: MouseEvent) => {
-      const delta = ev.clientX - startX;
-      const newWidth = Math.min(800, Math.max(240, startWidth + delta));
-      if (listRef.current) listRef.current.style.width = `${newWidth}px`;
+      latestX = ev.clientX;
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        const next = Math.min(800, Math.max(240, startWidth + latestX - startX));
+        if (listRef.current) listRef.current.style.width = `${next}px`;
+      });
     };
 
     const handleMouseUp = (ev: MouseEvent) => {
       document.removeEventListener("mousemove", handleMouseMove);
       document.removeEventListener("mouseup", handleMouseUp);
+      if (frame) cancelAnimationFrame(frame);
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
       const delta = ev.clientX - startX;
       const finalWidth = Math.min(800, Math.max(240, startWidth + delta));
+      if (listRef.current) listRef.current.style.width = `${finalWidth}px`;
       setEmailListWidth(finalWidth);
     };
 
@@ -45,7 +52,7 @@ function ResizableEmailLayout() {
   }, [emailListWidth, setEmailListWidth]);
 
   return (
-    <div ref={containerRef} className="workspace-canvas flex flex-1 min-w-0 flex-row">
+    <div className="workspace-canvas relative flex flex-1 min-w-0 flex-row">
       <EmailList width={emailListWidth} listRef={listRef} />
       <div
         onMouseDown={handleMouseDown}
@@ -54,7 +61,8 @@ function ResizableEmailLayout() {
         role="separator"
         aria-orientation="vertical"
         aria-label="Resize message list"
-        className="w-1 cursor-col-resize bg-transparent hover:bg-border-primary active:bg-text-tertiary transition-colors shrink-0"
+        style={{ left: emailListWidth - 8.5 }}
+        className="absolute inset-y-0 z-10 flex w-4 cursor-col-resize items-stretch justify-center bg-transparent outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-text-tertiary"
       />
       <ReadingPane />
     </div>

@@ -136,7 +136,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         title: "Initial sync",
         summary: "First sync downloads your email history.",
         description:
-          "When you add a new account, the app performs an initial sync that downloads your last year of email (configurable). This builds a local database for fast offline search and browsing. Depending on your inbox size, this can take a few minutes. You can use the app normally while it runs. After that, Gmail push and IMAP IDLE notify Velo when something changes; Velo then fetches only the delta instead of polling every mailbox on a timer.",
+          "When you add a new account, the app performs an initial sync that downloads your last year of email (configurable). This builds a local database for fast offline search and browsing. Depending on your inbox size, this can take a few minutes. You can use the app normally while it runs. After that, Gmail push and IMAP IDLE notify sndmail when something changes; sndmail then fetches only the delta instead of polling every mailbox on a timer.",
         tips: [
           { text: "Change the sync period (30 days to 1 year) in Settings > Accounts." },
           { text: "The app is fully usable during the initial sync." },
@@ -216,8 +216,8 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         title: "Links to individual emails",
         summary: "Open a specific message from Raycast or another app.",
         description:
-          "Right-click a message and choose Copy Message Link to reference it from another app. Opening the link brings Velo forward, opens the correct mailbox and conversation, and expands the linked message. Copy Message IDs provides the account, thread, and message identifiers for integrations; links work only where that mail is available locally.",
-        tips: [{ text: "The receiving Mac needs a Velo version that supports velo:// links installed." }],
+          "Right-click a message and choose Copy Message Link to reference it from another app. Opening the link brings sndmail forward, opens the correct mailbox and conversation, and expands the linked message. Copy Message IDs provides the account, thread, and message identifiers for integrations; links work only where that mail is available locally.",
+        tips: [{ text: "Install sndmail to open sndmail:// links. Existing velo:// links remain supported." }],
       },
       {
         id: "thread-view",
@@ -462,7 +462,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         title: "Read receipts",
         summary: "Request and answer read confirmations.",
         description:
-          "Ask recipients to confirm when they open your email, using the standard read-receipt mechanism (MDN) that most mail clients understand. Toggle the request per message with the double-check icon in the composer footer, or turn it on for all messages in Settings. When a receipt comes back, your sent message shows an \"Opened\" badge — with a count when it was confirmed more than once. When someone requests a receipt from you, a banner appears on the opened message so you decide whether to answer — or set Velo to always or never send receipts. Note that receiving a receipt back always depends on the recipient's mail client and their choice.",
+          "Ask recipients to confirm when they open your email, using the standard read-receipt mechanism (MDN) that most mail clients understand. Toggle the request per message with the double-check icon in the composer footer, or turn it on for all messages in Settings. When a receipt comes back, your sent message shows an \"Opened\" badge — with a count when it was confirmed more than once. When someone requests a receipt from you, a banner appears on the opened message so you decide whether to answer — or set sndmail to always or never send receipts. Note that receiving a receipt back always depends on the recipient's mail client and their choice.",
         tips: [
           { text: "Click the double-check icon in the composer footer to request a receipt for that message." },
           { text: "Sent messages show an \"Opened\" badge once a receipt arrives; hover it for when." },
@@ -642,13 +642,13 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         title: "Filters & rules",
         summary: "Auto-sort incoming email by sender, subject, or content.",
         description:
-          "Create filter rules that automatically process incoming email. Set criteria (match by sender address, subject line, or message content) and assign actions (apply a label, archive, move to trash, star, or mark as read). Criteria use case-insensitive substring matching with AND logic — all criteria must match. When multiple filters match the same message, their actions are merged together. Filters run automatically on every new message during sync.",
+          "Create rules in Settings > Mail Rules to match sender, subject, or content and apply labels, archive, trash, star, or mark as read. Criteria use case-insensitive AND matching, and actions from matching rules combine. The background helper downloads mail while sndmail is closed; filters and other heavier processing run after you open the app.",
         tips: [
           { text: "Create filters in Settings > Mail Rules." },
           { text: "Criteria: match by From, Subject, or Content (AND logic)." },
           { text: "Actions: apply label, archive, trash, star, mark as read." },
           { text: "Multiple matching filters merge their actions." },
-          { text: "Filters run on every new message during background sync." },
+          { text: "Messages synced while sndmail is closed are filtered when you open the app." },
         ],
         relatedSettingsTab: "mail-rules",
       },
@@ -658,13 +658,13 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         title: "Smart labels",
         summary: "AI-powered auto-labeling using plain English descriptions.",
         description:
-          "Describe what emails should receive a label using natural language — for example, 'Job applications and career opportunities' — and AI automatically labels matching emails during every sync. You can also add optional traditional criteria (from, subject, etc.) for instant deterministic matching before the AI fallback. Smart labels support multi-label assignment, so a single thread can match several rules at once. Use the 'Apply to existing emails' button to backfill labels onto your current inbox.",
+          "Describe the mail a label should catch in plain language, then add ordinary criteria if you want a deterministic match before AI. Smart labels can apply several labels to one thread; use Apply to existing emails to label your current inbox. Messages synced while sndmail is closed are processed when you open the app.",
         tips: [
           { text: "Create smart labels in Settings > Mail Rules > Smart Labels." },
           { text: "Write a plain-English description of what the label should match." },
           { text: "Optional: add traditional criteria (from, subject) for instant matching without AI." },
           { text: "Click 'Apply to existing emails' to label your current inbox retroactively." },
-          { text: "Smart labels run automatically on every new email during sync." },
+          { text: "New mail is processed when the app is open; queued work waits until then." },
           { text: "Requires an active AI provider (Claude, GPT, or Gemini)." },
         ],
         relatedSettingsTab: "mail-rules",
@@ -831,12 +831,12 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         title: "Split inbox",
         summary: "Divide your inbox into category tabs.",
         description:
-          "Split inbox organizes your inbox into five category tabs: Primary, Updates, Promotions, Social, and Newsletters. Each tab shows only the threads belonging to that category, letting you focus on what matters. New emails are automatically categorized using AI (or rule-based fallback). Toggle split inbox from the icon next to Inbox in the sidebar. When split mode is off, all categories are shown together.",
+          "Split inbox organizes your inbox into five category tabs: Primary, Updates, Promotions, Social, and Newsletters. New mail is categorized by local rules and, when configured, AI as sndmail processes it. Toggle split inbox from the icon next to Inbox in the sidebar; when split mode is off, all categories appear together.",
         tips: [
           { text: "Toggle split inbox from the Columns icon next to Inbox in the sidebar." },
           { text: "Categories: Primary, Updates, Promotions, Social, Newsletters." },
-          { text: "AI auto-categorizes new emails during sync." },
-          { text: "Rule-based categorization runs first, AI fills in the rest." },
+          { text: "New mail is categorized when sndmail is open to process it." },
+          { text: "Rule-based categorization runs first; AI fills in the rest when configured." },
           { text: "You can auto-archive non-Primary categories in Settings." },
         ],
         relatedSettingsTab: "general",
@@ -1025,10 +1025,10 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         title: "Buttons on notifications",
         summary: "Reply, archive or copy a code straight from the notification.",
         description:
-          "On macOS a notification carries the actions that fit it: Reply and Archive on a new mail, Copy code and Open sign-in link on a login mail — each acting on the exact message it announced, even with several stacked up. macOS only shows a banner's buttons while you hover, so Velo asks for the Alerts style; change it under System Settings → Notifications → Velo. Windows and Linux draw no buttons on notifications, so there the same actions sit on Velo's in-app toast.",
+          "On macOS, notifications offer Reply and Archive or Copy code and Open sign-in link, depending on the message; Windows and Linux show these actions in sndmail's in-app toast. sndmail never copies a one-time code automatically: it reaches your clipboard only after you press Copy code, and each action applies to the message that raised the notification. Choose Alerts under System Settings → Notifications → sndmail to keep macOS buttons visible.",
         tips: [
           { text: "Settings > Notifications has a \"Send a test\" button — its Copy code really copies." },
-          { text: "Pick Alerts under System Settings > Notifications > Velo to keep the buttons visible without hovering." },
+          { text: "Pick Alerts under System Settings > Notifications > sndmail to keep the buttons visible without hovering." },
           { text: "Buttons need the installed app; a development build shows plain notifications." },
         ],
         relatedSettingsTab: "notifications",
@@ -1155,7 +1155,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         title: "Task manager",
         summary: "Full task management with priorities, due dates, and subtasks.",
         description:
-          "Velo includes a built-in task manager accessible from the sidebar or via the g then k shortcut. Create tasks with titles, descriptions, priorities (none, low, medium, high, urgent), due dates, and tags. Tasks can have one level of subtasks for breaking down complex items. Drag to reorder tasks, filter by status or priority, and group by priority, due date, or tag. Completed tasks can be shown or hidden. The task sidebar panel shows tasks linked to the current email thread.",
+          "sndmail includes a built-in task manager accessible from the sidebar or via the g then k shortcut. Create tasks with titles, descriptions, priorities (none, low, medium, high, urgent), due dates, and tags. Tasks can have one level of subtasks for breaking down complex items. Drag to reorder tasks, filter by status or priority, and group by priority, due date, or tag. Completed tasks can be shown or hidden. The task sidebar panel shows tasks linked to the current email thread.",
         tips: [
           { text: "Go to Tasks page", shortcut: "g k" },
           { text: "Open tasks from the Tasks item in the sidebar." },
@@ -1308,7 +1308,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         title: "Refresh mail & account tooltip",
         summary: "Force a sync from the account avatar or with F5.",
         description:
-          "Hover the account avatar at the top of the sidebar and it turns into a refresh button — click it to manually check every mailbox the current list shows. Normal delivery is automatic through Gmail push or IMAP IDLE, so Velo does not periodically refresh every account. The account tooltip shows live sync status; a spinning ring means work is in progress and turns red when it fails.",
+          "Hover the account avatar at the top of the sidebar and it turns into a refresh button — click it to manually check every mailbox the current list shows. Normal delivery is automatic through Gmail push or IMAP IDLE, so sndmail does not periodically refresh every account. The account tooltip shows live sync status; a spinning ring means work is in progress and turns red when it fails.",
         tips: [
           { text: "Refresh mail", shortcut: "F5" },
           { text: "Hover the avatar, then click the refresh icon to sync now." },
@@ -1336,16 +1336,45 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       {
         id: "system-tray",
         icon: Minimize2,
-        title: "System tray & autostart",
-        summary: "Minimize to tray and launch on startup.",
+        title: "System tray, autostart & background mail",
+        summary: "Control the app window and login-time mail sync.",
         description:
-          "When you close the app window, it minimizes to the system tray instead of quitting — the app stays running in the background, continuing to sync email and check for notifications. Click the tray icon to show the window again, right-click for a menu (show, check mail, quit). Enable autostart to launch the app automatically when your computer starts — it starts minimized to the tray so it's ready without cluttering your taskbar.",
+          "Closing the window hides sndmail in the tray; choose Quit to close the main app. On macOS, the Background mail helper starts at login and keeps syncing after you quit sndmail. Toggle it in Settings > General; changing the setting relaunches the app to transfer sync ownership.",
         tips: [
-          { text: "Closing the window minimizes to tray (doesn't quit)." },
-          { text: "Right-click the tray icon for: Show, Check Mail, Quit." },
-          { text: "Enable autostart in Settings > General." },
-          { text: "Autostart launches minimized — the app is ready in the background." },
-          { text: "The app continues syncing and notifying while in the tray." },
+          { text: "Right-click the tray icon to show the window, check mail, or quit sndmail." },
+          { text: "Background mail helper is enabled by default on macOS and starts at login." },
+          { text: "The helper keeps syncing after the main app quits; disable it in Settings > General." },
+          { text: "Changing helper ownership relaunches sndmail." },
+          { text: "Autostart launches the main app hidden; the background helper is separate." },
+        ],
+        relatedSettingsTab: "general",
+      },
+      {
+        id: "background-mail-helper",
+        icon: Server,
+        title: "Background mail helper",
+        summary: "Sync mail at login, even while sndmail is closed.",
+        description:
+          "On macOS, the helper starts at login and syncs mail without opening the sndmail window. Gmail push and IMAP IDLE can wake it sooner; a periodic catch-up checks for missed changes. Enable or disable the helper in Settings > General.",
+        tips: [
+          { text: "The helper is enabled by default on macOS." },
+          { text: "Changing the setting relaunches sndmail to transfer sync ownership." },
+          { text: "If the helper is unavailable or disabled, the open app handles mail sync." },
+        ],
+        relatedSettingsTab: "general",
+      },
+      {
+        id: "commonplace-relay",
+        icon: Shield,
+        title: "Commonplace mail relay",
+        summary: "Grant Commonplace access to one mailbox at a time.",
+        description:
+          "Settings > General > Commonplace mail relay creates a revocable grant for one selected mailbox. The default grant shares metadata only; reading message content and searching it require separate permission. Copy the token into Commonplace's credential storage when it appears, and revoke access from the same setting at any time.",
+        tips: [
+          { text: "Choose the mailbox that Commonplace may access." },
+          { text: "The token is shown once; store it in Commonplace's credential storage." },
+          { text: "Message content and search require separate permission." },
+          { text: "Revoke the grant in Settings > General whenever you want." },
         ],
         relatedSettingsTab: "general",
       },
@@ -1450,12 +1479,12 @@ export const CONTEXTUAL_TIPS: Record<string, ContextualTip> = {
   },
   "filters": {
     title: "Automatic filters",
-    body: "Filters run on every new message during sync. Criteria use AND logic, and when multiple filters match, their actions are merged.",
+    body: "Filters process messages when sndmail is open. Criteria use AND logic, and actions from matching rules are merged.",
     helpTopic: "organization",
   },
   "smart-labels": {
     title: "Smart labels",
-    body: "Describe what emails should get a label in plain English. AI auto-labels matching emails during sync. Optional criteria provide instant matching without AI.",
+    body: "Describe what emails should get a label in plain English. New messages are processed when sndmail is open; optional criteria provide deterministic matching before AI.",
     helpTopic: "organization",
   },
 };

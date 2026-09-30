@@ -24,7 +24,7 @@ import {
  *
  * Two backends. On a bundled macOS build the Rust side talks to
  * UNUserNotificationCenter: a category names the buttons, every notification
- * carries its own context, and a press comes back as `velo-notification-action`
+ * carries its own context, and a press comes back as `sndmail-notification-action`
  * with that context — so Reply opens the thread it was pressed on and Copy
  * code copies that code, however many notifications are stacked. Everywhere
  * else (Windows, Linux, and a bare `tauri dev` binary, which has no bundle for
@@ -191,7 +191,7 @@ export async function handleNativeAction(response: NativeNotificationResponse): 
         // mail is exactly the phishing vector, so it passes the same check a
         // click inside the message would
         await showAndFocusMainWindow();
-        window.dispatchEvent(new CustomEvent("velo-open-signin-link", {
+        window.dispatchEvent(new CustomEvent("sndmail-open-signin-link", {
           detail: { url: ctx.linkUrl, threadId: ctx.threadId, accountId: ctx.accountId },
         }));
         return;
@@ -334,7 +334,7 @@ export function queueNewEmailNotification(
         });
       }
     } else {
-      void show({ title: "Velo Pro", body: `${batch.length} new emails` });
+      void show({ title: "sndmail", body: `${batch.length} new emails` });
     }
   }, 2000);
 }
@@ -425,7 +425,7 @@ export function notifyOneTimeCode(opts: {
       title: opts.copied ? `Code copied: ${opts.code}` : `Code: ${opts.code}`,
       body: buttons
         ? `From ${opts.sender}`
-        : `From ${opts.sender} — ${opts.copied ? "ready to paste. " : ""}Sign-in link waiting in Velo`,
+        : `From ${opts.sender} — ${opts.copied ? "ready to paste. " : ""}Sign-in link waiting in sndmail`,
       category: "otp-both",
       context,
     });
@@ -444,7 +444,7 @@ export function notifyOneTimeCode(opts: {
 
   void show({
     title: "Sign-in link",
-    body: buttons ? `From ${opts.sender}` : `From ${opts.sender} — open it from Velo`,
+    body: buttons ? `From ${opts.sender}` : `From ${opts.sender} — open it from sndmail`,
     category: "otp-link",
     context,
   });
@@ -458,9 +458,9 @@ export function notifyOneTimeCode(opts: {
 export async function sendTestNotification(): Promise<NotificationBackend> {
   if (backend === "off") return backend;
   await show({
-    title: hasButtons() ? "Code: 123456" : "Velo notifications are working",
+    title: hasButtons() ? "Code: 123456" : "sndmail notifications are working",
     body: hasButtons()
-      ? "A test from Velo — press Copy code"
+      ? "A test from sndmail — press Copy code"
       : "This platform draws no buttons; the in-app toast carries them",
     category: "otp-code",
     context: { code: "123456" },

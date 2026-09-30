@@ -14,7 +14,7 @@ use crate::smtp::types::{SmtpConfig, SmtpSendResult};
 
 // ---------- IMAP IDLE ----------
 
-/// Watch an account's INBOX and emit `velo-idle-activity` when it changes.
+/// Watch an account's INBOX and emit `sndmail-idle-activity` when it changes.
 ///
 /// The frontend answers that event with the sync it would otherwise have run
 /// on a timer, so this replaces the waiting rather than the syncing.

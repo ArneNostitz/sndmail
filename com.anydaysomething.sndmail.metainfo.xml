@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<component type="desktop-application">
+  <id>com.anydaysomething.sndmail</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>Apache-2.0</project_license>
+  <name>sndmail</name>
+  <summary>Local-first desktop email client</summary>
+  <description>
+    <p>sndmail is a local-first desktop email client, built with modern web technologies.</p>
+  </description>
+  <url type="homepage">https://github.com/avihaymenahem/velo</url>
+  <url type="bugtracker">https://github.com/avihaymenahem/velo/issues</url>
+  <launchable type="desktop-id">com.anydaysomething.sndmail.desktop</launchable>
+  <releases>
+    <release version="0.4.21" date="2026-02-20" /> <!-- x-release-please-version -->
+  </releases>
+  <developer id="app.velomail">
+    <name>sndmail contributors</name>
+  </developer>
+  <content_rating type="oars-1.1" />
+  <icons>
+    <icon type="cached" width="128" height="128">/app/share/icons/hicolor/128x128/apps/com.anydaysomething.sndmail.png</icon>
+    <icon type="cached" width="256" height="256">/app/share/icons/hicolor/256x256/apps/com.anydaysomething.sndmail.png</icon>
+  </icons>
+</component>

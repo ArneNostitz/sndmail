@@ -11,8 +11,8 @@ use tauri::{
     Runtime, Url, Webview,
 };
 
-pub const EMAIL_NAVIGATION_EVENT: &str = "velo-email-navigation";
-const EMAIL_ACTION_PREFIX: &str = "/__velo_email_action__/";
+pub const EMAIL_NAVIGATION_EVENT: &str = "sndmail-email-navigation";
+const EMAIL_ACTION_PREFIXES: [&str; 2] = ["/__sndmail_email_action__/", "/__velo_email_action__/"];
 
 fn is_external_scheme(url: &Url) -> bool {
     matches!(
@@ -41,7 +41,7 @@ pub fn allows_navigation(own: Option<&Url>, url: &Url) -> bool {
     // Use an app-origin path rather than a custom scheme. WebKit rejects an
     // unknown scheme before its navigation delegate, while this path reaches
     // the delegate and is cancelled here before the app/router sees it.
-    if url.path().starts_with(EMAIL_ACTION_PREFIX) {
+    if EMAIL_ACTION_PREFIXES.iter().any(|prefix| url.path().starts_with(prefix)) {
         return false;
     }
     if !is_external_scheme(url) {
@@ -100,6 +100,7 @@ mod tests {
     fn hands_mail_actions_and_external_links_to_the_app() {
         let own = u("tauri://localhost/");
         for target in [
+            "tauri://localhost/__sndmail_email_action__/renderer/action",
             "tauri://localhost/__velo_email_action__/renderer/action",
             "https://example.com/a?b=c",
             "mailto:someone@example.com",

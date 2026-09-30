@@ -8,7 +8,7 @@
       Notification buttons (Reply, Archive, Copy code) are only ever visible
       on an *alert*; on a banner macOS hides them until the pointer hovers.
       This asks for alerts by default. The user can still pick either style
-      under System Settings → Notifications → Velo.
+      under System Settings → Notifications → sndmail.
     -->
     <key>NSUserNotificationAlertStyle</key>
     <string>alert</string>

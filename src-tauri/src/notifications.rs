@@ -28,7 +28,7 @@ use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
 
 /// Event carrying a [`NotificationResponse`] to the webview.
-pub const ACTION_EVENT: &str = "velo-notification-action";
+pub const ACTION_EVENT: &str = "sndmail-notification-action";
 
 /// `action_id` for a click on the notification body.
 pub const DEFAULT_ACTION: &str = "default";
@@ -100,10 +100,10 @@ pub async fn notification_native_request_permission() -> Result<bool, String> {
 }
 
 #[tauri::command]
-pub fn notification_native_register_categories(
+pub async fn notification_native_register_categories(
     categories: Vec<NotificationCategory>,
 ) -> Result<(), String> {
-    imp::register_categories(categories)
+    imp::register_categories(categories).await
 }
 
 /// Show a notification; resolves with its identifier once the centre has
@@ -207,7 +207,7 @@ mod imp {
     define_class!(
         /// Hears what the user did with a notification and hands it on.
         #[unsafe(super(NSObject))]
-        #[name = "VeloNotificationDelegate"]
+        #[name = "SndmailNotificationDelegate"]
         #[ivars = Ivars]
         struct Delegate;
 
@@ -330,15 +330,36 @@ mod imp {
         rx
     }
 
-    pub fn register_categories(categories: Vec<NotificationCategory>) -> Result<(), String> {
+    pub async fn register_categories(categories: Vec<NotificationCategory>) -> Result<(), String> {
         if !available() {
             return Err(UNAVAILABLE.into());
         }
+        let rx = start_register_categories(categories);
+        tokio::time::timeout(std::time::Duration::from_secs(5), rx).await
+            .map_err(|_| "Timed out registering notification actions".to_string())?
+            .map_err(|_| "Could not register notification actions".to_string())
+    }
+
+    fn start_register_categories(categories: Vec<NotificationCategory>) -> tokio::sync::oneshot::Receiver<()> {
         let built: Vec<Retained<UNNotificationCategory>> =
             categories.iter().map(build_category).collect();
+        let (tx, rx) = tokio::sync::oneshot::channel::<()>();
+        let tx = Mutex::new(Some(tx));
+        let handler = RcBlock::new(move |existing: std::ptr::NonNull<NSSet<UNNotificationCategory>>| {
+            let mut merged: Vec<Retained<UNNotificationCategory>> = unsafe { existing.as_ref() }
+                .allObjects().iter().filter(|item| {
+                    !categories.iter().any(|category| item.identifier().to_string() == category.id)
+                }).map(|item| item.to_owned()).collect();
+            merged.extend(built.iter().cloned());
+            UNUserNotificationCenter::currentNotificationCenter()
+                .setNotificationCategories(&NSSet::from_retained_slice(&merged));
+            if let Some(tx) = tx.lock().ok().and_then(|mut slot| slot.take()) {
+                let _ = tx.send(());
+            }
+        });
         UNUserNotificationCenter::currentNotificationCenter()
-            .setNotificationCategories(&NSSet::from_retained_slice(&built));
-        Ok(())
+            .getNotificationCategoriesWithCompletionHandler(&handler);
+        rx
     }
 
     fn build_action(action: &NotificationAction) -> Retained<UNAction> {
@@ -384,7 +405,7 @@ mod imp {
         request: NotificationRequest,
     ) -> Result<(String, tokio::sync::oneshot::Receiver<Option<String>>), String> {
         let id = format!(
-            "velo-{}-{}",
+            "sndmail-{}-{}",
             std::process::id(),
             COUNTER.fetch_add(1, Ordering::Relaxed)
         );
@@ -491,7 +512,7 @@ mod imp {
         Err(UNAVAILABLE.into())
     }
 
-    pub fn register_categories(_categories: Vec<NotificationCategory>) -> Result<(), String> {
+    pub async fn register_categories(_categories: Vec<NotificationCategory>) -> Result<(), String> {
         Err(UNAVAILABLE.into())
     }
 
@@ -518,12 +539,12 @@ mod tests {
 
         let response = NotificationResponse {
             action_id: DEFAULT_ACTION.into(),
-            notification_id: "velo-1-0".into(),
+            notification_id: "sndmail-1-0".into(),
             context: Some(serde_json::json!({ "code": "123456" })),
         };
         let json = serde_json::to_value(&response).unwrap();
         assert_eq!(json["actionId"], "default");
-        assert_eq!(json["notificationId"], "velo-1-0");
+        assert_eq!(json["notificationId"], "sndmail-1-0");
         assert_eq!(json["context"]["code"], "123456");
     }
 

@@ -35,8 +35,8 @@ export function Navbar() {
     >
       <nav className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
         <a href="#" className="flex items-center gap-2.5 text-text-primary no-underline">
-          <img src="/logo-white.svg" alt="Velo" className="w-7 h-7 rounded-md" />
-          <span className="font-semibold text-lg tracking-tight">Velo</span>
+          <img src="/logo-white.svg" alt="sndmail" className="w-7 h-7 rounded-md" />
+          <span className="font-semibold text-lg tracking-tight">sndmail</span>
         </a>
 
         <div className="hidden md:flex items-center gap-8">

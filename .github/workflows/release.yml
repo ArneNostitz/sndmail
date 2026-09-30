@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       tag_name:
-        description: "Release tag (e.g. velo-v0.4.3)"
+        description: "Release tag (e.g. v0.4.21)"
         type: string
         required: false
       release_id:
@@ -98,7 +98,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: v__VERSION__
-          releaseName: "Velo v__VERSION__"
+          releaseName: "sndmail v__VERSION__"
           releaseBody: "See the assets below to download for your platform."
           releaseDraft: false
           prerelease: false
@@ -161,6 +161,7 @@ jobs:
         if: steps.signing-check.outputs.has_signing == 'true' && inputs.release_id
         uses: tauri-apps/tauri-action@v0
         env:
+          SNDMAIL_WORKER_TARGET: universal-apple-darwin
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
@@ -177,6 +178,7 @@ jobs:
         if: steps.signing-check.outputs.has_signing == 'true' && !inputs.release_id
         uses: tauri-apps/tauri-action@v0
         env:
+          SNDMAIL_WORKER_TARGET: universal-apple-darwin
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
@@ -186,7 +188,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: v__VERSION__
-          releaseName: "Velo v__VERSION__"
+          releaseName: "sndmail v__VERSION__"
           releaseBody: "See the assets below to download for your platform."
           releaseDraft: false
           prerelease: false
@@ -197,6 +199,7 @@ jobs:
         if: steps.signing-check.outputs.has_signing != 'true' && inputs.release_id
         uses: tauri-apps/tauri-action@v0
         env:
+          SNDMAIL_WORKER_TARGET: universal-apple-darwin
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
@@ -209,18 +212,19 @@ jobs:
         if: steps.signing-check.outputs.has_signing != 'true' && !inputs.release_id
         uses: tauri-apps/tauri-action@v0
         env:
+          SNDMAIL_WORKER_TARGET: universal-apple-darwin
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: v__VERSION__
-          releaseName: "Velo v__VERSION__"
+          releaseName: "sndmail v__VERSION__"
           releaseBody: |
             See the assets below to download for your platform.
 
             > **macOS users**: This build is unsigned. After downloading, run:
             > ```
-            > xattr -cr "/Applications/Velo Pro.app"
+            > xattr -cr "/Applications/sndmail.app"
             > ```
             > Or right-click the app and select "Open" on first launch.
           releaseDraft: false

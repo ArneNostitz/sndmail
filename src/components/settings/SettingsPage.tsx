@@ -1,11 +1,14 @@
 import { useState, useEffect, useCallback } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { useUIStore, type SettingsTab } from "@/stores/uiStore";
 import { useIdleStatusStore, describeIdleState, explainIdleFailure } from "@/stores/idleStatusStore";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { reportError, notify } from "@/stores/toastStore";
 import { Spinner } from "@/components/ui/Spinner";
 import { useAccountStore } from "@/stores/accountStore";
+import { useComposerStore } from "@/stores/composerStore";
 import { getSetting, setSetting, getSecureSetting, setSecureSetting } from "@/services/db/settings";
+import { getDb } from "@/services/db/connection";
 import {
   getNotificationBackend,
   getNativeNotificationFailure,
@@ -20,6 +23,7 @@ import { ACCOUNT_COLORS, accountColor } from "@/constants/accountColors";
 import { removeClient, reauthorizeAccount } from "@/services/gmail/tokenManager";
 import { validateClientId, validateClientSecret } from "@/services/gmail/clientCredentials";
 import { triggerSync, forceFullSync, resyncAccount } from "@/services/gmail/syncManager";
+import { backgroundWorkerOwnsSync, reconfigureBackgroundWorkerRelay, requestWorkerResync, wakeBackgroundWorker } from "@/services/worker/workerClient";
 import {
   getGmailPushRelayStatus,
   probeGmailPushRelay,
@@ -108,7 +112,6 @@ export function SettingsPage() {
   const idleReasons = useIdleStatusStore((s) => s.reasons);
   const [reconnecting, setReconnecting] = useState<Record<string, boolean>>({});
   const [otpDetection, setOtpDetection] = useState(true);
-  const [otpAutoCopy, setOtpAutoCopy] = useState(true);
   const [notifyAccounts, setNotifyAccounts] = useState<Set<string>>(() => new Set());
   const emailDensity = useUIStore((s) => s.emailDensity);
   const setEmailDensity = useUIStore((s) => s.setEmailDensity);
@@ -160,6 +163,12 @@ export function SettingsPage() {
   const [phishingDetectionEnabled, setPhishingDetectionEnabled] = useState(true);
   const [phishingSensitivity, setPhishingSensitivity] = useState<"low" | "default" | "high">("default");
   const [autostartEnabled, setAutostartEnabled] = useState(false);
+  const [backgroundWorkerEnabled, setBackgroundWorkerEnabled] = useState(true);
+  const [backgroundWorkerReady, setBackgroundWorkerReady] = useState(false);
+  const [workerNotificationPermission, setWorkerNotificationPermission] = useState<string | null>(null);
+  const [relayAccountId, setRelayAccountId] = useState("");
+  const [relayReadContent, setRelayReadContent] = useState(false);
+  const [relayToken, setRelayToken] = useState("");
   const [aiProvider, setAiProvider] = useState<"claude" | "openai" | "gemini" | "ollama" | "copilot">("claude");
   const [claudeApiKey, setClaudeApiKey] = useState("");
   const [openaiApiKey, setOpenaiApiKey] = useState("");
@@ -230,7 +239,6 @@ export function SettingsPage() {
       setSyncPeriodDays(syncDays ?? "365");
       setImapIdle((await getSetting("imap_idle")) !== "false");
       setOtpDetection((await getSetting("otp_detection")) !== "false");
-      setOtpAutoCopy((await getSetting("otp_auto_copy")) !== "false");
       const accountsSetting = await getSetting("notify_accounts");
       setNotifyAccounts(new Set(accountsSetting ? accountsSetting.split(",").filter(Boolean) : []));
 
@@ -248,6 +256,21 @@ export function SettingsPage() {
         setAutostartEnabled(await isEnabled());
       } catch {
         // autostart plugin may not be available in dev
+      }
+      setBackgroundWorkerEnabled((await getSetting("background_worker_enabled")) !== "false");
+      setBackgroundWorkerReady(await invoke<boolean>("worker_is_ready").catch(() => false));
+      try {
+        const db = await getDb();
+        const [status] = await db.select<{ phase: string; permission: string; error: string | null }[]>(
+          "SELECT phase, permission, error FROM worker_notification_status WHERE id = 1",
+        );
+        setWorkerNotificationPermission(status
+          ? status.permission === "denied"
+            ? "denied"
+            : status.error ?? status.permission
+          : null);
+      } catch {
+        setWorkerNotificationPermission(null);
       }
 
       // Load AI settings
@@ -371,7 +394,8 @@ export function SettingsPage() {
     else await setSetting("gmail_push_relay_url", "");
     if (gmailPushRelaySecret.trim()) await setSecureSetting("gmail_push_relay_secret", gmailPushRelaySecret.trim());
     await setSetting("gmail_push_topic_name", gmailPushTopicName.trim());
-    void startGmailPushRelay();
+    if (backgroundWorkerOwnsSync()) await reconfigureBackgroundWorkerRelay();
+    else void startGmailPushRelay();
     setGmailPushRelaySaved(true);
     setTimeout(() => setGmailPushRelaySaved(false), 2000);
   }, [gmailPushRelaySecret, gmailPushRelayUrl, gmailPushTopicName]);
@@ -394,7 +418,8 @@ export function SettingsPage() {
     if (activeIds.length === 0) return;
     setIsSyncing(true);
     try {
-      await triggerSync(activeIds);
+      if (backgroundWorkerOwnsSync()) await wakeBackgroundWorker();
+      else await triggerSync(activeIds);
     } finally {
       setIsSyncing(false);
     }
@@ -405,7 +430,8 @@ export function SettingsPage() {
     if (activeIds.length === 0) return;
     setIsSyncing(true);
     try {
-      await forceFullSync(activeIds);
+      if (backgroundWorkerOwnsSync()) await requestWorkerResync(activeIds);
+      else await forceFullSync(activeIds);
     } finally {
       setIsSyncing(false);
     }
@@ -425,11 +451,67 @@ export function SettingsPage() {
     }
   }, [autostartEnabled]);
 
+  const handleBackgroundWorkerToggle = useCallback(async () => {
+    try {
+      if (useComposerStore.getState().isOpen) {
+        throw new Error("Close the composer after its draft has saved, then change background mail.");
+      }
+      if (backgroundWorkerEnabled) {
+        await invoke("worker_disable");
+        for (let attempt = 0; attempt < 20; attempt++) {
+          if (!(await invoke<boolean>("worker_is_running"))) break;
+          await new Promise((resolve) => setTimeout(resolve, 150));
+        }
+        if (await invoke<boolean>("worker_is_running")) {
+          throw new Error("The helper is still shutting down. Try again in a moment.");
+        }
+        await setSetting("background_worker_enabled", "false");
+      } else {
+        // Reload first so the frontend releases its own watchers before the
+        // helper is registered by App startup.
+        await setSetting("background_worker_enabled", "true");
+      }
+      const { relaunch } = await import("@tauri-apps/plugin-process");
+      await relaunch();
+    } catch (error) {
+      reportError("Could not change background mail", error);
+    }
+  }, [backgroundWorkerEnabled]);
+
+  const handleRelayGrant = useCallback(async () => {
+    if (!relayAccountId) return;
+    try {
+      const token = await invoke<string>("worker_create_relay_profile", {
+        profileId: "commonplace",
+        accountIds: [relayAccountId],
+        readContent: relayReadContent,
+      });
+      setRelayToken(token);
+    } catch (error) {
+      reportError("Could not grant Commonplace mail access", error);
+    }
+  }, [relayAccountId, relayReadContent]);
+
+  const handleRelayRevoke = useCallback(async () => {
+    try {
+      await invoke("worker_revoke_relay_profile", { profileId: "commonplace" });
+      setRelayToken("");
+      notify("success", "Commonplace mail access revoked");
+    } catch (error) {
+      reportError("Could not revoke Commonplace mail access", error);
+    }
+  }, []);
+
   const handleRemoveAccount = useCallback(
     async (accountId: string) => {
       removeClient(accountId);
       await deleteAccount(accountId);
       removeAccountFromStore(accountId);
+      if (backgroundWorkerOwnsSync()) {
+        void reconfigureBackgroundWorkerRelay().catch((error) =>
+          console.warn("Could not refresh background worker account configuration:", error),
+        );
+      }
     },
     [removeAccountFromStore],
   );
@@ -472,7 +554,8 @@ export function SettingsPage() {
     async (accountId: string) => {
       setResyncStatus((prev) => ({ ...prev, [accountId]: "syncing" }));
       try {
-        await resyncAccount(accountId);
+        if (backgroundWorkerOwnsSync()) await requestWorkerResync([accountId]);
+        else await resyncAccount(accountId);
         setResyncStatus((prev) => ({ ...prev, [accountId]: "done" }));
         setTimeout(() => {
           setResyncStatus((prev) => ({ ...prev, [accountId]: "idle" }));
@@ -682,11 +765,71 @@ export function SettingsPage() {
 
                   <Section title="Startup">
                     <ToggleRow
+                      label="Background mail helper"
+                      description="Check mail and login codes at sign-in, even while the sndmail window is closed"
+                      checked={backgroundWorkerEnabled}
+                      onToggle={handleBackgroundWorkerToggle}
+                    />
+                    <p className="text-xs text-text-tertiary px-1">
+                      {backgroundWorkerEnabled
+                        ? backgroundWorkerReady ? "Helper connected" : "Helper starting or needs attention"
+                        : "Background mail is off"}
+                    </p>
+                    {backgroundWorkerEnabled && workerNotificationPermission === "denied" && (
+                      <p className="text-xs text-warning px-1">
+                        Background notifications are blocked. Open System Settings → Notifications → SndmailWorker and enable Allow Notifications.
+                      </p>
+                    )}
+                    {backgroundWorkerEnabled && workerNotificationPermission && workerNotificationPermission !== "denied" && (
+                      <p className="text-xs text-text-tertiary px-1">
+                        Background notification status: {workerNotificationPermission.replaceAll("_", " ")}.
+                      </p>
+                    )}
+                    <ToggleRow
                       label="Launch at login"
-                      description="Start Velo automatically when you log in (minimized to tray)"
+                      description="Also open the full sndmail app at login, minimized to the tray"
                       checked={autostartEnabled}
                       onToggle={handleAutostartToggle}
                     />
+                  </Section>
+
+                  <Section title="Commonplace mail relay">
+                    <p className="text-sm text-text-secondary">
+                      Grant Commonplace local read access to one mailbox. The token is shown once; creating a new one replaces the old grant.
+                    </p>
+                    <SettingRow label="Mailbox">
+                      <select
+                        value={relayAccountId}
+                        onChange={(event) => setRelayAccountId(event.target.value)}
+                        className="w-56 bg-bg-tertiary text-text-primary text-sm px-3 py-1.5 rounded-md border border-border-primary"
+                      >
+                        <option value="">Choose a mailbox</option>
+                        {accounts.filter((account) => account.provider !== "caldav").map((account) => (
+                          <option key={account.id} value={account.id}>{account.email}</option>
+                        ))}
+                      </select>
+                    </SettingRow>
+                    <ToggleRow
+                      label="Allow message content"
+                      description="Off by default. Metadata access never includes subjects, snippets, bodies, credentials, or login codes."
+                      checked={relayReadContent}
+                      onToggle={() => setRelayReadContent(!relayReadContent)}
+                    />
+                    <div className="flex gap-2">
+                      <Button variant="secondary" size="md" onClick={handleRelayGrant} disabled={!relayAccountId}>Create access token</Button>
+                      <Button variant="secondary" size="md" onClick={handleRelayRevoke}>Revoke access</Button>
+                    </div>
+                    {relayToken && (
+                      <SettingRow label="Copy this token now">
+                        <input
+                          readOnly
+                          value={relayToken}
+                          onFocus={(event) => event.currentTarget.select()}
+                          className="w-80 bg-bg-tertiary text-text-primary text-xs px-3 py-1.5 rounded-md border border-border-primary"
+                          aria-label="Commonplace mail relay access token"
+                        />
+                      </SettingRow>
+                    )}
                   </Section>
 
                   <Section title="Privacy & Security">
@@ -844,7 +987,7 @@ export function SettingsPage() {
                     </p>
                     <ToggleRow
                       label="Detect login codes"
-                      description="Spot a verification code in arriving mail and announce it, so you never have to open the message"
+                      description="Spot a verification code in arriving mail. Copy it from the notification or message when you need it"
                       checked={otpDetection}
                       onToggle={async () => {
                         const next = !otpDetection;
@@ -852,18 +995,6 @@ export function SettingsPage() {
                         await setSetting("otp_detection", next ? "true" : "false");
                       }}
                     />
-                    {otpDetection && (
-                      <ToggleRow
-                        label="Copy the code automatically"
-                        description="Puts it straight on the clipboard, ready to paste. It replaces whatever you were holding"
-                        checked={otpAutoCopy}
-                        onToggle={async () => {
-                          const next = !otpAutoCopy;
-                          setOtpAutoCopy(next);
-                          await setSetting("otp_auto_copy", next ? "true" : "false");
-                        }}
-                      />
-                    )}
                   </Section>
 
                   <Section title="Which mailboxes">
@@ -1398,7 +1529,7 @@ export function SettingsPage() {
                         size="md"
                         value={gmailPushTopicName}
                         onChange={(e) => setGmailPushTopicName(e.target.value)}
-                        placeholder="projects/PROJECT_ID/topics/velo-gmail"
+                        placeholder="projects/PROJECT_ID/topics/sndmail-gmail"
                       />
                       <TextField
                         label="Relay secret"
@@ -2284,11 +2415,11 @@ function AboutTab() {
 
   return (
     <>
-      <Section title="Velo Mail">
+      <Section title="sndmail">
         <div className="flex items-center gap-3 mb-2">
-          <img src={appIcon} alt="Velo" className="w-12 h-12 rounded-xl" />
+          <img src={appIcon} alt="sndmail" className="w-12 h-12 rounded-xl" />
           <div>
-            <h3 className="text-base font-semibold text-text-primary">Velo</h3>
+            <h3 className="text-base font-semibold text-text-primary">sndmail</h3>
             <p className="text-sm text-text-tertiary">
               {appVersion ? `Version ${appVersion}` : "Loading..."}
             </p>
@@ -2367,8 +2498,8 @@ function AboutTab() {
             <span className="text-sm font-medium text-text-primary">Modified from Velo</span>
           </div>
           <p className="text-xs text-text-secondary leading-relaxed">
-            Velo Pro is a modified version of Velo by Avihay Menahem, used under
-            the Apache License 2.0. Velo Pro is not affiliated with, endorsed by,
+            sndmail is a modified version of Velo by Avihay Menahem, used under
+            the Apache License 2.0. sndmail is not affiliated with, endorsed by,
             or supported by the Velo project. Changes have been made to the
             original software.
           </p>
@@ -2725,7 +2856,7 @@ function NotificationButtonsRow({ backend }: { backend: NotificationBackend }) {
   let note: string;
   if (backend === "native") {
     note =
-      "Reply, Archive and Copy code sit on the notification. macOS hides a banner's buttons until you hover, so Velo asks for the Alerts style; System Settings → Notifications → Velo is where to change it.";
+      "Reply, Archive and Copy code sit on the notification. macOS hides a banner's buttons until you hover, so sndmail asks for the Alerts style; System Settings → Notifications → sndmail is where to change it.";
   } else if (backend === "plugin") {
     note =
       os === "macos"
@@ -2735,10 +2866,10 @@ function NotificationButtonsRow({ backend }: { backend: NotificationBackend }) {
           // here would send the user looking in the wrong place.
           ? `The macOS notification centre turned this build down (${failure}), so notifications are plain text. An app bundle has to be code-signed before the centre will accept it.`
           : "Buttons need the installed app: a development build runs outside an app bundle, which the macOS notification centre refuses, so notifications here are plain text."
-        : "Notifications are plain text on this platform. The buttons live in Velo's own toasts instead.";
+        : "Notifications are plain text on this platform. The buttons live in sndmail's own toasts instead.";
   } else {
     note =
-      "Notifications are off, or the system has not allowed them. On macOS, check System Settings → Notifications → Velo.";
+      "Notifications are off, or the system has not allowed them. On macOS, check System Settings → Notifications → sndmail.";
   }
 
   return (

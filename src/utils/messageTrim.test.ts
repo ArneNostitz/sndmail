@@ -10,6 +10,15 @@ describe("trimHtmlBody", () => {
     expect(result.html).not.toContain("old mail");
   });
 
+  it("continues to remove legacy Velo quote and signature attributes", () => {
+    const result = trimHtmlBody(
+      '<p>New note</p><div data-velo-quote>Old reply</div><div data-velo-signature>Old signature</div>',
+    );
+    expect(result.html).toContain("New note");
+    expect(result.html).not.toContain("Old reply");
+    expect(result.html).not.toContain("Old signature");
+  });
+
   it("removes a bare blockquote", () => {
     const result = trimHtmlBody("<p>Sure thing</p><blockquote>quoted</blockquote>");
     expect(result.trimmed).toBe(true);

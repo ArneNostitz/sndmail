@@ -31,7 +31,7 @@ const cardVariants = {
   }),
 }
 
-export function WhyVelo() {
+export function WhySndmail() {
   return (
     <section id="features" className="relative py-24 md:py-32 px-6 dot-grid">
       {/* Subtle top/bottom fade to blend the dot grid */}

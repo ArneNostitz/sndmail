@@ -12,21 +12,19 @@
 
 use keyring::Entry;
 
-const SERVICE: &str = "com.anydaysomething.velopro";
+const SERVICE: &str = "com.anydaysomething.sndmail";
 const ACCOUNT: &str = "db-encryption-key";
 
-/// The service the key was stored under before the app was renamed. The
-/// credential store is keyed by this string, not by the bundle identifier, so
-/// renaming the app orphaned the key that decrypts every OAuth token and IMAP
-/// password — the account list would have come back empty and unreadable.
-const LEGACY_SERVICE: &str = "com.velomail.app";
+/// Credential services used by earlier app identities. Keep reading these
+/// until all installations have carried their database key forward.
+const LEGACY_SERVICES: [&str; 2] = ["com.anydaysomething.velopro", "com.velomail.app"];
 
 fn entry() -> Result<Entry, String> {
     Entry::new(SERVICE, ACCOUNT).map_err(|e| format!("Keychain unavailable: {e}"))
 }
 
-fn legacy_entry() -> Result<Entry, String> {
-    Entry::new(LEGACY_SERVICE, ACCOUNT).map_err(|e| format!("Keychain unavailable: {e}"))
+fn legacy_entry(service: &str) -> Result<Entry, String> {
+    Entry::new(service, ACCOUNT).map_err(|e| format!("Keychain unavailable: {e}"))
 }
 
 /// Copy the key out of the pre-rename entry, before any window exists.
@@ -41,19 +39,25 @@ fn legacy_entry() -> Result<Entry, String> {
 /// Best-effort throughout: a refusal or a missing credential store leaves the
 /// lazy path in `keychain_get_key` to try again and report properly.
 pub fn migrate_legacy_key() {
-    let (Ok(current), Ok(legacy)) = (entry(), legacy_entry()) else {
+    let Ok(current) = entry() else {
         return;
     };
     if current.get_password().is_ok() {
         return; // already carried over, or this install never had the old name
     }
-    match legacy.get_password() {
-        Ok(secret) => match current.set_password(&secret) {
-            Ok(()) => log::info!("Carried the database encryption key over to {SERVICE}"),
-            Err(e) => log::warn!("Could not store the encryption key under {SERVICE}: {e}"),
-        },
-        Err(keyring::Error::NoEntry) => {}
-        Err(e) => log::warn!("Could not read the encryption key from {LEGACY_SERVICE}: {e}"),
+    for service in LEGACY_SERVICES {
+        let Ok(legacy) = legacy_entry(service) else { continue };
+        match legacy.get_password() {
+            Ok(secret) => {
+                match current.set_password(&secret) {
+                    Ok(()) => log::info!("Carried the database encryption key over to {SERVICE}"),
+                    Err(e) => log::warn!("Could not store the encryption key under {SERVICE}: {e}"),
+                }
+                return;
+            }
+            Err(keyring::Error::NoEntry) => {}
+            Err(e) => log::warn!("Could not read the encryption key under {service}: {e}"),
+        }
     }
 }
 
@@ -68,16 +72,21 @@ pub fn keychain_get_key() -> Result<Option<String>, String> {
         // one the app had before it was renamed. Copy it across rather than
         // read it every time, and leave the old entry alone — an older build
         // pointed at the same database must keep working.
-        Err(keyring::Error::NoEntry) => match legacy_entry()?.get_password() {
-            Ok(secret) => {
-                if let Err(e) = entry()?.set_password(&secret) {
-                    log::warn!("Could not copy the encryption key to the new keychain entry: {e}");
+        Err(keyring::Error::NoEntry) => {
+            for service in LEGACY_SERVICES {
+                match legacy_entry(service)?.get_password() {
+                    Ok(secret) => {
+                        if let Err(e) = entry()?.set_password(&secret) {
+                            log::warn!("Could not copy the encryption key to the new keychain entry: {e}");
+                        }
+                        return Ok(Some(secret));
+                    }
+                    Err(keyring::Error::NoEntry) => {}
+                    Err(e) => return Err(format!("Failed to read key from keychain: {e}")),
                 }
-                Ok(Some(secret))
             }
-            Err(keyring::Error::NoEntry) => Ok(None),
-            Err(e) => Err(format!("Failed to read key from keychain: {e}")),
-        },
+            Ok(None)
+        }
         Err(e) => Err(format!("Failed to read key from keychain: {e}")),
     }
 }

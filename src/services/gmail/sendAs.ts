@@ -33,7 +33,7 @@ export async function fetchSendAsAliases(
     const message = err instanceof Error ? err.message : String(err);
     if (message.includes("403") || message.toLowerCase().includes("insufficient")) {
       throw new Error(
-        "Velo is not authorized to read your send-as addresses. Re-authorize this account in Settings > Accounts.",
+        "sndmail is not authorized to read your send-as addresses. Re-authorize this account in Settings > Accounts.",
       );
     }
     throw err;

@@ -196,10 +196,10 @@ function createActionAnchor(doc: Document, action: EmailDataAction, text: string
   const anchor = doc.createElement("a");
   anchor.textContent = text;
   anchor.href = action.href ?? "#";
-  anchor.dataset.veloKind = action.kind;
-  anchor.dataset.veloValue = action.value;
-  if (action.startTime) anchor.dataset.veloStart = action.startTime;
-  if (action.endTime) anchor.dataset.veloEnd = action.endTime;
+  anchor.dataset.sndmailKind = action.kind;
+  anchor.dataset.sndmailValue = action.value;
+  if (action.startTime) anchor.dataset.sndmailStart = action.startTime;
+  if (action.endTime) anchor.dataset.sndmailEnd = action.endTime;
   anchor.title = action.kind === "date" ? "Create calendar event" : `Actions for ${action.label}`;
   return anchor;
 }
@@ -263,16 +263,16 @@ export function instrumentEmailActions(
   const actions = new Map<string, InstrumentedEmailAction>();
   let index = 0;
   for (const anchor of doc.querySelectorAll<HTMLAnchorElement>("a")) {
-    if (anchor.dataset.veloActionId) continue;
+    if (anchor.dataset.sndmailActionId || anchor.dataset.veloActionId) continue;
     const action = actionForAnchor(anchor);
     if (!action) continue;
     const actionId = String(index++);
     const rawHref = anchor.getAttribute("href")?.trim() ?? action.href ?? action.value;
     const resolvedHref = action.href ?? anchor.href;
     actions.set(actionId, { action, rawHref, resolvedHref, anchor });
-    anchor.dataset.veloActionId = actionId;
+    anchor.dataset.sndmailActionId = actionId;
     if (action.kind === "date" || action.kind === "address") {
-      anchor.href = `/__velo_email_action__/${encodeURIComponent(rendererId)}/${encodeURIComponent(actionId)}`;
+      anchor.href = `/__sndmail_email_action__/${encodeURIComponent(rendererId)}/${encodeURIComponent(actionId)}`;
       anchor.target = "_self";
     } else {
       // frame-src 'self' intentionally forbids websites inside the message.
@@ -286,15 +286,16 @@ export function instrumentEmailActions(
 
 /** Classify both sender-provided anchors and anchors created by decorateEmailData. */
 export function actionForAnchor(anchor: HTMLAnchorElement): EmailDataAction | null {
-  const kind = anchor.dataset.veloKind as EmailDataKind | undefined;
+  const kind = (anchor.dataset.sndmailKind ?? anchor.dataset.veloKind) as EmailDataKind | undefined;
   if (kind) {
+    const value = anchor.dataset.sndmailValue ?? anchor.dataset.veloValue;
     return {
       kind,
-      value: anchor.dataset.veloValue ?? anchor.textContent?.trim() ?? "",
-      label: kind === "address" ? anchor.dataset.veloValue ?? "" : anchor.textContent?.trim() || anchor.dataset.veloValue || "",
+      value: value ?? anchor.textContent?.trim() ?? "",
+      label: kind === "address" ? value ?? "" : anchor.textContent?.trim() || value || "",
       href: anchor.getAttribute("href") ?? undefined,
-      startTime: anchor.dataset.veloStart,
-      endTime: anchor.dataset.veloEnd,
+      startTime: anchor.dataset.sndmailStart ?? anchor.dataset.veloStart,
+      endTime: anchor.dataset.sndmailEnd ?? anchor.dataset.veloEnd,
     };
   }
 

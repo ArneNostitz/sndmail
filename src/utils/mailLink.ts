@@ -4,6 +4,8 @@ export interface MailLinkTarget {
   messageId?: string;
 }
 
+const SUPPORTED_MAIL_LINK_PROTOCOLS = new Set(["sndmail:", "velo:"]);
+
 function validId(value: string | null): value is string {
   return !!value && value.length <= 2048 && !/[\u0000-\u001f\u007f]/.test(value) && value.trim() === value;
 }
@@ -16,17 +18,17 @@ export function createMailLink(target: MailLinkTarget): string {
   }
   const query = new URLSearchParams({ account: target.accountId, thread: target.threadId });
   if (target.messageId) query.set("message", target.messageId);
-  return `velo://open?${query}`;
+  return `sndmail://open?${query}`;
 }
 
 export function parseMailLink(value: string): MailLinkTarget {
   if (value.length > 16000) throw new Error("Mail link is too long.");
   const url = new URL(value);
-  if (url.protocol !== "velo:" || url.hostname !== "open" || url.username || url.password || url.port ||
-    (url.pathname !== "" && url.pathname !== "/") || url.hash) throw new Error("Invalid Velo mail link.");
+  if (!SUPPORTED_MAIL_LINK_PROTOCOLS.has(url.protocol) || url.hostname !== "open" || url.username || url.password || url.port ||
+    (url.pathname !== "" && url.pathname !== "/") || url.hash) throw new Error("Invalid mail link.");
   for (const key of url.searchParams.keys()) {
     if (!["account", "thread", "message"].includes(key) || url.searchParams.getAll(key).length !== 1) {
-      throw new Error("Invalid Velo mail link parameters.");
+      throw new Error("Invalid mail link parameters.");
     }
   }
   const accountId = url.searchParams.get("account");

@@ -30,7 +30,17 @@ describe("emailDataActions", () => {
   it("does not mistake an ISO date for a phone number", () => {
     const doc = documentWith("The deadline is 2026-09-12.");
     decorateEmailData(doc);
-    expect([...doc.querySelectorAll("a")].map((anchor) => anchor.dataset.veloKind)).toEqual(["date"]);
+    expect([...doc.querySelectorAll("a")].map((anchor) => anchor.dataset.sndmailKind)).toEqual(["date"]);
+  });
+
+  it("still classifies legacy Velo action attributes in saved message markup", () => {
+    const doc = documentWith('<a href="#" data-velo-kind="date" data-velo-value="12.09.2026" data-velo-start="2026-09-12T00:00" data-velo-end="2026-09-12T01:00">12.09.2026</a>');
+    expect(actionForAnchor(doc.querySelector("a")!)).toMatchObject({
+      kind: "date",
+      value: "12.09.2026",
+      startTime: "2026-09-12T00:00",
+      endTime: "2026-09-12T01:00",
+    });
   });
 
   it("classifies mailto, tel, and app links", () => {
@@ -62,7 +72,7 @@ describe("emailDataActions", () => {
     });
     expect([...doc.querySelectorAll("a")].map((anchor) => anchor.getAttribute("href"))).toEqual([
       "https://example.com/private?token=secret",
-      "/__velo_email_action__/renderer-7/1",
+      "/__sndmail_email_action__/renderer-7/1",
     ]);
     expect(doc.querySelector("a")!.target).toBe("_top");
   });
@@ -87,7 +97,7 @@ describe("emailDataActions", () => {
     const doc = documentWith(`${html}<br><a href="https://example.com/unsubscribe">Unsubscribe</a>`);
     const before = doc.body.textContent;
     decorateEmailData(doc);
-    const addresses = [...doc.querySelectorAll<HTMLAnchorElement>('a[data-velo-kind="address"]')];
+    const addresses = [...doc.querySelectorAll<HTMLAnchorElement>('a[data-sndmail-kind="address"]')];
     expect(addresses.length).toBeGreaterThan(0);
     expect(addresses.every((anchor) => actionForAnchor(anchor)?.value === expected)).toBe(true);
     expect(addresses[0]!.textContent).toContain(expected.split(" ")[0]);

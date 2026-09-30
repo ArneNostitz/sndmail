@@ -1,6 +1,6 @@
 # Architecture
 
-Velo follows a **three-layer architecture** with clear separation of concerns.
+sndmail follows a **three-layer architecture** with clear separation of concerns.
 
 ```
 +--------------------------+
@@ -14,7 +14,7 @@ Velo follows a **three-layer architecture** with clear separation of concerns.
 |  Filters / Notifications  |
 +--------------------------+
 |     Tauri v2 + Rust       |   Native Layer
-|  System Tray / OAuth /    |   (Rust)
+|  Tray / Worker / OAuth /  |   (Rust)
 |  SQLite / Notifications / |
 |  Deep Links / Autostart   |
 +--------------------------+
@@ -38,11 +38,11 @@ Velo follows a **three-layer architecture** with clear separation of concerns.
 
 ## Data Flow
 
-1. **Sync** -- One startup catch-up, then Gmail push / IMAP IDLE / manual checks trigger delta sync. Gmail accounts use Gmail History API (falls back to full sync if history expires ~30 days). IMAP accounts use UIDVALIDITY/last_uid tracking.
+1. **Mail sync** -- On macOS, the separate background helper owns sync while enabled, including after the main app closes. Gmail push, IMAP IDLE, and periodic catch-up drive updates; the open app handles sync when the helper is disabled or cannot own sync. A registered helper retains ownership while starting or recovering, so the app does not race it. Gmail uses the History API (with a full-sync fallback when history expires), while IMAP uses UIDVALIDITY/last_uid tracking.
 2. **Storage** -- All messages, threads, labels, contacts, calendar events, and AI results stored in local SQLite (34 tables) with FTS5 full-text indexing.
 3. **State** -- Eight Zustand stores manage UI state. No middleware, no persistence needed -- ephemeral state rebuilds from SQLite on startup.
 4. **Rendering** -- Email HTML is sanitized with DOMPurify and rendered in sandboxed iframes. Remote images blocked by default.
-5. **Background services** -- Mail has no polling timer. Gmail push/IMAP IDLE are event-driven; snooze, scheduled send, follow-up reminders, newsletter bundles, offline queue processing, and attachment pre-cache keep their own due-work intervals.
+5. **Background services** -- The helper handles lightweight mail sync and queues filter, smart-label, and optional AI postprocessing for the main app to run when open. Snooze, scheduled send, follow-up reminders, newsletter bundles, offline queue processing, and attachment pre-cache keep their own due-work intervals.
 6. **Security** -- Phishing link detection scores message links with 10 heuristic rules. SPF/DKIM/DMARC authentication headers parsed and displayed as badges.
 
 ## Project Structure
@@ -128,6 +128,7 @@ velo/
 The Rust layer (`src-tauri/src/`) handles system integration and performance-critical email protocol operations. It provides:
 
 - **System tray** -- Show/hide, check mail, quit menu
+- **Background mail helper** -- On macOS, the packaged helper starts at login and owns mail sync independently of the main app; Settings > General can disable it. The foreground attaches to its local change feed and handles deferred filters, smart labels, and optional AI postprocessing. See [background worker and Commonplace relay](background-worker.md) for behavior and verification limits.
 - **OAuth server** -- Localhost PKCE server on port 17248
 - **IMAP client** (`imap/`) -- Full IMAP protocol via `async-imap` + `mail-parser`. Supports TLS/STARTTLS/plain, XOAuth2 auth. Operations: FETCH, STORE, MOVE, DELETE, APPEND, LIST, STATUS
 - **SMTP client** (`smtp/`) -- Email sending via `lettre`. Supports TLS/STARTTLS/plain. Parses RFC 2822 envelopes
@@ -135,8 +136,8 @@ The Rust layer (`src-tauri/src/`) handles system integration and performance-cri
 - **Single instance** -- Prevents duplicate app windows, forwards deep link args
 - **Minimize to tray** -- Hides on close instead of quitting
 - **Custom titlebar** -- Overlay on macOS, frameless on Windows/Linux
-- **Windows AUMID** -- Set for proper notification identity
-- **Notification buttons** (`notifications.rs`) -- macOS `UNUserNotificationCenter` via objc2: categories name the buttons (Reply/Archive, Copy code/Open link), each notification carries its context, presses reach the webview as `velo-notification-action`. Only a bundled app qualifies; a bare `tauri dev` binary falls back to the plugin's plain text
+- **Windows AUMID** -- `com.anydaysomething.sndmail`, set in Rust for notification identity
+- **Notification buttons** (`notifications.rs`) -- macOS `UNUserNotificationCenter` via objc2: categories name the buttons (Reply/Archive, Copy code/Open link), each notification carries its context, presses reach the webview as `sndmail-notification-action`. Only a bundled app qualifies; a bare `tauri dev` binary falls back to the plugin's plain text
 
 **Tauri commands:** `start_oauth_server`, `close_splashscreen`, `set_tray_tooltip`, `open_devtools`, 5 `notification_native_*` commands (available, request_permission, register_categories, show, ready), 11 IMAP commands (`imap_test_connection`, `imap_list_folders`, `imap_fetch_messages`, etc.), 2 SMTP commands (`smtp_send_email`, `smtp_test_connection`)
 
@@ -203,7 +204,7 @@ Key tables: `accounts` (with `provider`, IMAP/SMTP fields), `messages` (with FTS
 2. Restore persisted settings (theme, sidebar, density, font scale, reading pane, etc.)
 3. Load custom keyboard shortcuts
 4. Initialize email providers for all accounts (Gmail API clients + IMAP providers), sync send-as aliases for Gmail accounts
-5. Run one mail catch-up, start Gmail push and IMAP IDLE, backfill uncategorized threads
+5. Check background-helper ownership; attach to its change feed when ready, otherwise start foreground mail sync. Run one catch-up and start Gmail push / IMAP IDLE as appropriate
 6. Start background checkers (snooze, scheduled send, follow-up, bundles, queue processor, attachment pre-cache)
 7. Initialize network status detection (online/offline listeners)
 8. Initialize OS notifications
@@ -214,7 +215,7 @@ Key tables: `accounts` (with `provider`, IMAP/SMTP fields), `messages` (with FTS
 
 ## Packaging & Distribution
 
-Velo supports standard Linux distribution formats via automated and local build processes:
+sndmail supports standard Linux distribution formats via automated and local build processes:
 
 - **RPM & COPR**: Native RPM generation is integrated via Tauri's bundler (`tauri build -b rpm`), making it trivial to build and test RPMs locally or publish SRPMs to Fedora COPR.
-- **Flatpak**: A Flatpak manifest (`com.anydaysomething.velopro.yml`) defines the sandbox environment, leveraging the GNOME 46 runtime and Rust/Node.js SDK extensions. Local builds are streamlined via an npm script (`npm run flatpak`) which uses `flatpak-builder` while excluding host-specific artifacts to ensure reproducible sandboxed builds.
+- **Flatpak**: A Flatpak manifest (`com.anydaysomething.sndmail.yml`) defines the sandbox environment, leveraging the GNOME 46 runtime and Rust/Node.js SDK extensions. Local builds are streamlined via an npm script (`npm run flatpak`) which uses `flatpak-builder` while excluding host-specific artifacts to ensure reproducible sandboxed builds.

@@ -151,7 +151,7 @@ describe("recovering from a stopped watcher", () => {
     await startIdleWatchers();
     mockInvoke.mockClear();
 
-    listeners.get("velo-idle-failed")?.({
+    listeners.get("sndmail-idle-failed")?.({
       payload: { account_id: "g1", error: "AUTHENTICATIONFAILED" },
     });
     await vi.advanceTimersByTimeAsync(0); // the account lookup
@@ -187,7 +187,7 @@ describe("recovering from a stopped watcher", () => {
     await startIdleWatchers();
     mockInvoke.mockClear();
 
-    listeners.get("velo-idle-status")?.({
+    listeners.get("sndmail-idle-status")?.({
       payload: { account_id: "g1", state: "connected" },
     });
     await vi.advanceTimersByTimeAsync(60_000);

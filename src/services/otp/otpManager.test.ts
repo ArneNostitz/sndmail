@@ -39,17 +39,17 @@ describe("processIncomingCodes", () => {
     resetHandledCodes();
   });
 
-  it("copies the code and says so", async () => {
+  it("announces the code without copying until the user chooses Copy", async () => {
     const out = await processIncomingCodes([codeMail()], NOW);
-    expect(out).toEqual([{ code: "493028", linkUrl: null, copied: true }]);
-    expect(mockWriteText).toHaveBeenCalledWith("493028");
+    expect(out).toEqual([{ code: "493028", linkUrl: null, copied: false }]);
+    expect(mockWriteText).not.toHaveBeenCalled();
     expect(mockNotify).toHaveBeenCalledWith(
-      expect.objectContaining({ code: "493028", copied: true }),
+      expect.objectContaining({ code: "493028", copied: false }),
     );
   });
 
-  it("still notifies when auto-copy is off", async () => {
-    settings.set("otp_auto_copy", "false");
+  it("ignores the legacy auto-copy setting", async () => {
+    settings.set("otp_auto_copy", "true");
     const out = await processIncomingCodes([codeMail()], NOW);
     expect(mockWriteText).not.toHaveBeenCalled();
     expect(out[0]!.copied).toBe(false);
@@ -71,7 +71,8 @@ describe("processIncomingCodes", () => {
   it("acts on a message only once, however often it re-syncs", async () => {
     await processIncomingCodes([codeMail()], NOW);
     await processIncomingCodes([codeMail()], NOW);
-    expect(mockWriteText).toHaveBeenCalledTimes(1);
+    expect(mockWriteText).not.toHaveBeenCalled();
+    expect(mockNotify).toHaveBeenCalledTimes(1);
   });
 
   it("offers the code and the link together when a mail carries both", async () => {
@@ -83,7 +84,7 @@ describe("processIncomingCodes", () => {
         bodyHtml: '<a href="https://app.example.com/login?t=9">Anmelden</a><p>Oder dieser Code</p><p>271260</p>',
       }),
     ], NOW);
-    expect(out).toEqual([{ code: "271260", linkUrl: "https://app.example.com/login?t=9", copied: true }]);
+    expect(out).toEqual([{ code: "271260", linkUrl: "https://app.example.com/login?t=9", copied: false }]);
     expect(mockNotify).toHaveBeenCalledWith(
       expect.objectContaining({ code: "271260", linkUrl: "https://app.example.com/login?t=9" }),
     );
@@ -100,9 +101,9 @@ describe("processIncomingCodes", () => {
       }),
     ], NOW);
     const toast = useToastStore.getState().toasts[0];
-    expect(toast?.title).toBe("Code copied: 271260");
+    expect(toast?.title).toBe("Code: 271260");
     expect(toast?.ttlMs).toBeNull();
-    expect(toast?.actions?.map((a) => a.label)).toEqual(["Copy again", "Open sign-in link"]);
+    expect(toast?.actions?.map((a) => a.label)).toEqual(["Copy code", "Open sign-in link"]);
   });
 
   it("surfaces a sign-in link when there is no code", async () => {

@@ -75,11 +75,14 @@ coverage/
 *.tmp
 *.temp
 .cache/
+__pycache__/
 
 # Packaging Artifacts
 build-dir/
 repo/
+src-tauri/binaries/
 velo-*.tar.gz
+sndmail-*.tar.gz
 *.flatpak
 *.rpm
 *.src.rpm

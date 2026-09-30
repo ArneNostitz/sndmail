@@ -10,7 +10,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
  * what the tests exercise.
  */
 
-export const NATIVE_ACTION_EVENT = "velo-notification-action";
+export const NATIVE_ACTION_EVENT = "sndmail-notification-action";
 
 export interface NativeAction {
   id: string;

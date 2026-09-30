@@ -26,7 +26,8 @@ const invoke = vi.fn(async (cmd: string, args?: Record<string, unknown>) => {
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: (...a: unknown[]) => invoke(...(a as [string, Record<string, unknown>])) }));
 
-const KEY_FILE = "velo.key";
+const KEY_FILE = "sndmail.key";
+const LEGACY_KEY_FILE = "velo.key";
 
 describe("crypto", () => {
   beforeEach(() => {
@@ -98,7 +99,7 @@ describe("crypto", () => {
     await encryptValue("test");
 
     expect(tauriFs.mock.exists).toHaveBeenCalledWith(
-      "velo.key",
+      KEY_FILE,
       expect.objectContaining({ baseDir: 26 }),
     );
   });
@@ -110,7 +111,7 @@ describe("crypto", () => {
     await encryptValue("test");
 
     expect(tauriFs.mock.writeTextFile).toHaveBeenCalledWith(
-      "velo.key",
+      KEY_FILE,
       expect.any(String),
       expect.objectContaining({ baseDir: 26 }),
     );
@@ -119,13 +120,13 @@ describe("crypto", () => {
   it("reads existing key from file using baseDir", async () => {
     // Pre-seed a key in the mock store
     const mockKey = btoa(String.fromCharCode(...new Uint8Array(32).fill(42)));
-    tauriFs.store.set("velo.key", mockKey);
+    tauriFs.store.set(LEGACY_KEY_FILE, mockKey);
 
     const { encryptValue, decryptValue } = await import("./crypto");
     const encrypted = await encryptValue("round-trip-test");
 
     expect(tauriFs.mock.readTextFile).toHaveBeenCalledWith(
-      "velo.key",
+      LEGACY_KEY_FILE,
       expect.objectContaining({ baseDir: 26 }),
     );
 
@@ -156,19 +157,19 @@ describe("crypto", () => {
 
     it("migrates a legacy velo.key into the keychain and deletes the file", async () => {
       const legacy = btoa(String.fromCharCode(...new Uint8Array(32).fill(3)));
-      tauriFs.store.set(KEY_FILE, legacy);
+      tauriFs.store.set(LEGACY_KEY_FILE, legacy);
 
       const { encryptValue } = await import("./crypto");
       await encryptValue("hello");
 
       expect(keychain.value).toBe(legacy);
-      expect(tauriFs.mock.remove).toHaveBeenCalledWith(KEY_FILE, expect.anything());
+      expect(tauriFs.mock.remove).toHaveBeenCalledWith(LEGACY_KEY_FILE, expect.anything());
     });
 
     it("can still decrypt data written before the migration", async () => {
       // Encrypt with the legacy on-disk key, with no keychain available
       const legacy = btoa(String.fromCharCode(...new Uint8Array(32).fill(9)));
-      tauriFs.store.set(KEY_FILE, legacy);
+      tauriFs.store.set(LEGACY_KEY_FILE, legacy);
       keychain.available = false;
 
       const before = await import("./crypto");

@@ -55,7 +55,7 @@ export function dispatchEmailNavigation(url: string): void {
     const parts = parsed.pathname.split("/").filter(Boolean).map(decodeURIComponent);
     const appOrigin = (parsed.protocol === "tauri:" && parsed.hostname === "localhost")
       || (parsed.origin !== "null" && parsed.origin === window.location.origin);
-    if (appOrigin && parts[0] === "__velo_email_action__") {
+    if (appOrigin && ["__sndmail_email_action__", "__velo_email_action__"].includes(parts[0] ?? "")) {
       const [, rendererId, actionId] = parts;
       if (rendererId && actionId && handlers.get(rendererId)?.run(actionId)) return;
       reportError("Could not open email action", "The message action is no longer available.");
@@ -74,6 +74,6 @@ export async function startEmailNavigationListener(): Promise<() => void> {
       dispatchEmailNavigation(url);
     }
   };
-  window.addEventListener("velo-email-navigation", handleNavigation);
-  return () => window.removeEventListener("velo-email-navigation", handleNavigation);
+  window.addEventListener("sndmail-email-navigation", handleNavigation);
+  return () => window.removeEventListener("sndmail-email-navigation", handleNavigation);
 }

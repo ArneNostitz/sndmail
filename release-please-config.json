@@ -16,11 +16,11 @@
         },
         {
           "type": "generic",
-          "path": "com.anydaysomething.velopro.metainfo.xml"
+          "path": "com.anydaysomething.sndmail.metainfo.xml"
         },
         {
           "type": "generic",
-          "path": "velo.spec"
+          "path": "sndmail.spec"
         }
       ]
     }

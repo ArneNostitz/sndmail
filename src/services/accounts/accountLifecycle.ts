@@ -3,6 +3,7 @@ import { useAccountStore } from "@/stores/accountStore";
 import { initializeClients, getGmailClient } from "@/services/gmail/tokenManager";
 import { syncAccount } from "@/services/gmail/syncManager";
 import { fetchSendAsAliases } from "@/services/gmail/sendAs";
+import { backgroundWorkerOwnsSync, reconfigureBackgroundWorkerRelay } from "@/services/worker/workerClient";
 
 /**
  * Bring the app up to date after an account was added.
@@ -31,7 +32,12 @@ export async function refreshAfterAccountAdded(): Promise<void> {
   if (newest) {
     if (newest.provider !== "caldav") {
       // Calendar-only accounts wait until the Calendar page is opened.
-      void syncAccount(newest.id);
+      if (backgroundWorkerOwnsSync()) {
+        void reconfigureBackgroundWorkerRelay().catch((error) =>
+          console.warn("Could not refresh background worker account configuration:", error),
+        );
+      }
+      else void syncAccount(newest.id);
     }
 
     // Fetch send-as aliases in the background (non-blocking, skip CalDAV-only accounts)

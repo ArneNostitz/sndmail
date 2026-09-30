@@ -70,8 +70,8 @@ export function SearchBar() {
   }, [activeLabel, accountKey]);
   useEffect(() => {
     const refresh = () => setRevision((v) => v + 1);
-    window.addEventListener("velo-sync-done", refresh);
-    return () => window.removeEventListener("velo-sync-done", refresh);
+    window.addEventListener("sndmail-sync-done", refresh);
+    return () => window.removeEventListener("sndmail-sync-done", refresh);
   }, []);
   useEffect(() => {
     let cancelled = false;

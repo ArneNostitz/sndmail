@@ -15,6 +15,8 @@ on:
 
 jobs:
   update-homebrew:
+    # The tap token can mutate a separate repository; never run this from forks.
+    if: github.repository == 'avihaymenahem/velo'
     runs-on: macos-latest
     steps:
       - name: Get version
@@ -23,13 +25,13 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if [ -n "${{ inputs.tag_name }}" ]; then
-            # Called from release-please workflow — tag_name is the full tag (e.g. velo-v0.4.12)
+            # Called from release-please workflow — tag_name is the full tag (e.g. v0.4.21)
             TAG="${{ inputs.tag_name }}"
           elif [ -n "${{ inputs.version }}" ]; then
             # Manual dispatch with a version — look up the actual tag from releases
             TAG=$(gh release list --repo ${{ github.repository }} --json tagName -q "[.[] | select(.tagName | test(\"${{ inputs.version }}\"))][0].tagName")
             if [ -z "$TAG" ]; then
-              TAG="velo-v${{ inputs.version }}"
+              TAG="v${{ inputs.version }}"
             fi
           else
             # Manual dispatch without version — use latest release
@@ -45,17 +47,17 @@ jobs:
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           TAG="${{ steps.version.outputs.tag }}"
-          DMG_URL="https://github.com/${{ github.repository }}/releases/download/${TAG}/Velo_${VERSION}_universal.dmg"
+          DMG_URL="https://github.com/${{ github.repository }}/releases/download/${TAG}/sndmail_${VERSION}_universal.dmg"
 
           echo "Downloading DMG from: ${DMG_URL}"
           for i in 1 2 3 4 5; do
-            HTTP_CODE=$(curl -sL -o Velo.dmg -w "%{http_code}" "$DMG_URL")
+            HTTP_CODE=$(curl -sL -o sndmail.dmg -w "%{http_code}" "$DMG_URL")
             if [ "$HTTP_CODE" = "200" ]; then
               echo "Download succeeded (attempt $i)"
               break
             fi
             echo "Attempt $i failed (HTTP $HTTP_CODE), retrying in 60s..."
-            rm -f Velo.dmg
+            rm -f sndmail.dmg
             if [ "$i" = "5" ]; then
               echo "::error::DMG not available after 5 attempts"
               exit 1
@@ -63,7 +65,7 @@ jobs:
             sleep 60
           done
 
-          SHA256=$(shasum -a 256 Velo.dmg | awk '{print $1}')
+          SHA256=$(shasum -a 256 sndmail.dmg | awk '{print $1}')
           echo "SHA256: ${SHA256}"
           echo "sha256=${SHA256}" >> "$GITHUB_OUTPUT"
 
@@ -84,11 +86,11 @@ jobs:
             version "${VERSION}"
             sha256 "${SHA256}"
 
-            url "https://github.com/avihaymenahem/velo/releases/download/velo-v#{version}/Velo_#{version}_universal.dmg",
+            url "https://github.com/avihaymenahem/velo/releases/download/v#{version}/sndmail_#{version}_universal.dmg",
                 verified: "github.com/avihaymenahem/velo/"
 
-            name "Velo Pro"
-            desc "Fast, beautiful desktop email client"
+            name "sndmail"
+            desc "Local-first desktop email client"
             homepage "https://github.com/avihaymenahem/velo"
 
             livecheck do
@@ -96,12 +98,12 @@ jobs:
               strategy :github_latest
             end
 
-            app "Velo Pro.app"
+            app "sndmail.app"
 
             caveats <<~EOS
               If the app is not notarized, macOS may block it on first launch.
-              To allow it, right-click Velo Pro.app and select "Open", or run:
-                xattr -cr "/Applications/Velo Pro.app"
+              To allow it, right-click sndmail.app and select "Open", or run:
+                xattr -cr "/Applications/sndmail.app"
             EOS
 
             zap trash: [
@@ -110,6 +112,11 @@ jobs:
               "~/Library/Preferences/com.anydaysomething.velopro.plist",
               "~/Library/Saved Application State/com.anydaysomething.velopro.savedState",
               "~/Library/WebKit/com.anydaysomething.velopro",
+              "~/Library/Application Support/com.anydaysomething.sndmail",
+              "~/Library/Caches/com.anydaysomething.sndmail",
+              "~/Library/Preferences/com.anydaysomething.sndmail.plist",
+              "~/Library/Saved Application State/com.anydaysomething.sndmail.savedState",
+              "~/Library/WebKit/com.anydaysomething.sndmail",
             ]
           end
           CASK_EOF
@@ -122,5 +129,5 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add Casks/velo.rb
           git diff --cached --quiet && echo "No changes to commit" && exit 0
-          git commit -m "Update velo to ${VERSION}"
+          git commit -m "Update sndmail to ${VERSION}"
           git push

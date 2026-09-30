@@ -7,8 +7,8 @@ import { reportError, notify } from "@/stores/toastStore";
  * One-time codes and sign-in links, surfaced the moment they arrive.
  *
  * A login code is worth nothing thirty seconds later, so the point is to
- * spare the user from opening the mail at all: the code goes on the clipboard
- * and into a notification, and a magic link becomes one click.
+ * spare the user from hunting through the mail: the code appears in a
+ * notification with an explicit Copy action, and a magic link becomes one click.
  */
 
 /**
@@ -75,8 +75,6 @@ export async function processIncomingCodes(
 
   const enabled = (await getSetting("otp_detection")) !== "false";
   if (!enabled) return [];
-  const autoCopy = (await getSetting("otp_auto_copy")) !== "false";
-
   const outcomes: OtpOutcome[] = [];
 
   for (const message of messages) {
@@ -91,7 +89,9 @@ export async function processIncomingCodes(
 
     handled.add(message.id);
     const sender = message.fromName ?? message.fromAddress ?? "";
-    const copied = match && autoCopy ? await writeClipboard(match.code) : false;
+    // Never replace clipboard contents on arrival. Copy remains an explicit
+    // action on the notification, toast, or opened message.
+    const copied = false;
 
     try {
       notifyOneTimeCode({
@@ -122,7 +122,7 @@ export async function processIncomingCodes(
       actions.push({
         label: "Open sign-in link",
         run: () => {
-          window.dispatchEvent(new CustomEvent("velo-open-signin-link", {
+          window.dispatchEvent(new CustomEvent("sndmail-open-signin-link", {
             detail: { url: link.url, threadId: message.threadId, accountId: message.accountId },
           }));
         },

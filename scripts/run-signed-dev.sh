@@ -16,11 +16,11 @@ if [ -n "$identity" ]; then
   /usr/bin/codesign \
     --force \
     --sign "$identity" \
-    --identifier com.anydaysomething.velopro \
+    --identifier com.anydaysomething.sndmail \
     --timestamp=none \
     "$binary"
 else
-  echo "warning: no Apple Development identity found; Velo Pro will use an ad-hoc signature" >&2
+  echo "warning: no Apple Development identity found; sndmail will use an ad-hoc signature" >&2
   echo "warning: Little Snitch may ask you to accept the modified app after rebuilds" >&2
 fi
 

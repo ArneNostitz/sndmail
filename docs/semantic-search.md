@@ -1,23 +1,23 @@
 # Local semantic search runtime
 
-Velo can own the local Typesense service used for semantic mail search. Its
+sndmail can own the local Typesense service used for semantic mail search. Its
 Settings controls manage the service and download the multilingual E5 Small
 embedding model. Mail and embeddings stay on the computer; downloading model
 files does not upload mail.
 
 ## Lifecycle
 
-- The feature is opt-in. An enabled runtime starts with Velo.
-- Disabling it stops Velo's search server and indexing worker, retaining their
+- The feature is opt-in. An enabled runtime starts with sndmail.
+- Disabling it stops sndmail's search server and indexing worker, retaining their
   stored model and index for later use.
-- Quitting Velo stops the owned processes. Closing a window hides Velo in the
+- Quitting sndmail stops the owned processes. Closing a window hides sndmail in the
   tray and is not the same as quitting.
 - An unrelated server occupying the search port is a conflict, not permission
   to kill or adopt that process. An existing Homebrew installation is not
   automatically removed.
 - Model download, readiness, indexing progress, and errors are shown in Settings.
 - This runtime indexes mail, not arbitrary folders. Existing SQLite FTS search
-  remains separate; enabling the runtime does not replace Velo's search adapter.
+  remains separate; enabling the runtime does not replace sndmail's search adapter.
 
 ## Resources
 

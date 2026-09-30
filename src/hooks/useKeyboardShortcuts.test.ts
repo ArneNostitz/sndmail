@@ -98,11 +98,11 @@ describe("useKeyboardShortcuts", () => {
     shortcutKeyMap = { ...defaultKeyMap };
   });
 
-  it("dispatches velo-toggle-ask-inbox when 'i' is pressed", () => {
+  it("dispatches sndmail-toggle-ask-inbox when 'i' is pressed", () => {
     renderHook(() => useKeyboardShortcuts());
 
     const listener = vi.fn();
-    window.addEventListener("velo-toggle-ask-inbox", listener);
+    window.addEventListener("sndmail-toggle-ask-inbox", listener);
 
     window.dispatchEvent(
       new KeyboardEvent("keydown", { key: "i", bubbles: true }),
@@ -110,7 +110,7 @@ describe("useKeyboardShortcuts", () => {
 
     expect(listener).toHaveBeenCalledTimes(1);
 
-    window.removeEventListener("velo-toggle-ask-inbox", listener);
+    window.removeEventListener("sndmail-toggle-ask-inbox", listener);
   });
 
   it("dispatches an action rebound to Cmd+Shift+letter", () => {
@@ -118,7 +118,7 @@ describe("useKeyboardShortcuts", () => {
     renderHook(() => useKeyboardShortcuts());
 
     const listener = vi.fn();
-    window.addEventListener("velo-toggle-ask-inbox", listener);
+    window.addEventListener("sndmail-toggle-ask-inbox", listener);
 
     window.dispatchEvent(new KeyboardEvent("keydown", {
       key: "i",
@@ -128,7 +128,7 @@ describe("useKeyboardShortcuts", () => {
     }));
 
     expect(listener).toHaveBeenCalledTimes(1);
-    window.removeEventListener("velo-toggle-ask-inbox", listener);
+    window.removeEventListener("sndmail-toggle-ask-inbox", listener);
   });
 
   it("dispatches an action rebound to an Alt combination", () => {
@@ -136,7 +136,7 @@ describe("useKeyboardShortcuts", () => {
     renderHook(() => useKeyboardShortcuts());
 
     const listener = vi.fn();
-    window.addEventListener("velo-toggle-ask-inbox", listener);
+    window.addEventListener("sndmail-toggle-ask-inbox", listener);
 
     window.dispatchEvent(new KeyboardEvent("keydown", {
       key: "i",
@@ -145,14 +145,14 @@ describe("useKeyboardShortcuts", () => {
     }));
 
     expect(listener).toHaveBeenCalledTimes(1);
-    window.removeEventListener("velo-toggle-ask-inbox", listener);
+    window.removeEventListener("sndmail-toggle-ask-inbox", listener);
   });
 
-  it("dispatches velo-toggle-command-palette when '/' is pressed", () => {
+  it("dispatches sndmail-toggle-command-palette when '/' is pressed", () => {
     renderHook(() => useKeyboardShortcuts());
 
     const listener = vi.fn();
-    window.addEventListener("velo-toggle-command-palette", listener);
+    window.addEventListener("sndmail-toggle-command-palette", listener);
 
     window.dispatchEvent(
       new KeyboardEvent("keydown", { key: "/", bubbles: true }),
@@ -160,14 +160,14 @@ describe("useKeyboardShortcuts", () => {
 
     expect(listener).toHaveBeenCalledTimes(1);
 
-    window.removeEventListener("velo-toggle-command-palette", listener);
+    window.removeEventListener("sndmail-toggle-command-palette", listener);
   });
 
-  it("dispatches velo-toggle-shortcuts-help when '?' is pressed", () => {
+  it("dispatches sndmail-toggle-shortcuts-help when '?' is pressed", () => {
     renderHook(() => useKeyboardShortcuts());
 
     const listener = vi.fn();
-    window.addEventListener("velo-toggle-shortcuts-help", listener);
+    window.addEventListener("sndmail-toggle-shortcuts-help", listener);
 
     window.dispatchEvent(
       new KeyboardEvent("keydown", { key: "?", shiftKey: true, bubbles: true }),
@@ -175,7 +175,7 @@ describe("useKeyboardShortcuts", () => {
 
     expect(listener).toHaveBeenCalledTimes(1);
 
-    window.removeEventListener("velo-toggle-shortcuts-help", listener);
+    window.removeEventListener("sndmail-toggle-shortcuts-help", listener);
   });
 
   it("toggles the settings dialog on Ctrl+,", () => {
@@ -216,7 +216,7 @@ describe("useKeyboardShortcuts", () => {
     renderHook(() => useKeyboardShortcuts());
 
     const listener = vi.fn();
-    window.addEventListener("velo-toggle-ask-inbox", listener);
+    window.addEventListener("sndmail-toggle-ask-inbox", listener);
 
     window.dispatchEvent(
       new KeyboardEvent("keydown", { key: "i", bubbles: true }),
@@ -224,7 +224,7 @@ describe("useKeyboardShortcuts", () => {
 
     expect(listener).not.toHaveBeenCalled();
 
-    window.removeEventListener("velo-toggle-ask-inbox", listener);
+    window.removeEventListener("sndmail-toggle-ask-inbox", listener);
   });
 
   it("selects every thread on Ctrl+A in the mail list", () => {
@@ -269,7 +269,7 @@ describe("useKeyboardShortcuts", () => {
     renderHook(() => useKeyboardShortcuts());
 
     const listener = vi.fn();
-    window.addEventListener("velo-toggle-ask-inbox", listener);
+    window.addEventListener("sndmail-toggle-ask-inbox", listener);
 
     window.dispatchEvent(
       new KeyboardEvent("keydown", { key: "i", bubbles: true }),
@@ -277,7 +277,7 @@ describe("useKeyboardShortcuts", () => {
 
     expect(listener).not.toHaveBeenCalled();
 
-    window.removeEventListener("velo-toggle-ask-inbox", listener);
+    window.removeEventListener("sndmail-toggle-ask-inbox", listener);
   });
 
   it("still closes the composer on Escape", () => {

@@ -8,6 +8,12 @@ describe("public mail links", () => {
   it("allows a thread-only link", () => {
     expect(parseMailLink("velo://open?account=a&thread=t")).toEqual({ accountId: "a", threadId: "t" });
   });
+  it("creates canonical sndmail links and still accepts Velo links", () => {
+    const target = { accountId: "a", threadId: "t", messageId: "m" };
+    expect(createMailLink(target)).toBe("sndmail://open?account=a&thread=t&message=m");
+    expect(parseMailLink("sndmail://open?account=a&thread=t&message=m")).toEqual(target);
+    expect(parseMailLink("velo://open?account=a&thread=t&message=m")).toEqual(target);
+  });
   it.each([
     "velo://delete?account=a&thread=t", "https://open?account=a&thread=t",
     "velo://user@open?account=a&thread=t", "velo://open/file?account=a&thread=t",

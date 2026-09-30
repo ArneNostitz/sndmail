@@ -57,6 +57,7 @@ interface UIState {
   readingPanePosition: ReadingPanePosition;
   readFilter: ReadFilter;
   emailListWidth: number;
+  detailsPaneWidth: number;
   emailDensity: EmailDensity;
   defaultReplyMode: DefaultReplyMode;
   markAsReadBehavior: MarkAsReadBehavior;
@@ -93,6 +94,7 @@ interface UIState {
   setReadingPanePosition: (position: ReadingPanePosition) => void;
   setReadFilter: (filter: ReadFilter) => void;
   setEmailListWidth: (width: number) => void;
+  setDetailsPaneWidth: (width: number) => void;
   setEmailDensity: (density: EmailDensity) => void;
   setDefaultReplyMode: (mode: DefaultReplyMode) => void;
   setMarkAsReadBehavior: (behavior: MarkAsReadBehavior) => void;
@@ -129,6 +131,7 @@ export const useUIStore = create<UIState>((set) => ({
   readingPanePosition: "right",
   readFilter: "all",
   emailListWidth: 420,
+  detailsPaneWidth: 240,
   emailDensity: "default",
   defaultReplyMode: "reply",
   markAsReadBehavior: "instant",
@@ -178,6 +181,11 @@ export const useUIStore = create<UIState>((set) => ({
   setEmailListWidth: (emailListWidth) => {
     setSetting("email_list_width", String(emailListWidth)).catch(() => {});
     set({ emailListWidth });
+  },
+  setDetailsPaneWidth: (detailsPaneWidth) => {
+    const width = Math.min(400, Math.max(200, Math.round(detailsPaneWidth)));
+    setSetting("details_pane_width", String(width)).catch(() => {});
+    set({ detailsPaneWidth: width });
   },
   setEmailDensity: (emailDensity) => {
     setSetting("email_density", emailDensity).catch(() => {});

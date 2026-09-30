@@ -156,7 +156,7 @@ describe("ThreadCard - who spoke last", () => {
       );
       const tag = screen.getByTestId("thread-folder");
       expect(tag).toHaveTextContent("Trash");
-      expect(tag.className).toContain("text-danger");
+      expect(tag.className).toContain("text-text-secondary");
     });
 
     it("names the user label a hit is filed under", () => {

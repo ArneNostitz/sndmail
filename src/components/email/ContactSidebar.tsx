@@ -27,7 +27,7 @@ import { useTimeFormat } from "@/hooks/useTimeFormat";
 
 export function DetailsPlaceholder({ onClose }: { onClose: () => void }) {
   return (
-    <aside className="absolute right-0 top-0 bottom-0 z-20 flex w-[15rem] h-full shrink-0 flex-col border-l border-border-secondary bg-bg-primary shadow-lg @[640px]:relative @[640px]:z-auto @[640px]:shadow-none">
+    <aside className="flex h-full w-full flex-col bg-bg-primary">
       <div className="flex h-12 items-center justify-between border-b border-border-secondary px-3">
         <h2 className="text-xs font-semibold text-text-primary">Details</h2>
         <button onClick={onClose} aria-label="Hide details" className="toolbar-icon-button h-7 w-7">
@@ -237,7 +237,7 @@ export function ContactSidebar({ email, name, accountId, threadId, ownAddresses,
   const domain = email.includes("@") ? email.split("@")[1] : null;
 
   return (
-    <div className="w-[15rem] h-full border-l border-border-secondary bg-bg-primary overflow-y-auto shrink-0">
+    <div className="h-full w-full overflow-y-auto">
       <div className="p-3">
         {/* Pin state + close */}
         <div className="flex items-center justify-between gap-2 -mt-1 -mr-1 mb-1 min-h-[1.5rem]">

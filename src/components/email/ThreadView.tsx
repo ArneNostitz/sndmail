@@ -24,6 +24,7 @@ import { useOwnAddresses } from "@/hooks/useOwnAddresses";
 import { SmartReplySuggestions } from "./SmartReplySuggestions";
 import { InlineReply } from "./InlineReply";
 import { ContactSidebar, DetailsPlaceholder } from "./ContactSidebar";
+import { ResizableDetailsPane } from "@/components/layout/ResizableDetailsPane";
 import { TaskSidebar } from "@/components/tasks/TaskSidebar";
 import { AiTaskExtractDialog } from "@/components/tasks/AiTaskExtractDialog";
 import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
@@ -580,7 +581,7 @@ export function ThreadView({ thread }: ThreadViewProps) {
           <h1 className="text-xl font-semibold tracking-tight text-text-primary flex items-center gap-2">
             {thread.subject ?? "(No subject)"}
             {thread.isMuted && (
-              <span className="text-warning shrink-0" title="Muted">
+              <span className="text-text-secondary shrink-0" title="Muted">
                 <VolumeX size={16} />
               </span>
             )}
@@ -685,7 +686,7 @@ export function ThreadView({ thread }: ThreadViewProps) {
             className="absolute inset-0 z-10 bg-black/20 @[640px]:hidden"
             onClick={toggleContactSidebar}
           />
-          <div className="absolute right-0 top-0 bottom-0 z-20 shadow-xl @[640px]:relative @[640px]:z-auto @[640px]:shadow-none">
+          <ResizableDetailsPane>
             <ContactSidebar
               email={peerAddress}
               name={peerName}
@@ -694,11 +695,13 @@ export function ThreadView({ thread }: ThreadViewProps) {
               ownAddresses={ownAddresses}
               onClose={toggleContactSidebar}
             />
-          </div>
+          </ResizableDetailsPane>
         </>
       )}
       {contactSidebarVisible && (!peerAddress || !threadAccountId) && (
-        <DetailsPlaceholder onClose={toggleContactSidebar} />
+        <ResizableDetailsPane>
+          <DetailsPlaceholder onClose={toggleContactSidebar} />
+        </ResizableDetailsPane>
       )}
 
       {/* Task companion — a gentle overlay in compact spaces and part of the

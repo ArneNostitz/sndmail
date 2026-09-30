@@ -762,7 +762,7 @@ export function EmailList({ width, listRef }: { width?: number; listRef?: React.
       <div className="px-3 py-2 flex items-center justify-between">
         <div>
           <h2 className="text-sm font-semibold text-text-primary capitalize flex items-center gap-1.5">
-            {isSmartFolder && <FolderSearch size={14} className="text-accent shrink-0" />}
+            {isSmartFolder && <FolderSearch size={14} className="text-text-secondary shrink-0" />}
             {searchThreadIds !== null
               ? "Search results"
               : isSmartFolder
@@ -790,7 +790,7 @@ export function EmailList({ width, listRef }: { width?: number; listRef?: React.
             }
             className={`rounded-lg p-1.5 transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
               selectedThread?.fromAddress && searchQuery === `from:${selectedThread.fromAddress}`
-                ? "bg-accent/10 text-accent hover:bg-accent/20"
+                ? "bg-bg-tertiary text-text-primary hover:bg-bg-hover"
                 : "text-text-tertiary hover:bg-bg-hover hover:text-text-primary"
             }`}
           >
@@ -872,7 +872,7 @@ export function EmailList({ width, listRef }: { width?: number; listRef?: React.
 
       {/* Multi-select action bar */}
       <CSSTransition nodeRef={multiSelectBarRef} in={multiSelectCount > 0} timeout={150} classNames="slide-down" unmountOnExit>
-        <div ref={multiSelectBarRef} className="px-3 py-2 border-b border-border-primary bg-accent/5 flex items-center justify-between">
+        <div ref={multiSelectBarRef} className="px-3 py-2 border-b border-border-primary bg-bg-secondary flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="text-xs font-medium text-text-primary">
               {multiSelectCount} selected
@@ -880,7 +880,7 @@ export function EmailList({ width, listRef }: { width?: number; listRef?: React.
             {multiSelectCount < visibleThreads.length && (
               <button
                 onClick={selectAll}
-                className="text-xs text-accent hover:text-accent-hover transition-colors"
+                className="text-xs text-text-secondary hover:text-text-primary transition-colors"
               >
                 Select all
               </button>
@@ -905,7 +905,7 @@ export function EmailList({ width, listRef }: { width?: number; listRef?: React.
               <button
                 onClick={handleMerge}
                 title="Merge into one conversation"
-                className="p-1.5 text-text-secondary hover:text-accent hover:bg-bg-hover rounded transition-colors"
+                className="p-1.5 text-text-secondary hover:text-text-primary hover:bg-bg-hover rounded transition-colors"
               >
                 <Merge size={14} />
               </button>

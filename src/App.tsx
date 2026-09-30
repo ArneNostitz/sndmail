@@ -314,11 +314,17 @@ export default function App() {
           ui.setReadFilter(savedReadFilter);
         }
 
-        // Restore email list width
+        // Restore the independently sized content panes
         const savedListWidth = await getSetting("email_list_width");
         if (savedListWidth) {
           const w = parseInt(savedListWidth, 10);
           if (w >= 240 && w <= 800) ui.setEmailListWidth(w);
+        }
+
+        const savedDetailsWidth = await getSetting("details_pane_width");
+        if (savedDetailsWidth) {
+          const w = parseInt(savedDetailsWidth, 10);
+          if (w >= 200 && w <= 400) ui.setDetailsPaneWidth(w);
         }
 
         // Restore email density
@@ -677,7 +683,7 @@ export default function App() {
   }
 
   return (
-    <div className="app-workspace relative m-2 flex h-[calc(100vh-1rem)] flex-col overflow-hidden rounded-[1.25rem] text-text-primary">
+    <div className="app-workspace relative flex h-full w-full flex-col overflow-hidden text-text-primary">
       <OfflineBanner />
       <ToastHost />
       <DndProvider>

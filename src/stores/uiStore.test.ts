@@ -16,6 +16,7 @@ describe("uiStore", () => {
       contactSidebarVisible: true,
       readingPanePosition: "right",
       emailListWidth: 420,
+      detailsPaneWidth: 240,
       readFilter: "all",
       fontScale: "default",
       colorTheme: "indigo",
@@ -38,6 +39,16 @@ describe("uiStore", () => {
     useUIStore.getState().toggleContactSidebar();
     expect(useUIStore.getState().contactSidebarVisible).toBe(false);
     expect(setSetting).toHaveBeenCalledWith("details_pane_visible", "false");
+  });
+
+  it("persists a bounded details pane width", () => {
+    useUIStore.getState().setDetailsPaneWidth(312);
+    expect(useUIStore.getState().detailsPaneWidth).toBe(312);
+    expect(setSetting).toHaveBeenCalledWith("details_pane_width", "312");
+
+    useUIStore.getState().setDetailsPaneWidth(999);
+    expect(useUIStore.getState().detailsPaneWidth).toBe(400);
+    expect(setSetting).toHaveBeenCalledWith("details_pane_width", "400");
   });
 
   it("should set theme", () => {

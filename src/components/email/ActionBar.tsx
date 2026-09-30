@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import type { Thread } from "@/stores/threadStore";
 import { useThreadStore } from "@/stores/threadStore";
 import { useAccountStore } from "@/stores/accountStore";
@@ -11,11 +11,12 @@ import { snoozeThread } from "@/services/snooze/snoozeManager";
 import { getGmailClient } from "@/services/gmail/tokenManager";
 import { SnoozeDialog } from "./SnoozeDialog";
 import { FollowUpDialog } from "./FollowUpDialog";
-import { Archive, Trash2, MailOpen, Mail, Star, Clock, Ban, Pin, MailMinus, BellRing, VolumeX, Reply, ReplyAll, Forward, FolderInput, Printer, Download, ExternalLink, PanelRightClose, PanelRightOpen, ListTodo, MessagesSquare } from "lucide-react";
+import { Archive, Trash2, MailOpen, Mail, Star, Clock, Ban, Pin, MailMinus, BellRing, VolumeX, Reply, ReplyAll, Forward, FolderInput, Printer, Download, ExternalLink, PanelRightClose, PanelRightOpen, ListTodo, MessagesSquare, MoreHorizontal } from "lucide-react";
 import type { DbMessage } from "@/services/db/messages";
 import type { ThreadViewMode } from "@/stores/uiStore";
 import { insertFollowUpReminder, getFollowUpForThread, cancelFollowUpForThread } from "@/services/db/followUpReminders";
 import { Button } from "@/components/ui/Button";
+import { useClickOutside } from "@/hooks/useClickOutside";
 
 interface ActionBarProps {
   thread: Thread;
@@ -37,7 +38,34 @@ interface ActionBarProps {
 }
 
 function Separator() {
-  return <div className="h-px w-5 bg-border-secondary my-1 shrink-0" />;
+  return <div className="h-5 w-px bg-border-secondary mx-1 shrink-0" />;
+}
+
+function MoreActionItem({
+  icon,
+  label,
+  onClick,
+  active = false,
+  disabled = false,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  onClick: () => void;
+  active?: boolean;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      disabled={disabled}
+      onClick={onClick}
+      className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-xs transition-colors hover:bg-bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:cursor-not-allowed disabled:opacity-45 ${active ? "text-accent" : "text-text-secondary hover:text-text-primary"}`}
+    >
+      <span className="shrink-0">{icon}</span>
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+    </button>
+  );
 }
 
 export function ActionBar({ thread, messages, noReply, defaultReplyMode = "reply", contactSidebarVisible, taskSidebarVisible, onReply, onReplyAll, onForward, onPrint, onExport, onPopOut, onToggleContactSidebar, onToggleTaskSidebar, threadViewMode, onToggleThreadViewMode }: ActionBarProps) {
@@ -50,9 +78,26 @@ export function ActionBar({ thread, messages, noReply, defaultReplyMode = "reply
   const activeLabel = useActiveLabel();
   const [showSnooze, setShowSnooze] = useState(false);
   const [showFollowUp, setShowFollowUp] = useState(false);
+  const [showMoreActions, setShowMoreActions] = useState(false);
+  const moreActionsRef = useRef<HTMLDivElement | null>(null);
+  const moreActionsButtonRef = useRef<HTMLButtonElement | null>(null);
+  const moreActionsMenuRef = useRef<HTMLDivElement | null>(null);
+  const closeMoreActions = useCallback(() => setShowMoreActions(false), []);
+  useClickOutside(moreActionsRef, closeMoreActions);
   const [hasFollowUp, setHasFollowUp] = useState(false);
   const isSpam = thread.labelIds.includes("SPAM");
   const hasLastMessage = !!messages?.length;
+
+  useEffect(() => {
+    if (showMoreActions) {
+      moreActionsMenuRef.current?.querySelector<HTMLButtonElement>("[role=menuitem]:not(:disabled)")?.focus();
+    }
+  }, [showMoreActions]);
+
+  const runMoreAction = (action: () => void | Promise<void>) => () => {
+    setShowMoreActions(false);
+    void action();
+  };
 
   // Check if thread has an active follow-up reminder
   useEffect(() => {
@@ -230,7 +275,7 @@ export function ActionBar({ thread, messages, noReply, defaultReplyMode = "reply
   return (
     <>
       <div className="action-rail flex items-center gap-1 bg-transparent">
-        {/* Reply / Forward group */}
+        {/* One common reply action stays visible; other response options live in More. */}
         {hasLastMessage && (
           <>
             <Button
@@ -239,39 +284,16 @@ export function ActionBar({ thread, messages, noReply, defaultReplyMode = "reply
               icon={defaultReplyMode === "replyAll" ? <ReplyAll size={15} /> : <Reply size={15} />}
               onClick={defaultReplyMode === "replyAll" ? onReplyAll : onReply}
               disabled={noReply}
-              title={noReply ? "This sender does not accept replies" : defaultReplyMode === "replyAll" ? "Reply All (r)" : "Reply (r)"}
+              title={noReply ? "This sender does not accept replies" : defaultReplyMode === "replyAll" ? "Reply all (r)" : "Reply (r)"}
               className="disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-text-secondary"
-            />
-            <Button
-              variant="secondary"
-              iconOnly
-              icon={defaultReplyMode === "replyAll" ? <Reply size={15} /> : <ReplyAll size={15} />}
-              onClick={defaultReplyMode === "replyAll" ? onReply : onReplyAll}
-              disabled={noReply}
-              title={noReply ? "This sender does not accept replies" : defaultReplyMode === "replyAll" ? "Reply (a)" : "Reply All (a)"}
-              className="disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-text-secondary"
-            />
-            <Button
-              variant="secondary"
-              iconOnly
-              icon={<Forward size={15} />}
-              onClick={onForward}
-              title="Forward (f)"
             />
             <Separator />
           </>
         )}
 
-        {/* Core actions group */}
+        {/* Keep the most common thread actions in the toolbar. */}
         <Button variant="secondary" iconOnly icon={<Archive size={15} />} onClick={handleArchive} title="Archive (e)" />
         <Button variant="secondary" iconOnly icon={<Trash2 size={15} />} onClick={handleDelete} title="Delete (#)" />
-        <Button
-          variant="secondary"
-          iconOnly
-          icon={thread.isRead ? <Mail size={15} /> : <MailOpen size={15} />}
-          onClick={handleToggleRead}
-          title={thread.isRead ? "Mark unread" : "Mark read"}
-        />
         <Button
           variant="secondary"
           iconOnly
@@ -280,99 +302,73 @@ export function ActionBar({ thread, messages, noReply, defaultReplyMode = "reply
           title={thread.isStarred ? "Unstar (s)" : "Star (s)"}
           className={thread.isStarred ? "text-warning" : ""}
         />
-        <Button variant="secondary" iconOnly icon={<Clock size={15} />} onClick={() => setShowSnooze(true)} title="Snooze (h)" />
-        <Button
-          variant="secondary"
-          iconOnly
-          icon={<Ban size={15} />}
-          onClick={handleSpam}
-          title={isSpam ? "Not Spam (!)" : "Report Spam (!)"}
-        />
-        <Button
-          variant="secondary"
-          iconOnly
-          icon={<FolderInput size={15} />}
-          onClick={() => {
-            if (!threadAccountId) return;
-            window.dispatchEvent(new CustomEvent("sndmail-move-to-folder", { detail: { threadIds: [thread.id] } }));
-          }}
-          title="Move to folder (v)"
-        />
-        <Button
-          variant="secondary"
-          iconOnly
-          icon={<Pin size={15} className={thread.isPinned ? "fill-current" : ""} />}
-          onClick={handleTogglePin}
-          title={thread.isPinned ? "Unpin (p)" : "Pin (p)"}
-          className={thread.isPinned ? "text-accent" : ""}
-        />
-        <Button
-          variant="secondary"
-          iconOnly
-          icon={<VolumeX size={15} className={thread.isMuted ? "fill-current" : ""} />}
-          onClick={handleToggleMute}
-          title={thread.isMuted ? "Unmute (m)" : "Mute (m)"}
-          className={thread.isMuted ? "text-warning" : ""}
-        />
-        {hasFollowUp ? (
-          <Button
-            variant="secondary"
-            iconOnly
-            icon={<BellRing size={15} className="fill-current" />}
-            onClick={handleCancelFollowUp}
-            title="Cancel follow-up reminder"
-            className="text-accent"
-          />
-        ) : (
-          <Button
-            variant="secondary"
-            iconOnly
-            icon={<BellRing size={15} />}
-            onClick={() => setShowFollowUp(true)}
-            title="Remind me if no reply"
-          />
-        )}
-        {hasUnsubscribe && (
-          <Button
-            variant="secondary"
-            iconOnly
-            icon={<MailMinus size={15} />}
-            onClick={handleUnsubscribe}
-            title={unsubscribeStatus === "loading" ? "Unsubscribing..." : unsubscribeStatus === "done" ? "Unsubscribed" : "Unsubscribe (u)"}
-            className={unsubscribeStatus === "done" ? "text-success" : ""}
-          />
-        )}
-
-        {/* Spacer */}
-        <div className="mt-auto" />
-
-        {/* Utility group */}
-        {onToggleThreadViewMode && (
-          <Button
-            variant="secondary"
-            iconOnly
-            icon={<MessagesSquare size={15} className={threadViewMode === "chat" ? "text-accent" : ""} />}
-            onClick={onToggleThreadViewMode}
-            title={threadViewMode === "chat" ? "Switch to the classic message list" : "Switch to chat view"}
-          />
-        )}
-        <Button variant="secondary" iconOnly icon={<Printer size={15} />} onClick={onPrint} title="Print" />
-        <Button variant="secondary" iconOnly icon={<Download size={15} />} onClick={onExport} title="Export as .eml" />
-        <Button variant="secondary" iconOnly icon={<ExternalLink size={15} />} onClick={onPopOut} title="Open in new window" />
-        <Button
-          variant="secondary"
-          iconOnly
-          icon={<ListTodo size={15} className={taskSidebarVisible ? "text-accent" : ""} />}
-          onClick={onToggleTaskSidebar}
-          title={taskSidebarVisible ? "Hide task panel" : "Show task panel"}
-        />
-        <Button
-          variant="secondary"
-          iconOnly
-          icon={contactSidebarVisible ? <PanelRightClose size={15} /> : <PanelRightOpen size={15} />}
-          onClick={onToggleContactSidebar}
-          title={contactSidebarVisible ? "Hide contact sidebar" : "Show contact sidebar"}
-        />
+        <Separator />
+        <div ref={moreActionsRef} className="relative ml-auto shrink-0">
+          <button
+            ref={moreActionsButtonRef}
+            type="button"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+            onClick={() => setShowMoreActions((open) => !open)}
+            title="More actions"
+            aria-label="More actions"
+            aria-haspopup="menu"
+            aria-expanded={showMoreActions}
+          >
+            <MoreHorizontal size={17} />
+          </button>
+          {showMoreActions && (
+            <div
+              ref={moreActionsMenuRef}
+              role="menu"
+              aria-label="More email actions"
+              className="absolute right-0 top-full z-30 mt-1 w-56 rounded-xl border border-border-primary bg-white p-1 shadow-lg dark:bg-slate-900"
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  setShowMoreActions(false);
+                  moreActionsButtonRef.current?.focus();
+                  return;
+                }
+                const items = Array.from(moreActionsMenuRef.current?.querySelectorAll<HTMLButtonElement>("[role=menuitem]:not(:disabled)") ?? []);
+                const currentIndex = items.indexOf(document.activeElement as HTMLButtonElement);
+                let nextIndex: number | null = null;
+                if (event.key === "ArrowDown") nextIndex = (currentIndex + 1) % items.length;
+                else if (event.key === "ArrowUp") nextIndex = (currentIndex - 1 + items.length) % items.length;
+                else if (event.key === "Home") nextIndex = 0;
+                else if (event.key === "End") nextIndex = items.length - 1;
+                if (nextIndex !== null) {
+                  event.preventDefault();
+                  items[nextIndex]?.focus();
+                }
+              }}
+            >
+              <MoreActionItem icon={thread.isRead ? <Mail size={15} /> : <MailOpen size={15} />} label={thread.isRead ? "Mark unread" : "Mark read"} onClick={runMoreAction(handleToggleRead)} />
+              {hasLastMessage && <MoreActionItem icon={defaultReplyMode === "replyAll" ? <Reply size={15} /> : <ReplyAll size={15} />} label={defaultReplyMode === "replyAll" ? "Reply (a)" : "Reply all (a)"} disabled={noReply} onClick={runMoreAction(defaultReplyMode === "replyAll" ? () => onReply?.() : () => onReplyAll?.())} />}
+              {hasLastMessage && <MoreActionItem icon={<Forward size={15} />} label="Forward (f)" onClick={runMoreAction(() => onForward?.())} />}
+              <MoreActionItem icon={<Clock size={15} />} label="Snooze (h)" onClick={runMoreAction(() => setShowSnooze(true))} />
+              <MoreActionItem icon={<Ban size={15} />} label={isSpam ? "Not spam (!)" : "Report spam (!)"} onClick={runMoreAction(handleSpam)} />
+              <MoreActionItem
+                icon={<FolderInput size={15} />}
+                label="Move to folder (v)"
+                onClick={runMoreAction(() => {
+                  if (threadAccountId) window.dispatchEvent(new CustomEvent("sndmail-move-to-folder", { detail: { threadIds: [thread.id] } }));
+                })}
+              />
+              <div role="separator" className="my-1 border-t border-border-secondary" />
+              <MoreActionItem icon={<Pin size={15} className={thread.isPinned ? "fill-current" : ""} />} label={thread.isPinned ? "Unpin (p)" : "Pin (p)"} active={thread.isPinned} onClick={runMoreAction(handleTogglePin)} />
+              <MoreActionItem icon={<VolumeX size={15} className={thread.isMuted ? "fill-current" : ""} />} label={thread.isMuted ? "Unmute (m)" : "Mute (m)"} active={thread.isMuted} onClick={runMoreAction(handleToggleMute)} />
+              <MoreActionItem icon={<BellRing size={15} className={hasFollowUp ? "fill-current" : ""} />} label={hasFollowUp ? "Cancel follow-up reminder" : "Remind me if no reply"} active={hasFollowUp} onClick={runMoreAction(hasFollowUp ? handleCancelFollowUp : () => setShowFollowUp(true))} />
+              {hasUnsubscribe && <MoreActionItem icon={<MailMinus size={15} />} label={unsubscribeStatus === "loading" ? "Unsubscribing…" : unsubscribeStatus === "done" ? "Unsubscribed" : "Unsubscribe (u)"} active={unsubscribeStatus === "done"} onClick={runMoreAction(handleUnsubscribe)} />}
+              <div role="separator" className="my-1 border-t border-border-secondary" />
+              {onToggleThreadViewMode && <MoreActionItem icon={<MessagesSquare size={15} />} label={threadViewMode === "chat" ? "Classic message list" : "Chat view"} active={threadViewMode === "chat"} onClick={runMoreAction(onToggleThreadViewMode)} />}
+              <MoreActionItem icon={<Printer size={15} />} label="Print" onClick={runMoreAction(() => onPrint?.())} />
+              <MoreActionItem icon={<Download size={15} />} label="Export as .eml" onClick={runMoreAction(() => onExport?.())} />
+              <MoreActionItem icon={<ExternalLink size={15} />} label="Open in new window" onClick={runMoreAction(() => onPopOut?.())} />
+              <MoreActionItem icon={<ListTodo size={15} />} label={taskSidebarVisible ? "Hide task panel" : "Show task panel"} active={taskSidebarVisible} onClick={runMoreAction(() => onToggleTaskSidebar?.())} />
+              <MoreActionItem icon={contactSidebarVisible ? <PanelRightClose size={15} /> : <PanelRightOpen size={15} />} label={contactSidebarVisible ? "Hide contact sidebar" : "Show contact sidebar"} active={contactSidebarVisible} onClick={runMoreAction(() => onToggleContactSidebar?.())} />
+            </div>
+          )}
+        </div>
       </div>
 
       <SnoozeDialog

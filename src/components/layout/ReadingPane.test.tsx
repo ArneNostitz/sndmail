@@ -1,6 +1,7 @@
 import { act, render, screen } from "@testing-library/react";
 import { ReadingPane } from "./ReadingPane";
 import { useThreadStore, type Thread } from "@/stores/threadStore";
+import { useUIStore } from "@/stores/uiStore";
 
 const route = vi.hoisted(() => ({ id: "broken", accountId: null as string | null }));
 vi.mock("@/hooks/useRouteNavigation", () => ({
@@ -22,6 +23,14 @@ const good = {
 
 afterEach(() => vi.restoreAllMocks());
 beforeEach(() => { route.accountId = null; });
+
+it("shows the details column by default when no conversation is selected", () => {
+  route.id = "";
+  useUIStore.setState({ contactSidebarVisible: true });
+  render(<ReadingPane />);
+  expect(screen.getByText("Details")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Hide details" })).toBeInTheDocument();
+});
 
 it("recovers from a rendering error when another email is selected", () => {
   vi.spyOn(console, "error").mockImplementation(() => {});

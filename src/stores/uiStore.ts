@@ -128,7 +128,7 @@ export const useUIStore = create<UIState>((set) => ({
   contactSidebarVisible: true,
   readingPanePosition: "right",
   readFilter: "all",
-  emailListWidth: 320,
+  emailListWidth: 420,
   emailDensity: "default",
   defaultReplyMode: "reply",
   markAsReadBehavior: "instant",
@@ -137,8 +137,8 @@ export const useUIStore = create<UIState>((set) => ({
   sendAndArchive: false,
   inboxViewMode: "unified",
   threadViewMode: "classic",
-  // The task companion is part of the focused reading composition.
-  taskSidebarVisible: true,
+  // Open the task companion on demand so email remains the primary reading surface.
+  taskSidebarVisible: false,
   sidebarNavConfig: null,
   reduceMotion: false,
   timeFormat: "system",
@@ -163,7 +163,7 @@ export const useUIStore = create<UIState>((set) => ({
   toggleContactSidebar: () =>
     set((state) => {
       const visible = !state.contactSidebarVisible;
-      setSetting("contact_sidebar_visible", String(visible)).catch(() => {});
+      setSetting("details_pane_visible", String(visible)).catch(() => {});
       return { contactSidebarVisible: visible };
     }),
   setContactSidebarVisible: (contactSidebarVisible) => set({ contactSidebarVisible }),

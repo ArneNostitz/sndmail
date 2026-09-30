@@ -749,17 +749,17 @@ export function EmailList({ width, listRef }: { width?: number; listRef?: React.
   return (
     <div
       ref={listRef}
-      className={`workspace-panel flex flex-col bg-white glass-panel ${
+      className={`flex flex-col bg-bg-primary ${
         readingPanePosition === "right"
-          ? "min-w-[240px] shrink-0"
+          ? "min-w-[240px] shrink-0 border-r border-border-secondary"
           : readingPanePosition === "bottom"
-            ? "w-full border-b border-border-primary h-[40%] min-h-[200px]"
+            ? "w-full border-b border-border-secondary h-[40%] min-h-[200px]"
             : "w-full flex-1"
       }`}
       style={readingPanePosition === "right" && width ? { width } : undefined}
     >
       {/* Header */}
-      <div className="px-5 py-3 flex items-center justify-between">
+      <div className="px-3 py-2 flex items-center justify-between">
         <div>
           <h2 className="text-sm font-semibold text-text-primary capitalize flex items-center gap-1.5">
             {isSmartFolder && <FolderSearch size={14} className="text-accent shrink-0" />}
@@ -832,7 +832,7 @@ export function EmailList({ width, listRef }: { width?: number; listRef?: React.
               onClick={() => setInboxFocus("all")}
               aria-pressed={inboxFocus === "all"}
               className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
-                inboxFocus === "all" ? "bg-white text-text-primary shadow-sm" : "text-text-tertiary hover:text-text-secondary"
+                inboxFocus === "all" ? "bg-bg-primary text-text-primary shadow-sm" : "text-text-tertiary hover:text-text-secondary"
               }`}
             >
               All
@@ -841,7 +841,7 @@ export function EmailList({ width, listRef }: { width?: number; listRef?: React.
               onClick={() => setInboxFocus("important")}
               aria-pressed={inboxFocus === "important"}
               className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
-                inboxFocus === "important" ? "bg-white text-text-primary shadow-sm" : "text-text-tertiary hover:text-text-secondary"
+                inboxFocus === "important" ? "bg-bg-primary text-text-primary shadow-sm" : "text-text-tertiary hover:text-text-secondary"
               }`}
             >
               Important
@@ -929,7 +929,7 @@ export function EmailList({ width, listRef }: { width?: number; listRef?: React.
       </CSSTransition>
 
       {/* Thread list */}
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto py-2">
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto py-1.5">
         {isLoading && threads.length === 0 ? (
           <EmailListSkeleton />
         ) : filteredThreads.length === 0 && bundleRules.length === 0 ? (

@@ -28,7 +28,6 @@ import {
   ChevronUp,
   HelpCircle,
   PanelLeftClose,
-  PanelLeftOpen,
   Pencil,
   Columns2,
   Bell,
@@ -39,6 +38,7 @@ import {
   Paperclip,
   FolderSearch,
   Loader2,
+  MoreHorizontal,
   type LucideIcon,
 } from "lucide-react";
 import { useTaskStore } from "@/stores/taskStore";
@@ -103,7 +103,7 @@ function DroppableNavItem({
         isOver
           ? "bg-accent/20 ring-1 ring-accent"
           : isActive
-            ? "bg-accent/10 text-accent font-medium"
+            ? "bg-sidebar-hover text-sidebar-text font-medium"
             : "hover:bg-sidebar-hover text-sidebar-text"
       }`}
     >
@@ -142,7 +142,7 @@ function DroppableLabelItem({
         isOver
           ? "bg-accent/20 ring-1 ring-accent"
           : isActive
-            ? "bg-accent/10 text-accent font-medium"
+            ? "bg-sidebar-hover text-sidebar-text font-medium"
             : "hover:bg-sidebar-hover text-sidebar-text"
       }`}
     >
@@ -203,6 +203,16 @@ function getSmartFolderIcon(iconName: string): LucideIcon {
 }
 
 const LABELS_COLLAPSED_COUNT = 3;
+const COMPACT_NAV_IDS = new Set([
+  "inbox",
+  "conversations",
+  "starred",
+  "snoozed",
+  "sent",
+  "drafts",
+  "tasks",
+  "calendar",
+]);
 
 export function Sidebar({ collapsed }: SidebarProps) {
   const activeLabel = useActiveLabel();
@@ -365,21 +375,24 @@ export function Sidebar({ collapsed }: SidebarProps) {
   }, [openMenu]);
 
   const editingLabel = editingLabelId ? labels.find((l) => l.id === editingLabelId) ?? null : null;
+  const displayedNavItems = collapsed
+    ? visibleNavItems.filter((item) => COMPACT_NAV_IDS.has(item.id) || activeLabel === item.id)
+    : visibleNavItems;
 
   return (
     <aside
       className={`reference-sidebar no-select flex flex-col bg-transparent text-sidebar-text transition-all duration-300 ${
-        collapsed ? "w-[4.75rem]" : "w-60"
+        collapsed ? "w-[3.25rem]" : "w-60"
       }`}
     >
       <div className={`flex h-12 items-center ${collapsed ? "justify-center" : "px-4"}`}>
-        <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/10 text-sm font-semibold text-white shadow-sm">
+        <span className="flex h-8 w-8 items-center justify-center rounded-xl border border-border-secondary bg-bg-tertiary text-sm font-semibold text-text-secondary">
           S
         </span>
       </div>
 
       <nav className="flex-1 overflow-y-auto py-2">
-        {visibleNavItems.map((item) => {
+        {displayedNavItems.map((item) => {
           const Icon = item.icon;
           const isInbox = item.id === "inbox";
           return (
@@ -455,7 +468,7 @@ export function Sidebar({ collapsed }: SidebarProps) {
                         }}
                         className={`flex items-center gap-2 w-full py-1.5 pl-7 pr-3 text-left text-[0.8125rem] transition-colors ${
                           isCatActive
-                            ? "text-accent font-medium"
+                            ? "text-sidebar-text font-medium"
                             : "text-sidebar-text/70 hover:text-sidebar-text hover:bg-sidebar-hover"
                         }`}
                       >
@@ -471,7 +484,7 @@ export function Sidebar({ collapsed }: SidebarProps) {
         })}
 
         {/* Smart Folders */}
-        {showSmartFolders && (smartFolders.length > 0 || !collapsed) && (
+        {showSmartFolders && !collapsed && (
           <>
             {!collapsed && (
               <div className="flex items-center justify-between px-3 pt-4 pb-1">
@@ -501,7 +514,7 @@ export function Sidebar({ collapsed }: SidebarProps) {
                     collapsed ? "justify-center px-0" : "gap-3 px-3 text-left"
                   } ${
                     isActive
-                      ? "bg-accent/10 text-accent font-medium"
+                      ? "bg-sidebar-hover text-sidebar-text font-medium"
                       : "hover:bg-sidebar-hover text-sidebar-text"
                   }`}
                 >
@@ -527,7 +540,7 @@ export function Sidebar({ collapsed }: SidebarProps) {
         )}
 
         {/* User labels */}
-        {showLabels && (labels.length > 0 || !collapsed) && (
+        {showLabels && !collapsed && (
           <>
             {!collapsed && (
               <div className="flex items-center justify-between px-3 pt-4 pb-1">
@@ -629,7 +642,7 @@ export function Sidebar({ collapsed }: SidebarProps) {
             collapsed ? "p-2 justify-center" : "gap-3 flex-1 px-3 py-2 text-left"
           } ${
             settingsOpen
-              ? "bg-accent/10 text-accent font-medium"
+              ? "bg-sidebar-hover text-sidebar-text font-medium"
               : "text-sidebar-text hover:bg-sidebar-hover"
           }`}
           title="Settings (Ctrl+,)"
@@ -643,7 +656,7 @@ export function Sidebar({ collapsed }: SidebarProps) {
             collapsed ? "p-2 justify-center" : "p-2"
           } ${
             activeLabel === "help"
-              ? "bg-accent/10 text-accent font-medium"
+              ? "bg-sidebar-hover text-sidebar-text font-medium"
               : "text-sidebar-text hover:bg-sidebar-hover"
           }`}
           title="Help"
@@ -653,9 +666,10 @@ export function Sidebar({ collapsed }: SidebarProps) {
         <button
           onClick={toggleSidebar}
           className="p-2 text-sidebar-text/60 hover:text-sidebar-text hover:bg-sidebar-hover rounded-md transition-colors"
-          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          title={collapsed ? "More destinations" : "Collapse sidebar"}
+          aria-label={collapsed ? "More destinations" : "Collapse sidebar"}
         >
-          {collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
+          {collapsed ? <MoreHorizontal size={16} /> : <PanelLeftClose size={16} />}
         </button>
       </div>
 
@@ -687,7 +701,7 @@ function PendingOpsIndicator({ collapsed }: { collapsed: boolean }) {
   if (pendingOpsCount <= 0) return null;
 
   return (
-    <div className="px-3 py-2 border-t border-border-primary">
+    <div className={`py-2 border-t border-border-primary ${collapsed ? "px-2" : "px-3"}`}>
       {collapsed ? (
         <div className="flex justify-center">
           <span className="bg-accent/20 text-accent text-xs font-medium px-1.5 py-0.5 rounded-full">{pendingOpsCount}</span>

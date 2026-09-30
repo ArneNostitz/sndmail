@@ -18,7 +18,7 @@ export function WorkspaceToolbar({ onAddAccount }: WorkspaceToolbarProps) {
   const { back, forward, canGoBack } = useHistoryNav();
 
   return (
-    <header className="workspace-toolbar flex h-14 shrink-0 items-center gap-2 px-4" data-tauri-drag-region>
+    <header className="workspace-toolbar flex h-12 shrink-0 items-center gap-2 px-3" data-tauri-drag-region>
       <div className="shrink-0" data-tauri-drag-region>
         <WindowControls />
       </div>
@@ -27,7 +27,7 @@ export function WorkspaceToolbar({ onAddAccount }: WorkspaceToolbarProps) {
       </div>
       <button
         onClick={() => openComposer()}
-        className="toolbar-compose interactive-btn flex shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium"
+        className="toolbar-compose interactive-btn flex shrink-0 items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium"
       >
         <Plus size={16} />
         Compose

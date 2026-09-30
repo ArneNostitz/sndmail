@@ -13,7 +13,9 @@ describe("uiStore", () => {
     useUIStore.setState({
       theme: "system",
       sidebarCollapsed: false,
+      contactSidebarVisible: true,
       readingPanePosition: "right",
+      emailListWidth: 420,
       readFilter: "all",
       fontScale: "default",
       colorTheme: "indigo",
@@ -28,6 +30,14 @@ describe("uiStore", () => {
     expect(state.theme).toBe("system");
     expect(state.sidebarCollapsed).toBe(false);
     expect(state.readingPanePosition).toBe("right");
+    expect(state.contactSidebarVisible).toBe(true);
+    expect(state.taskSidebarVisible).toBe(false);
+  });
+
+  it("persists details visibility using the new pane preference", () => {
+    useUIStore.getState().toggleContactSidebar();
+    expect(useUIStore.getState().contactSidebarVisible).toBe(false);
+    expect(setSetting).toHaveBeenCalledWith("details_pane_visible", "false");
   });
 
   it("should set theme", () => {

@@ -4,8 +4,12 @@ import { useLinkedAccountId, useSelectedThreadId } from "@/hooks/useRouteNavigat
 import { EmptyState } from "../ui/EmptyState";
 import { ReadingPaneIllustration } from "../ui/illustrations";
 import { ErrorBoundary } from "../ui/ErrorBoundary";
+import { useUIStore } from "@/stores/uiStore";
+import { DetailsPlaceholder } from "../email/ContactSidebar";
 
 export function ReadingPane() {
+  const contactSidebarVisible = useUIStore((s) => s.contactSidebarVisible);
+  const toggleContactSidebar = useUIStore((s) => s.toggleContactSidebar);
   const selectedThreadId = useSelectedThreadId();
   const linkedAccountId = useLinkedAccountId();
   // Falls back to the detached cache so a thread opened from the contact
@@ -20,14 +24,17 @@ export function ReadingPane() {
 
   if (!selectedThread) {
     return (
-      <div className="workspace-panel flex-1 flex flex-col bg-white glass-panel">
-        <EmptyState illustration={ReadingPaneIllustration} title="sndmail" subtitle="Select an email to read" />
+      <div className="@container relative flex flex-1 min-w-0 bg-bg-primary">
+        <div className="flex flex-1 min-w-0 flex-col">
+          <EmptyState illustration={ReadingPaneIllustration} title="sndmail" subtitle="Select an email to read" />
+        </div>
+        {contactSidebarVisible && <DetailsPlaceholder onClose={toggleContactSidebar} />}
       </div>
     );
   }
 
   return (
-    <div className="workspace-panel flex-1 bg-white overflow-hidden glass-panel">
+    <div className="flex flex-1 min-w-0 bg-bg-primary overflow-hidden">
       {/* Keyed so switching threads resets per-thread state — an open inline
           reply with text in it must not follow you to the next thread */}
       <ErrorBoundary key={`${selectedThread.accountId}:${selectedThread.id}`} name="Message">

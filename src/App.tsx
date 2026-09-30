@@ -11,6 +11,7 @@ import { useUIStore } from "./stores/uiStore";
 import { useAccountStore } from "./stores/accountStore";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import { runMigrations } from "./services/db/migrations";
+import { attachBackgroundWorker, backgroundWorkerOwnsSync, observeWorkerChanges, wakeBackgroundWorker } from "./services/worker/workerClient";
 import { getAllAccounts } from "./services/db/accounts";
 import { getSetting } from "./services/db/settings";
 import {
@@ -137,6 +138,7 @@ export default function App() {
   const [showAskInbox, setShowAskInbox] = useState(false);
   const [moveToFolderState, setMoveToFolderState] = useState<{ open: boolean; threadIds: string[] }>({ open: false, threadIds: [] });
   const deepLinkCleanupRef = useRef<(() => void) | undefined>(undefined);
+  const workerChangeCleanupRef = useRef<(() => void) | undefined>(undefined);
 
   // Sync bridge: router state → Zustand stores (temporary)
   useRouterSyncBridge();
@@ -154,7 +156,10 @@ export default function App() {
       triggerQueueFlush();
       const accounts = useAccountStore.getState().accounts;
       const activeIds = accounts.filter((a) => a.isActive && a.provider !== "caldav").map((a) => a.id);
-      if (activeIds.length > 0) triggerSync(activeIds);
+      if (activeIds.length > 0) {
+        if (backgroundWorkerOwnsSync()) void wakeBackgroundWorker();
+        else triggerSync(activeIds);
+      }
     };
     const handleOffline = () => setOnline(false);
 
@@ -192,9 +197,9 @@ export default function App() {
       const detail = (e as CustomEvent<{ threadIds: string[] }>).detail;
       setMoveToFolderState({ open: true, threadIds: detail.threadIds });
     };
-    window.addEventListener("velo-toggle-command-palette", togglePalette);
-    window.addEventListener("velo-toggle-shortcuts-help", toggleHelp);
-    window.addEventListener("velo-toggle-ask-inbox", toggleAskInbox);
+    window.addEventListener("sndmail-toggle-command-palette", togglePalette);
+    window.addEventListener("sndmail-toggle-shortcuts-help", toggleHelp);
+    window.addEventListener("sndmail-toggle-ask-inbox", toggleAskInbox);
     // A sign-in link opened from a notification goes past the phishing check
     // rather than straight to the browser — a link in mail is the vector
     const handleSignInLink = async (e: Event) => {
@@ -211,11 +216,15 @@ export default function App() {
     const handleIdleSync = (e: Event) => {
       const detail = (e as CustomEvent).detail as { accountId?: string } | undefined;
       if (!detail?.accountId) return;
+      if (backgroundWorkerOwnsSync()) {
+        void wakeBackgroundWorker();
+        return;
+      }
       import("@/services/gmail/syncManager")
         .then(({ syncAccount }) => syncAccount(detail.accountId!))
         .catch((err) => console.error("Sync after IDLE failed:", err));
     };
-    window.addEventListener("velo-idle-sync", handleIdleSync);
+    window.addEventListener("sndmail-idle-sync", handleIdleSync);
 
     // Anything nobody caught. Not a substitute for catching things — the
     // message is whatever the browser gives us — but it means an error can no
@@ -229,18 +238,18 @@ export default function App() {
     window.addEventListener("error", handleUncaught);
     window.addEventListener("unhandledrejection", handleRejection);
 
-    window.addEventListener("velo-open-signin-link", handleSignInLink);
+    window.addEventListener("sndmail-open-signin-link", handleSignInLink);
 
-    window.addEventListener("velo-move-to-folder", handleMoveToFolder);
+    window.addEventListener("sndmail-move-to-folder", handleMoveToFolder);
     return () => {
-      window.removeEventListener("velo-toggle-command-palette", togglePalette);
-      window.removeEventListener("velo-toggle-shortcuts-help", toggleHelp);
-      window.removeEventListener("velo-toggle-ask-inbox", toggleAskInbox);
-      window.removeEventListener("velo-idle-sync", handleIdleSync);
+      window.removeEventListener("sndmail-toggle-command-palette", togglePalette);
+      window.removeEventListener("sndmail-toggle-shortcuts-help", toggleHelp);
+      window.removeEventListener("sndmail-toggle-ask-inbox", toggleAskInbox);
+      window.removeEventListener("sndmail-idle-sync", handleIdleSync);
       window.removeEventListener("error", handleUncaught);
       window.removeEventListener("unhandledrejection", handleRejection);
-      window.removeEventListener("velo-open-signin-link", handleSignInLink);
-      window.removeEventListener("velo-move-to-folder", handleMoveToFolder);
+      window.removeEventListener("sndmail-open-signin-link", handleSignInLink);
+      window.removeEventListener("sndmail-move-to-folder", handleMoveToFolder);
     };
   }, []);
 
@@ -252,7 +261,8 @@ export default function App() {
         const accounts = useAccountStore.getState().accounts;
         const activeIds = accounts.filter((a) => a.isActive && a.provider !== "caldav").map((a) => a.id);
         if (activeIds.length > 0) {
-          triggerSync(activeIds);
+          if (backgroundWorkerOwnsSync()) void wakeBackgroundWorker();
+          else triggerSync(activeIds);
         }
       }).then((fn) => { unlisten = fn; });
     });
@@ -434,16 +444,25 @@ export default function App() {
           }
         }
 
+        // The native login helper owns background sync when installed. The UI
+        // keeps its existing sync path for development and unsupported hosts.
+        const backgroundWorker = await attachBackgroundWorker();
+        if (backgroundWorker) {
+          workerChangeCleanupRef.current = observeWorkerChanges();
+        }
+
         // Catch up once, then let Gmail push / IMAP IDLE drive mail updates.
         if (emailAccountIds.length > 0) {
-          startInitialSync(emailAccountIds);
-          void startGmailPushRelay();
+          if (!backgroundWorker) {
+            startInitialSync(emailAccountIds);
+            void startGmailPushRelay();
 
-          // Let the servers say when something changed.
-          const { startIdleWatchers } = await import("@/services/imap/idleManager");
-          startIdleWatchers().catch((err) => {
-            console.warn("Could not start IDLE watchers:", err);
-          });
+            // Let the servers say when something changed.
+            const { startIdleWatchers } = await import("@/services/imap/idleManager");
+            startIdleWatchers().catch((err) => {
+              console.warn("Could not start IDLE watchers:", err);
+            });
+          }
         }
 
         // Start snooze, scheduled send, follow-up, bundle, and queue checkers
@@ -500,6 +519,7 @@ export default function App() {
       stopUpdateChecker();
       unregisterComposeShortcut();
       deepLinkCleanupRef.current?.();
+      workerChangeCleanupRef.current?.();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- store setters are stable references
   }, []);
@@ -516,12 +536,12 @@ export default function App() {
             );
             // Threads are written to the DB as they arrive, so show them as they
             // land instead of leaving the list empty until the whole sync ends.
-            // A separate event from velo-sync-done: this one must not disturb an
+            // A separate event from sndmail-sync-done: this one must not disturb an
             // active search or a scrolled-in page.
             const now = Date.now();
             if (now - lastIncrementalRefreshRef.current > INCREMENTAL_REFRESH_MS) {
               lastIncrementalRefreshRef.current = now;
-              window.dispatchEvent(new Event("velo-sync-progress"));
+              window.dispatchEvent(new Event("sndmail-sync-progress"));
             }
           } else if (progress.phase === "labels") {
             setSyncStatus("Syncing labels...");
@@ -545,7 +565,7 @@ export default function App() {
         setTimeout(() => setSyncStatus(null), 2_000);
       }
       // One store/list refresh for the whole mailbox batch, never one per account.
-      window.dispatchEvent(new Event("velo-sync-done"));
+      window.dispatchEvent(new Event("sndmail-sync-done"));
       void updateBadgeCount();
 
       // Keep post-sync categorization out of the per-mailbox loop and start it

@@ -1,5 +1,5 @@
 {
-  "name": "velo",
+  "name": "sndmail",
   "version": "0.4.21+010",
   "private": true,
   "license": "Apache-2.0",
@@ -14,8 +14,9 @@
     "lint": "eslint",
     "tauri": "tauri",
     "semantic:prepare": "node scripts/prepare-semantic-search.mjs",
+    "worker:prepare": "node scripts/prepare-mail-worker.mjs",
     "dev:landing": "npm run dev --prefix landing",
-    "flatpak": "flatpak-builder --force-clean --user --install --install-deps-from=flathub build-dir com.anydaysomething.velopro.yml",
+    "flatpak": "flatpak-builder --force-clean --user --install --install-deps-from=flathub build-dir com.anydaysomething.sndmail.yml",
     "build:signed": "node scripts/build-signed.mjs",
     "signing:macos": "node scripts/macos-signing.mjs"
   },

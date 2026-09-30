@@ -105,6 +105,12 @@ describe('parseReferences', () => {
     expect(parseReferences('<abc@host.com>')).toEqual(['abc@host.com']);
   });
 
+  it('continues to recognize legacy Velo-generated synthetic Message-IDs', () => {
+    expect(parseReferences('<synthetic-acc-1-INBOX-42@velo.local>')).toEqual([
+      'synthetic-acc-1-INBOX-42@velo.local',
+    ]);
+  });
+
   it('parses multiple angle-bracket Message-IDs', () => {
     expect(parseReferences('<id1@host> <id2@host>')).toEqual([
       'id1@host',

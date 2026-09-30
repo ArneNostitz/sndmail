@@ -221,7 +221,7 @@ export function PastConversations({
                   onClick={async () => {
                     try {
                       await mergeThreads(accountId, currentThreadId, [thread.id]);
-                      window.dispatchEvent(new CustomEvent("velo-threads-merged"));
+                      window.dispatchEvent(new CustomEvent("sndmail-threads-merged"));
                     } catch (err) {
                       console.error("Failed to merge conversation:", err);
                     }

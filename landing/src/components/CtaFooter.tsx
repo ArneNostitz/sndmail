@@ -17,7 +17,7 @@ export function CtaFooter() {
             viewport={{ once: true }}
             transition={{ duration: 0.7 }}
           >
-            <span className="gradient-text">Try Velo</span>
+            <span className="gradient-text">Try sndmail</span>
             <span className="text-text-primary"> today</span>
           </motion.h2>
 
@@ -69,8 +69,8 @@ export function CtaFooter() {
       <footer className="border-t border-border py-8 px-6">
         <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <img src="/logo-white.svg" alt="Velo" className="w-5 h-5 rounded" />
-            <span className="text-sm text-text-muted">Velo</span>
+            <img src="/logo-white.svg" alt="sndmail" className="w-5 h-5 rounded" />
+            <span className="text-sm text-text-muted">sndmail</span>
           </div>
 
           <div className="flex items-center gap-6 text-sm text-text-muted">

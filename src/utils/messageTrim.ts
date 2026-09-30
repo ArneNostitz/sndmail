@@ -40,6 +40,7 @@ const QUOTE_SELECTORS = [
   "#divRplyFwdMsg",
   "div[id^='divRplyFwdMsg']",
   "hr#stopSpelling",
+  "[data-sndmail-quote]",
   "[data-velo-quote]",
 ];
 
@@ -49,6 +50,7 @@ const SIGNATURE_SELECTORS = [
   "[data-smartmail='gmail_signature']",
   "div.moz-signature",
   "signature",
+  "[data-sndmail-signature]",
   "[data-velo-signature]",
 ];
 

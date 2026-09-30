@@ -39,7 +39,7 @@
   <path d="M96 88H112V104H96V88Z" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
 
   <!-- Logo text -->
-  <text x="140" y="108" font-family="Inter, -apple-system, sans-serif" font-size="32" font-weight="700" fill="#E8E8F0" letter-spacing="-0.5">Velo</text>
+  <text x="140" y="108" font-family="Inter, -apple-system, sans-serif" font-size="32" font-weight="700" fill="#E8E8F0" letter-spacing="-0.5">sndmail</text>
 
   <!-- Main headline -->
   <text x="80" y="280" font-family="Inter, -apple-system, sans-serif" font-size="72" font-weight="800" fill="#E8E8F0" letter-spacing="-2">Email at the</text>

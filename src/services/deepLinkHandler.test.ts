@@ -20,11 +20,15 @@ beforeEach(() => {
 
 describe("native mail link delivery", () => {
   it("opens a cold-start link after registering listeners", async () => {
-    mocks.current.mockResolvedValue(["velo://open?account=a&thread=t&message=m"]);
+    mocks.current.mockResolvedValue(["sndmail://open?account=a&thread=t&message=m"]);
     const cleanup = await initDeepLinkHandler();
     expect(mocks.openMail).toHaveBeenCalledWith({ accountId: "a", threadId: "t", messageId: "m" });
     expect(mocks.onOpen.mock.invocationCallOrder[0]).toBeLessThan(mocks.current.mock.invocationCallOrder[0]!);
     cleanup(); expect(mocks.cleanup).toHaveBeenCalledTimes(2);
+  });
+  it("continues to open legacy Velo links", async () => {
+    await handleUrl("velo://open?account=a&thread=t&message=m");
+    expect(mocks.openMail).toHaveBeenCalledWith({ accountId: "a", threadId: "t", messageId: "m" });
   });
   it("coalesces warm OS, single-instance, and startup duplicate deliveries", async () => {
     const url = "velo://open?account=a&thread=t";

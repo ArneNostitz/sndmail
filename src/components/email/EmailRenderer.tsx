@@ -363,7 +363,7 @@ export function EmailRenderer({
       const actions = instrumentEmailActions(activeDocument, rendererId);
       if (actions.size > 0) {
         navigationActionsRef.current = actions;
-      } else if (!activeDocument.querySelector("[data-velo-action-id]")) {
+      } else if (!activeDocument.querySelector("[data-sndmail-action-id], [data-velo-action-id]")) {
         navigationActionsRef.current.clear();
       }
       observerRef.current?.disconnect();
@@ -413,11 +413,12 @@ export function EmailRenderer({
     pre { overflow-x: auto; }
     table { max-width: 100%; }
     a { cursor: pointer; }
+    a[data-sndmail-kind="date"], a[data-sndmail-kind="phone"], a[data-sndmail-kind="address"],
     a[data-velo-kind="date"], a[data-velo-kind="phone"], a[data-velo-kind="address"] {
       text-decoration-style: dotted;
       text-underline-offset: 2px;
     }
-    mark[data-velo-search-match="true"] {
+    mark[data-sndmail-search-match="true"], mark[data-velo-search-match="true"] {
       background: #fde68a;
       color: inherit;
       border-radius: 2px;

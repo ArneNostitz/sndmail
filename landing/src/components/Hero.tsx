@@ -17,7 +17,7 @@ export function Hero() {
           transition={{ duration: 0.6 }}
         >
           <div className="inline-flex items-center gap-2.5 px-4 py-2 rounded-full border border-white/[0.06] bg-white/[0.03]">
-            <img src="/logo-white.svg" alt="Velo" className="h-4 w-auto" />
+            <img src="/logo-white.svg" alt="sndmail" className="h-4 w-auto" />
             <span className="text-sm text-text-secondary">Open source desktop email client</span>
           </div>
         </motion.div>

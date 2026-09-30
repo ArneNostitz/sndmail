@@ -16,7 +16,7 @@ export async function updateBadgeCount(): Promise<void> {
       // badge count may not be supported on all platforms
     }
 
-    const tooltip = count > 0 ? `Velo Pro - ${count} unread` : "Velo Pro";
+    const tooltip = count > 0 ? `sndmail - ${count} unread` : "sndmail";
     try {
       await invoke("set_tray_tooltip", { tooltip });
     } catch {

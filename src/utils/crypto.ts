@@ -24,7 +24,8 @@ import {
 } from "@tauri-apps/plugin-fs";
 import { invoke } from "@tauri-apps/api/core";
 
-const KEY_FILE_NAME = "velo.key";
+const KEY_FILE_NAME = "sndmail.key";
+const LEGACY_KEY_FILE_NAME = "velo.key";
 const ALGORITHM = "AES-GCM";
 const KEY_LENGTH = 256;
 const IV_LENGTH = 12;
@@ -81,22 +82,25 @@ async function keychainSet(key: string): Promise<void> {
 
 /** Read the legacy plaintext key file, or null if it isn't there. */
 async function readLegacyKeyFile(): Promise<string | null> {
-  try {
-    if (!(await exists(KEY_FILE_NAME, FS_OPTIONS))) return null;
-    const contents = (await readTextFile(KEY_FILE_NAME, FS_OPTIONS)).trim();
-    return contents || null;
-  } catch {
-    return null;
+  for (const name of [KEY_FILE_NAME, LEGACY_KEY_FILE_NAME]) {
+    try {
+      if (!(await exists(name, FS_OPTIONS))) continue;
+      const contents = (await readTextFile(name, FS_OPTIONS)).trim();
+      if (contents) return contents;
+    } catch {
+      // Try the older filename before deciding that no fallback key exists.
+    }
   }
+  return null;
 }
 
 async function deleteLegacyKeyFile(): Promise<void> {
-  try {
-    await remove(KEY_FILE_NAME, FS_OPTIONS);
-  } catch (err) {
-    // Non-fatal: the key is already safe in the keychain, the stale file is
-    // just noise. Surface it so it can be removed by hand if needed.
-    console.warn("Could not delete legacy velo.key after migration:", err);
+  for (const name of [KEY_FILE_NAME, LEGACY_KEY_FILE_NAME]) {
+    try {
+      if (await exists(name, FS_OPTIONS)) await remove(name, FS_OPTIONS);
+    } catch (err) {
+      console.warn(`Could not delete ${name} after keychain migration:`, err);
+    }
   }
 }
 
@@ -139,7 +143,7 @@ async function resolveRawKey(): Promise<string> {
     try {
       await keychainSet(legacy);
       await deleteLegacyKeyFile();
-      console.info("Migrated encryption key from velo.key into the OS credential store.");
+      console.info("Migrated encryption key file into the OS credential store.");
     } catch (err) {
       console.warn("Could not migrate key into the keychain, leaving it on disk:", err);
       usingInsecureFallback = true;

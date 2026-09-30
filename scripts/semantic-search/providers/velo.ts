@@ -31,12 +31,12 @@ interface MailRow {
   labels: string;
 }
 
-// Read the live WAL through SQLite; never copy, checkpoint, or write Velo's DB.
+// Read the live WAL through SQLite; never copy, checkpoint, or write sndmail's DB.
 export async function collectVeloDocuments(_exportPath?: string, dbPathOverride?: string, onBatch?: (documents: UniversalDocument[]) => Promise<void>): Promise<UniversalDocument[]> {
-  const path = expandPath(dbPathOverride || process.env.VELO_DB_PATH || process.env.VELO_DATABASE_PATH ||
-    join(homedir(), "Library", "Application Support", "com.anydaysomething.velopro", "velo.db"));
+  const path = expandPath(dbPathOverride || process.env.SNDMAIL_DB_PATH || process.env.VELO_DB_PATH || process.env.VELO_DATABASE_PATH ||
+    join(homedir(), "Library", "Application Support", "com.anydaysomething.sndmail", "sndmail.db"));
   try { await access(path); } catch {
-    throw new Error(`Velo database not found: ${path}. Set Velo DB Path in extension preferences.`);
+    throw new Error(`sndmail database not found: ${path}. Set sndmail DB Path in extension preferences.`);
   }
   const documents: UniversalDocument[] = [];
   let cursor = 0;
@@ -64,11 +64,11 @@ export async function collectVeloDocuments(_exportPath?: string, dbPathOverride?
       const body = (readable || row.snippet || "").slice(0, 100000);
       const snippet = row.snippet || body.slice(0, 600);
       documents.push({
-        id: createHash("sha256").update(JSON.stringify(["velo", row.account_id, row.id])).digest("hex"),
-        source: "velo", title: row.subject || "(No Subject)",
+        id: createHash("sha256").update(JSON.stringify(["sndmail", row.account_id, row.id])).digest("hex"),
+        source: "sndmail", title: row.subject || "(No Subject)",
         subtitle: `${sender} | ${row.labels || "Mail"} | ${row.account_email}`,
         snippet, content: [sender, row.to_addresses, body].filter(Boolean).join("\n"),
-        app: "Velo", open_type: "app", open_target: "com.anydaysomething.velopro",
+        app: "sndmail", open_type: "app", open_target: "com.anydaysomething.sndmail",
         tags: [row.account_email, ...(row.labels || "").split(", ")].filter(Boolean),
         metadata: { account: row.account_id, accountName: row.account_email, threadId: row.thread_id,
           messageId: row.id, from: sender, to: row.to_addresses, labels: row.labels || "", folder: row.labels || "Mail",
@@ -97,8 +97,8 @@ export interface MailContent { subject: string; body: string; from: string; to: 
 
 export async function readVeloMessage(accountId: string, messageId: string, dbPathOverride?: string, signal?: AbortSignal): Promise<MailContent> {
   signal?.throwIfAborted();
-  const path = expandPath(dbPathOverride || process.env.VELO_DB_PATH || process.env.VELO_DATABASE_PATH ||
-    join(homedir(), "Library", "Application Support", "com.anydaysomething.velopro", "velo.db"));
+  const path = expandPath(dbPathOverride || process.env.SNDMAIL_DB_PATH || process.env.VELO_DB_PATH || process.env.VELO_DATABASE_PATH ||
+    join(homedir(), "Library", "Application Support", "com.anydaysomething.sndmail", "sndmail.db"));
   const literal = (value: string) => `'${value.replace(/'/g, "''")}'`;
   const query = `SELECT subject, substr(body_text,1,1000000) AS body_text, substr(body_html,1,1000000) AS body_html,
     length(CASE WHEN length(trim(COALESCE(body_text,''), ${SQL_WHITESPACE})) > 0 THEN body_text ELSE COALESCE(body_html,'') END) AS body_length, from_name, from_address, to_addresses, date, body_cached
@@ -107,10 +107,10 @@ export async function readVeloMessage(accountId: string, messageId: string, dbPa
     { timeout: 15000, maxBuffer: 24 * 1024 * 1024, signal });
   signal?.throwIfAborted();
   const row = (JSON.parse(stdout || "[]") as Array<Record<string, unknown>>)[0];
-  if (!row) throw new Error("This message is no longer in Velo's local database.");
+  if (!row) throw new Error("This message is no longer in sndmail's local database.");
   const plain = String(row.body_text || "");
   const html = String(row.body_html || "");
-  if (!plain && !html && !row.body_cached) throw new Error("This email's body has not been downloaded by Velo yet. Open it in Velo, then retry.");
+  if (!plain && !html && !row.body_cached) throw new Error("This email's body has not been downloaded by sndmail yet. Open it in sndmail, then retry.");
   return { subject: String(row.subject || "(No Subject)"),
     body: readableBody(plain, html), truncated: Number(row.body_length) > 1000000,
     from: [row.from_name, row.from_address].filter(Boolean).join(" "), to: String(row.to_addresses || ""), date: Number(row.date),

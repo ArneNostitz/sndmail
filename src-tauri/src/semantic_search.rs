@@ -1,4 +1,4 @@
-//! Velo-owned local search. No PATH/Homebrew discovery, external process adoption,
+//! sndmail-owned local search. No PATH/Homebrew discovery, external process adoption,
 //! remote mail upload, or credentials in IPC responses. Settings poll Status.
 use serde::{Deserialize, Serialize};
 use std::{
@@ -23,9 +23,9 @@ const MODEL_ORIGIN: &str = "https://models.typesense.org/public/multilingual-e5-
 const URL: &str = "http://127.0.0.1:8108";
 const COLLECTION: &str = "universal-search";
 const CANCELLED: &str = "Semantic search operation cancelled.";
-const CONFLICT: &str = "Port 8108 or 8107 is already in use. Stop the other local search service yourself, then enable Velo semantic search again. Velo will not use or stop that service.";
+const CONFLICT: &str = "Port 8108 or 8107 is already in use. Stop the other local search service yourself, then enable sndmail semantic search again. sndmail will not use or stop that service.";
 
-// The bundled Node runtime supervises each child without a shell. A crashed Velo
+// The bundled Node runtime supervises each child without a shell. A crashed sndmail
 // is noticed within 2s; its child gets SIGTERM, then SIGKILL after another 2s.
 // Normal shutdown also terminates the private process group and reaps this Node
 // process. This watchdog is not a system service and does not restart anything.
@@ -161,7 +161,7 @@ fn private_dir(path: &Path) -> Result<(), String> {
 fn private_write(path: &Path, bytes: &[u8]) -> Result<(), String> {
     let parent = path.parent().ok_or("Invalid semantic search file path.")?;
     private_dir(parent)?;
-    let temp = parent.join(format!(".velo-{}.tmp", random_hex()?));
+    let temp = parent.join(format!(".sndmail-{}.tmp", random_hex()?));
     let result = (|| {
         let mut options = OpenOptions::new();
         options.write(true).create_new(true);
@@ -232,7 +232,7 @@ impl SemanticSearchManager {
             state: if supported { "disabled" } else { "unsupported" }.into(),
             model_state: "missing".into(), downloaded_bytes: 0, total_bytes: None,
             indexed_documents: None,
-            message: (!supported).then(|| "Local semantic search is unavailable on this platform or the bundled runtime is missing. Install a Velo build with the semantic runtime included.".into()),
+            message: (!supported).then(|| "Local semantic search is unavailable on this platform or the bundled runtime is missing. Install a sndmail build with the semantic runtime included.".into()),
             data_path: root.to_string_lossy().into_owned(), model_id: MODEL_ID.into(),
         };
         let mut config = None;
@@ -262,7 +262,7 @@ impl SemanticSearchManager {
         }
         Self {
             root, resources: resources.unwrap_or_default(),
-            database: data.map(|p| p.join("velo.db")).unwrap_or_default(), discovery,
+            database: data.map(|p| p.join("sndmail.db")).unwrap_or_default(), discovery,
             inner: Mutex::new(Inner { status, config, generation: 0, cancel: CancellationToken::new(), closing: false, children: Children::default() }),
             retiring: Mutex::new(Vec::new()),
             transition: Mutex::new(()),
@@ -276,8 +276,8 @@ impl SemanticSearchManager {
     }
 
     fn require(inner: &Inner) -> Result<(), String> {
-        if inner.closing { return Err("Velo is quitting.".into()); }
-        if !inner.status.supported { return Err("This Velo build does not contain a supported semantic runtime.".into()); }
+        if inner.closing { return Err("sndmail is quitting.".into()); }
+        if !inner.status.supported { return Err("This sndmail build does not contain a supported semantic runtime.".into()); }
         if inner.config.is_none() { return Err("Private semantic search configuration is unavailable.".into()); }
         Ok(())
     }
@@ -287,7 +287,7 @@ impl SemanticSearchManager {
         match fs::read(path) {
             Ok(bytes) => {
                 let existing: serde_json::Value = serde_json::from_slice(&bytes)
-                    .map_err(|_| "Cannot update the existing Raycast discovery file: it is not Velo-owned.".to_string())?;
+                    .map_err(|_| "Cannot update the existing Raycast discovery file: it is not owned by sndmail or the legacy Velo integration.".to_string())?;
                 if existing["managedBy"] != "velo" || existing["dataPath"].as_str() != Some(inner.status.data_path.as_str()) {
                     return Err("Another installation owns the Raycast discovery file. Resolve universal-search/velo-runtime.json before enabling.".into());
                 }
@@ -348,7 +348,7 @@ impl SemanticSearchManager {
     }
 
     fn recover_worker_lock(&self) -> Result<(), String> {
-        const BUSY: &str = "The managed mail indexer lock cannot be safely recovered. Another worker may still be running, or its ownership cannot be confirmed. Velo left the lock untouched.";
+        const BUSY: &str = "The managed mail indexer lock cannot be safely recovered. Another worker may still be running, or its ownership cannot be confirmed. sndmail left the lock untouched.";
         let directory = self.root.join("velo-worker-v1.lock");
         match fs::symlink_metadata(&directory) {
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
@@ -380,7 +380,7 @@ impl SemanticSearchManager {
         // A reused/live worker PID also refuses recovery. Never remove an
         // unknown marker, recursively delete a lock, or touch standalone locks.
         fs::remove_file(&marker_path).map_err(|_| "Cannot remove the confirmed stopped worker's lock marker.".to_string())?;
-        fs::remove_dir(&directory).map_err(|_| "The managed worker lock directory contains other entries; Velo preserved them.".to_string())?;
+        fs::remove_dir(&directory).map_err(|_| "The managed worker lock directory contains other entries; sndmail preserved them.".to_string())?;
         Ok(())
     }
 
@@ -590,7 +590,7 @@ impl SemanticSearchManager {
             } else {
                 let bytes = tokio::fs::read(stage.join(name)).await.map_err(|_| "Cannot read the downloaded model configuration.".to_string())?;
                 let config = serde_json::from_slice(&bytes).map_err(|_| "The official model configuration is invalid.".to_string())?;
-                if !model_config_valid(&config) { return Err("The official model configuration changed. Update Velo before downloading this model.".into()); }
+                if !model_config_valid(&config) { return Err("The official model configuration changed. Update sndmail before downloading this model.".into()); }
             }
         }
         Ok(())
@@ -606,7 +606,7 @@ impl SemanticSearchManager {
         let program;
         let args: Vec<String>;
         if worker {
-            if !self.database.is_file() { return Err("The local Velo mail database is not available yet. Retry after Velo finishes starting.".into()); }
+            if !self.database.is_file() { return Err("The local sndmail database is not available yet. Retry after sndmail finishes starting.".into()); }
             // launch runs only after retired children finish cleanup. Persisted
             // ownership also permits conservative recovery after an app crash.
             self.recover_worker_lock()?;
@@ -651,7 +651,7 @@ impl SemanticSearchManager {
         }
         // Children inherit background priority. ONNX thread counts themselves
         // are NOT capped by Typesense's request-pool-size setting.
-        let mut child = command.spawn().map_err(|_| "Cannot launch the bundled semantic runtime. Check that this Velo installation contains executable, signed runtime files.".to_string())?;
+        let mut child = command.spawn().map_err(|_| "Cannot launch the bundled semantic runtime. Check that this sndmail installation contains executable, signed runtime files.".to_string())?;
         let stdout = child.stdout.take();
         if worker {
             let group_id = child.id();
@@ -695,7 +695,7 @@ impl SemanticSearchManager {
     async fn start_and_monitor(self: &Arc<Self>, generation: u64, reuse_server: bool) -> Result<(), String> {
         self.await_retired().await;
         if !reuse_server {
-            self.publish(generation, |s| { s.state = "starting".into(); s.message = Some("Starting Velo's local semantic search service.".into()); });
+            self.publish(generation, |s| { s.state = "starting".into(); s.message = Some("Starting sndmail's local semantic search service.".into()); });
             let manager = self.clone();
             tauri::async_runtime::spawn_blocking(move || manager.launch(generation, false)).await
                 .map_err(|_| "Semantic runtime startup task failed.".to_string())??;
@@ -711,7 +711,7 @@ impl SemanticSearchManager {
                 if response.status() == reqwest::StatusCode::UNAUTHORIZED || response.status() == reqwest::StatusCode::FORBIDDEN { return Err(CONFLICT.into()); }
                 if response.status().is_success() {
                     let debug: serde_json::Value = response.json().await.map_err(|_| "The bundled search service returned invalid readiness data.".to_string())?;
-                    if !matches!(debug["version"].as_str(), Some("30.2" | "v30.2")) { return Err("Velo requires the bundled Typesense 30.2 runtime. Update this Velo installation.".into()); }
+                    if !matches!(debug["version"].as_str(), Some("30.2" | "v30.2")) { return Err("sndmail requires the bundled Typesense 30.2 runtime. Update this sndmail installation.".into()); }
                     let health: serde_json::Value = client.get(format!("{URL}/health")).send().await
                         .map_err(|_| "Cannot check local search readiness.".to_string())?
                         .json().await.map_err(|_| "The local search readiness response is invalid.".to_string())?;
@@ -723,7 +723,7 @@ impl SemanticSearchManager {
         // An explicit update restarts only the incremental worker. Never drop
         // the collection: unchanged documents must retain their embeddings and
         // remain searchable while the worker scans and prunes stale mail.
-        self.publish(generation, |s| { s.state = "indexing".into(); s.message = Some("Indexing local Velo mail.".into()); });
+        self.publish(generation, |s| { s.state = "indexing".into(); s.message = Some("Indexing local sndmail messages.".into()); });
         let manager = self.clone();
         let stdout = tauri::async_runtime::spawn_blocking(move || manager.launch(generation, true)).await
             .map_err(|_| "Mail indexer startup task failed.".to_string())??.ok_or("Mail indexer progress stream is unavailable.")?;
@@ -767,7 +767,7 @@ impl SemanticSearchManager {
                 if let Some(count) = value["indexedDocuments"].as_u64() { s.indexed_documents = Some(count); }
                 match value["state"].as_str() {
                     Some("ready") => { s.state = "ready".into(); s.message = None; },
-                    Some("indexing") => { s.state = "indexing".into(); s.message = Some("Indexing local Velo mail.".into()); },
+                    Some("indexing") => { s.state = "indexing".into(); s.message = Some("Indexing local sndmail messages.".into()); },
                     _ => {},
                 }
             });

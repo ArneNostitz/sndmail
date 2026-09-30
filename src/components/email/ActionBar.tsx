@@ -206,7 +206,7 @@ export function ActionBar({ thread, messages, noReply, defaultReplyMode = "reply
         kind: "reminder",
       });
       setHasFollowUp(true);
-      window.dispatchEvent(new CustomEvent("velo-tasks-changed"));
+      window.dispatchEvent(new CustomEvent("sndmail-tasks-changed"));
     } catch (err) {
       console.error("Failed to set follow-up reminder:", err);
     }
@@ -221,7 +221,7 @@ export function ActionBar({ thread, messages, noReply, defaultReplyMode = "reply
       const reminderTask = await getReminderTaskForThread(threadAccountId, thread.id);
       if (reminderTask) await deleteTask(reminderTask.id);
       setHasFollowUp(false);
-      window.dispatchEvent(new CustomEvent("velo-tasks-changed"));
+      window.dispatchEvent(new CustomEvent("sndmail-tasks-changed"));
     } catch (err) {
       console.error("Failed to cancel follow-up:", err);
     }
@@ -294,7 +294,7 @@ export function ActionBar({ thread, messages, noReply, defaultReplyMode = "reply
           icon={<FolderInput size={15} />}
           onClick={() => {
             if (!threadAccountId) return;
-            window.dispatchEvent(new CustomEvent("velo-move-to-folder", { detail: { threadIds: [thread.id] } }));
+            window.dispatchEvent(new CustomEvent("sndmail-move-to-folder", { detail: { threadIds: [thread.id] } }));
           }}
           title="Move to folder (v)"
         />

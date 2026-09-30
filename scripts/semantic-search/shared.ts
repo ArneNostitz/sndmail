@@ -21,9 +21,11 @@ export interface IndexerConfig extends TypesenseConnection {
   batchSize: number;
   folders: string[];
   obsidianVaults: string[];
+  sndmailExportPath?: string;
   veloExportPath?: string;
+  sndmailDbPath?: string;
   veloDbPath?: string;
-  sourceFilter?: Array<"velo" | "obsidian" | "file">;
+  sourceFilter?: Array<"sndmail" | "velo" | "obsidian" | "file">;
 }
 
 export function createTypesenseConnection(config: {

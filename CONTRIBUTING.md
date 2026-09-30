@@ -1,6 +1,6 @@
-# Contributing to Velo
+# Contributing to sndmail
 
-Thank you for your interest in contributing to Velo! This guide will help you get started.
+Thank you for your interest in contributing to sndmail! This guide will help you get started.
 
 ## Getting Started
 
@@ -97,7 +97,7 @@ Use the [bug report template](https://github.com/avihaymenahem/velo/issues/new?t
 
 - Steps to reproduce
 - Expected vs. actual behavior
-- OS and Velo version
+- OS and sndmail version
 - Screenshots or logs if applicable
 
 ## Feature Requests
@@ -154,7 +154,7 @@ These steps guide you through building the Flatpak package locally using `flatpa
     You can now run the application directly.
 
     ```bash
-    flatpak run com.anydaysomething.velopro
+    flatpak run com.anydaysomething.sndmail
     ```
 
 ### Building and Testing the RPM Locally
@@ -187,7 +187,7 @@ You can build the RPM directly using Tauri's built-in bundler.
 
 ### Pushing to COPR
 
-To publish a new release to a Fedora COPR repository using the `velo.spec` file:
+To publish a new release to a Fedora COPR repository using the `sndmail.spec` file:
 
 1.  **Install RPM Tools**
 
@@ -198,16 +198,16 @@ To publish a new release to a Fedora COPR repository using the `velo.spec` file:
 
 2.  **Create a Source Tarball and SRPM**
 
-    Create a source tarball that matches the version in `velo.spec`, then build the SRPM.
+    Create a source tarball that matches the version in `sndmail.spec`, then build the SRPM.
 
     ```bash
-    VERSION=$(grep -oP '(?<=^%global app_version ).*' velo.spec)
+    VERSION=$(grep -oP '(?<=^%global app_version ).*' sndmail.spec)
     tar --exclude='.git' --transform "s/^\./velo-${VERSION}/" -czf "velo-${VERSION}.tar.gz" .
     
     cp "velo-${VERSION}.tar.gz" ~/rpmbuild/SOURCES/
-    cp velo.spec ~/rpmbuild/SPECS/
+    cp sndmail.spec ~/rpmbuild/SPECS/
     
-    rpmbuild -bs ~/rpmbuild/SPECS/velo.spec
+    rpmbuild -bs ~/rpmbuild/SPECS/sndmail.spec
     ```
 
 3.  **Upload to COPR**

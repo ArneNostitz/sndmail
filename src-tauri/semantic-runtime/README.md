@@ -1,4 +1,4 @@
-# Velo semantic runtime resources
+# sndmail semantic runtime resources
 
 This directory is the native resource boundary. The source slice does not include
 downloaded binaries, a model, a signed application, or a verified release.
@@ -12,9 +12,9 @@ and obtains the checksum-pinned upstream LICENSE.txt. It never installs npm
 packages, downloads models, or replaces global executables. Node >=22 and worker
 build dependencies must already be available locally.
 
-`--offline` (or `VELO_SEMANTIC_OFFLINE=1`) makes no network requests and requires
+`--offline` (or `SNDMAIL_SEMANTIC_OFFLINE=1`) makes no network requests and requires
 intact cached Typesense archive/license assets or explicit local binary/license
-overrides. `--strict` (or `VELO_SEMANTIC_STRICT=1`) also fails on an unsupported
+overrides. `--strict` (or `SNDMAIL_SEMANTIC_STRICT=1`) also fails on an unsupported
 target. Supported macOS builds always fail when resources are incomplete.
 Offline mode also skips timestamped codesigning, which would contact Apple's
 timestamp service. Offline preparation must be followed by the normal online
@@ -49,13 +49,13 @@ server priority, enable/disable, model installation, and release packaging.
 
 Explicit local provisioning overrides:
 
-- `VELO_SEMANTIC_NODE_PATH`, `VELO_SEMANTIC_NODE_LICENSE_PATH`
-- `VELO_SEMANTIC_TYPESENSE_PATH`, `VELO_SEMANTIC_TYPESENSE_LICENSE_PATH`
-- `VELO_SEMANTIC_BUILD_NODE_MODULES`: optional node_modules containing esbuild and
+- `SNDMAIL_SEMANTIC_NODE_PATH`, `SNDMAIL_SEMANTIC_NODE_LICENSE_PATH`
+- `SNDMAIL_SEMANTIC_TYPESENSE_PATH`, `SNDMAIL_SEMANTIC_TYPESENSE_LICENSE_PATH`
+- `SNDMAIL_SEMANTIC_BUILD_NODE_MODULES`: optional node_modules containing esbuild and
   html-to-text@10.0.1; otherwise the repository dependencies are used. esbuild may
   resolve through Vite. html-to-text must be available at build time to preserve
   the current body extraction and embedding fingerprints.
-- `VELO_SEMANTIC_TARGET_ARCH`: arm64 or x64 (defaults to the build host).
+- `SNDMAIL_SEMANTIC_TARGET_ARCH`: arm64 or x64 (defaults to the build host).
 - `APPLE_SIGNING_IDENTITY`: optionally signs the copied executables with hardened
   runtime; Node uses the existing src-tauri/Entitlements.plist. This does not sign
   or notarize the enclosing app and does not prove a working release signature.
@@ -74,7 +74,7 @@ downloaded. Architecture, non-system dynamic dependencies, Node >=22, and comple
 local license text are checked. Typesense is never executed during preparation:
 the verified official archive establishes the default release provenance, and
 its license must match the pinned upstream text. Explicit binary overrides require
-VELO_SEMANTIC_TYPESENSE_SHA256, supplied from verified Typesense 30.2 provenance.
+SNDMAIL_SEMANTIC_TYPESENSE_SHA256, supplied from verified Typesense 30.2 provenance.
 The override's bytes must match that checksum; the release owner is responsible
 for tying the checksum to the intended release. No data directory or live server
 is created to inspect a version.
@@ -93,7 +93,7 @@ source author has not run provisioning or release validation.
 
 ## Worker/native protocol
 
-Spawn directly as a Velo-owned child, without a persistent shell or daemon:
+Spawn directly as a sndmail-owned child, without a persistent shell or daemon:
 
 ```text
 <resource-dir>/semantic-runtime/node <resource-dir>/semantic-runtime/indexer.cjs <app-data>/semantic-search/worker.json
@@ -108,9 +108,11 @@ or other permissions (normally mode 0600), containing:
   "url": "http://127.0.0.1:8108",
   "apiKey": "<local-secret>",
   "collection": "universal-search",
-  "veloDatabasePath": "<absolute-app-data>/velo.db"
+  "sndmailDatabasePath": "<absolute-app-data>/sndmail.db"
 }
 ```
+
+For migration compatibility, `veloDatabasePath` remains accepted when `sndmailDatabasePath` is absent. Canonical `SNDMAIL_SEMANTIC_*` environment variables take precedence; existing `VELO_SEMANTIC_*` variables remain supported.
 
 Credentials are never passed on the command line. Only loopback HTTP(S) is allowed;
 URL credentials, non-root paths, redirects, and remote hosts are rejected. Config
@@ -119,7 +121,7 @@ scan. A native reindex action must stop/wait/restart this worker without deletin
 collections. Stable embedding generations and fingerprints retain completed work.
 
 Every stdout line is a JSON object with `state` (`indexing`, `ready`, or `error`),
-`indexedDocuments`, `type`, `timestamp`, and `source: "velo"`. Progress can also
+`indexedDocuments`, `type`, `timestamp`, and `source: "sndmail"`. Progress can also
 include `phase`, `processed`, `embedded`, `reused`, `restMs`, and `cpuBudgetPercent`.
 `ready` includes the completed `documents` count. Error records carry only fixed
 generic `code`/`message` and `retryable`. No message content, credentials, database
@@ -130,9 +132,9 @@ The worker checks its original parent every second, handles SIGTERM/SIGINT, and
 cancels network calls, SQLite reads, pacing, and idle waits on shutdown. Native
 supervision must also terminate/reap the child on disable/quit. The worker itself
 does not start/stop Typesense, install a launch agent, or schedule work outside
-Velo's lifetime. It remains alive between scans, defaulting to 300 seconds with
-bounded error backoff. `VELO_SEMANTIC_INTERVAL_SECONDS` is clamped to 60..3600;
-backoff is capped at one hour. The process is restricted to sourceFilter ['velo'].
+sndmail's lifetime. It remains alive between scans, defaulting to 300 seconds with
+bounded error backoff. `SNDMAIL_SEMANTIC_INTERVAL_SECONDS` is clamped to 60..3600;
+backoff is capped at one hour. The worker writes the canonical `sndmail` source; searches for sndmail include legacy `velo` records already in the shared index.
 
 An exclusive lock directory beside the config has one unpredictable owner marker.
 Normal shutdown removes only that marker and an empty lock directory. It never
@@ -153,7 +155,7 @@ Metadata, unchanged embeddings, and queries are not deliberately delayed.
 
 The copied pipeline preserves original IDs, lexical content, 320-byte passage
 format/version, local multilingual-e5-small model, completed-embedding reuse,
-fresh scan markers, and parent-first/orphan-passage cleanup. Velo SQLite is read
+fresh scan markers, and parent-first/orphan-passage cleanup. sndmail SQLite is read
 through macOS's system /usr/bin/sqlite3 in readonly mode. There is no runtime
 dependency on the standalone Raycast checkout, its node_modules, or Homebrew.
 No file/Obsidian providers are wired into this worker.

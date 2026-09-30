@@ -9,7 +9,7 @@ import { indexingCpuBudgetPercent } from "./indexing-budget";
 import { stopWorker, waitForNextWork, workerSignal } from "./runtime-control";
 
 interface WorkerConfig {
-  url: string; apiKey: string; collection: string; veloDatabasePath: string;
+  url: string; apiKey: string; collection: string; sndmailDatabasePath?: string; veloDatabasePath?: string;
   lockPath?: string; lockOwnerToken?: string;
 }
 let nativeState: "indexing" | "ready" | "error" = "indexing";
@@ -28,7 +28,7 @@ function emit(type: string, fields: Record<string, string | number | boolean> = 
   else if (typeof fields.processed === "number") indexedDocuments = fields.processed;
   if (type === "progress" && process.stdout.writableLength > 65536) return;
   if (!process.stdout.destroyed) process.stdout.write(JSON.stringify({ state: nativeState, indexedDocuments,
-    type, timestamp: Date.now(), source: "velo", ...fields }) + "\n");
+    type, timestamp: Date.now(), source: "sndmail", ...fields }) + "\n");
 }
 
 function safeFailure(error: unknown): { code: string; message: string } {
@@ -55,7 +55,7 @@ async function loadConfig(path: string): Promise<WorkerConfig> {
   catch { throw new WorkerError("invalid_config", "Worker configuration is not valid JSON."); }
   if (!value || typeof value.url !== "string" || typeof value.apiKey !== "string" || !value.apiKey.trim() ||
     typeof value.collection !== "string" || !/^[a-zA-Z0-9_-]+$/.test(value.collection) ||
-    typeof value.veloDatabasePath !== "string" || !isAbsolute(value.veloDatabasePath)) {
+    typeof (value.sndmailDatabasePath || value.veloDatabasePath) !== "string" || !isAbsolute(value.sndmailDatabasePath || value.veloDatabasePath || "")) {
     throw new WorkerError("invalid_config", "Worker configuration requires a local URL, API key, collection, and absolute mail database path.");
   }
   if (value.lockPath !== undefined || value.lockOwnerToken !== undefined) {
@@ -134,7 +134,7 @@ async function awaitNativeOwnership(configPath: string, ownerToken: string): Pro
   while (performance.now() < deadline) {
     workerSignal.throwIfAborted();
     if (supervisorPid <= 1 || process.ppid !== supervisorPid) {
-      throw new WorkerError("owner_handshake_failed", "The Velo worker supervisor exited before ownership was recorded.");
+      throw new WorkerError("owner_handshake_failed", "The sndmail worker supervisor exited before ownership was recorded.");
     }
     try {
       const file = await lstat(path);
@@ -158,7 +158,7 @@ async function awaitNativeOwnership(configPath: string, ownerToken: string): Pro
         (owner as { groupId: number }).groupId === supervisorPid) {
         workerSignal.throwIfAborted();
         if (process.ppid !== supervisorPid) {
-          throw new WorkerError("owner_handshake_failed", "The Velo worker supervisor exited before lock acquisition.");
+          throw new WorkerError("owner_handshake_failed", "The sndmail worker supervisor exited before lock acquisition.");
         }
         return;
       }
@@ -169,11 +169,11 @@ async function awaitNativeOwnership(configPath: string, ownerToken: string): Pro
     }
     await waitForNextWork(50);
   }
-  throw new WorkerError("owner_handshake_timeout", "Velo did not confirm worker ownership before the startup deadline.");
+  throw new WorkerError("owner_handshake_timeout", "sndmail did not confirm worker ownership before the startup deadline.");
 }
 
 function scanIntervalMs(): number {
-  const value = Number(process.env.VELO_SEMANTIC_INTERVAL_SECONDS || 300);
+  const value = Number(process.env.SNDMAIL_SEMANTIC_INTERVAL_SECONDS || process.env.VELO_SEMANTIC_INTERVAL_SECONDS || 300);
   return (Number.isFinite(value) ? Math.min(3600, Math.max(60, value)) : 300) * 1000;
 }
 
@@ -184,7 +184,7 @@ async function scan(connection: TypesenseConnection, config: WorkerConfig): Prom
   // this worker. Typesense can otherwise try its own public-model download.
   await ensureCollection(connection);
   await ensureSemanticCollections(connection);
-  const sourceFilter = ["velo"] as const;
+  const sourceFilter = ["sndmail"] as const;
   for (const source of sourceFilter) {
     let state: SemanticSourceState | undefined;
     let processed = 0;
@@ -193,7 +193,7 @@ async function scan(connection: TypesenseConnection, config: WorkerConfig): Prom
     try {
       state = await beginSemanticSource(connection, source);
       const active = state;
-      await collectVeloDocuments(undefined, config.veloDatabasePath, async (documents) => {
+      await collectVeloDocuments(undefined, config.sndmailDatabasePath || config.veloDatabasePath, async (documents) => {
         workerSignal.throwIfAborted();
         let batchEmbedded = 0;
         let batchReused = 0;
@@ -231,7 +231,7 @@ async function run(): Promise<void> {
     throw new WorkerError("invalid_arguments", "Usage: indexer.cjs <private-config-file>");
   }
   const parentPid = process.ppid;
-  if (parentPid <= 1) throw new WorkerError("parent_required", "The semantic worker must be started by its Velo parent process.");
+  if (parentPid <= 1) throw new WorkerError("parent_required", "The semantic worker must be started by its sndmail parent process.");
   process.on("SIGTERM", stopWorker);
   process.on("SIGINT", stopWorker);
   process.stdout.on("error", stopWorker);

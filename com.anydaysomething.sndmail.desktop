@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=sndmail
+Comment=Local-first desktop email client
+Exec=sndmail
+Icon=com.anydaysomething.sndmail
+Type=Application
+Categories=Network;Email;
+StartupWMClass=sndmail
+StartupNotify=true

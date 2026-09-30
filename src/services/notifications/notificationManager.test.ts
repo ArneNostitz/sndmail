@@ -179,9 +179,9 @@ describe("what a press does", () => {
 
   it("opens a sign-in link through the app, never straight to the browser", async () => {
     const seen = vi.fn();
-    window.addEventListener("velo-open-signin-link", seen);
+    window.addEventListener("sndmail-open-signin-link", seen);
     await press("open-link", { linkUrl: "https://example.com/login?t=1", threadId: "t1" });
-    window.removeEventListener("velo-open-signin-link", seen);
+    window.removeEventListener("sndmail-open-signin-link", seen);
     expect(mockShowWindow).toHaveBeenCalled();
     expect(seen).toHaveBeenCalledTimes(1);
     const detail = (seen.mock.calls[0]![0] as CustomEvent).detail;
@@ -231,7 +231,7 @@ describe("what gets sent", () => {
     vi.advanceTimersByTime(2000);
     expect(mockShowNative).toHaveBeenCalledTimes(1);
     expect(mockShowNative).toHaveBeenCalledWith(
-      expect.objectContaining({ title: "Velo Pro", body: "5 new emails" }),
+      expect.objectContaining({ title: "sndmail", body: "5 new emails" }),
     );
   });
 
@@ -263,7 +263,7 @@ describe("what gets sent", () => {
     expect(mockShowNative).not.toHaveBeenCalled();
     expect(mockSendPlugin).toHaveBeenCalledWith({
       title: "Code: 493028",
-      body: "From Example — Sign-in link waiting in Velo",
+      body: "From Example — Sign-in link waiting in sndmail",
     });
   });
 

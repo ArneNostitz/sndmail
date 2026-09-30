@@ -34,11 +34,19 @@ describe("email navigation", () => {
     const second = handler();
     const offFirst = registerEmailNavigationHandler("first", first);
     const offSecond = registerEmailNavigationHandler("second", second);
-    dispatchEmailNavigation("tauri://localhost/__velo_email_action__/second/4");
+    dispatchEmailNavigation("tauri://localhost/__sndmail_email_action__/second/4");
     expect(first.run).not.toHaveBeenCalled();
     expect(second.run).toHaveBeenCalledWith("4");
     offFirst();
     offSecond();
+  });
+
+  it("still routes legacy Velo action URLs", () => {
+    const target = handler();
+    const off = registerEmailNavigationHandler("legacy", target);
+    dispatchEmailNavigation("tauri://localhost/__velo_email_action__/legacy/4");
+    expect(target.run).toHaveBeenCalledWith("4");
+    off();
   });
 
   it("opens a safe external URL and confirms a flagged one", async () => {
@@ -75,8 +83,8 @@ describe("email navigation", () => {
     const target = handler();
     const off = registerEmailNavigationHandler("target", target);
     const unlisten = await startEmailNavigationListener();
-    window.dispatchEvent(new CustomEvent("velo-email-navigation", {
-      detail: "tauri://localhost/__velo_email_action__/target/9",
+    window.dispatchEvent(new CustomEvent("sndmail-email-navigation", {
+      detail: "tauri://localhost/__sndmail_email_action__/target/9",
     }));
     expect(target.run).toHaveBeenCalledWith("9");
     unlisten();

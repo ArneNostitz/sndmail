@@ -12,17 +12,18 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const destination = join(root, "src-tauri", "semantic-runtime");
 const require = createRequire(join(root, "package.json"));
 const args = process.argv.slice(2);
+const semanticEnv = (name) => process.env[`SNDMAIL_SEMANTIC_${name}`] ?? process.env[`VELO_SEMANTIC_${name}`];
 if (args.some((arg) => !["--strict", "--offline"].includes(arg))) throw new Error("Usage: node scripts/prepare-semantic-search.mjs [--strict] [--offline]");
-const strict = args.includes("--strict") || process.env.VELO_SEMANTIC_STRICT === "1";
-const offline = args.includes("--offline") || process.env.VELO_SEMANTIC_OFFLINE === "1";
+const strict = args.includes("--strict") || semanticEnv("STRICT") === "1";
+const offline = args.includes("--offline") || semanticEnv("OFFLINE") === "1";
 const cargoTarget = process.env.CARGO_BUILD_TARGET || "";
 const macTarget = cargoTarget ? cargoTarget.endsWith("-apple-darwin") : process.platform === "darwin";
 const cargoArch = cargoTarget.startsWith("aarch64-") ? "arm64" : cargoTarget.startsWith("x86_64-") ? "x64" : undefined;
 if (macTarget && cargoTarget && !cargoArch) throw new Error("Unsupported macOS CARGO_BUILD_TARGET; prepare a separate arm64 or x86_64 runtime.");
-if (cargoTarget && cargoArch && process.env.VELO_SEMANTIC_TARGET_ARCH && process.env.VELO_SEMANTIC_TARGET_ARCH !== cargoArch) {
-  throw new Error("VELO_SEMANTIC_TARGET_ARCH conflicts with CARGO_BUILD_TARGET.");
+if (cargoTarget && cargoArch && semanticEnv("TARGET_ARCH") && semanticEnv("TARGET_ARCH") !== cargoArch) {
+  throw new Error("SNDMAIL_SEMANTIC_TARGET_ARCH conflicts with CARGO_BUILD_TARGET.");
 }
-const targetArch = cargoArch || process.env.VELO_SEMANTIC_TARGET_ARCH || process.arch;
+const targetArch = cargoArch || semanticEnv("TARGET_ARCH") || process.arch;
 if (macTarget && (process.platform !== "darwin" || !["arm64", "x64"].includes(targetArch) || targetArch !== process.arch)) {
   throw new Error("Cross-architecture macOS semantic preparation is not supported; prepare on the matching target architecture.");
 }
@@ -68,8 +69,8 @@ async function assertPortable(binary) {
 }
 
 async function copyExecutable(name, source, licensePath) {
-  if (!source) throw new Error("provision the executable locally or set its VELO_SEMANTIC_*_PATH override");
-  if (!licensePath) throw new Error("the executable's actual license text is required; set its VELO_SEMANTIC_*_LICENSE_PATH override");
+  if (!source) throw new Error("provision the executable locally or set its SNDMAIL_SEMANTIC_*_PATH override");
+  if (!licensePath) throw new Error("the executable's actual license text is required; set its SNDMAIL_SEMANTIC_*_LICENSE_PATH override");
   const binary = await realpath(source);
   if (!(await stat(binary)).isFile()) throw new Error("executable source is not a regular file");
   const license = await readFile(licensePath, "utf8");
@@ -100,7 +101,7 @@ async function copyExecutable(name, source, licensePath) {
 async function binaryInputs(kind) {
   const variable = kind === "node" ? "NODE" : "TYPESENSE";
   const executable = kind === "node" ? "node" : "typesense-server";
-  const explicit = process.env[`VELO_SEMANTIC_${variable}_PATH`];
+  const explicit = semanticEnv(`${variable}_PATH`);
   const source = explicit || await firstExisting([
     join(destination, executable), ...(kind === "node" ? [process.execPath] : []),
     `/opt/homebrew/bin/${executable}`, `/usr/local/bin/${executable}`,
@@ -108,7 +109,7 @@ async function binaryInputs(kind) {
   ]);
   const resolved = source && await exists(source) ? await realpath(source) : undefined;
   const prefix = resolved ? dirname(dirname(resolved)) : "";
-  const license = process.env[`VELO_SEMANTIC_${variable}_LICENSE_PATH`] || await firstExisting([
+  const license = semanticEnv(`${variable}_LICENSE_PATH`) || await firstExisting([
     ...(source === join(destination, executable) ? [join(destination, executable + ".license.txt")] : []),
     ...(prefix ? [join(prefix, "LICENSE"), join(prefix, "LICENSE.txt"), join(prefix, "COPYING"),
       join(prefix, "share", "doc", kind, "LICENSE"), join(prefix, "share", "doc", kind, "LICENSE.txt")] : []),
@@ -117,7 +118,7 @@ async function binaryInputs(kind) {
 }
 
 function loadEsbuild() {
-  const modules = process.env.VELO_SEMANTIC_BUILD_NODE_MODULES;
+  const modules = semanticEnv("BUILD_NODE_MODULES");
   if (modules) return require(join(resolve(modules), "esbuild"));
   try { return require("esbuild"); }
   catch { return createRequire(require.resolve("vite/package.json"))("esbuild"); }
@@ -168,7 +169,7 @@ async function prepareWorker() {
     const result = await esbuild.build({ absWorkingDir: root, entryPoints: ["scripts/semantic-search/worker.ts"],
       outfile: output, bundle: true, platform: "node", format: "cjs", target: "node22", metafile: true,
       sourcemap: false, minify: false, legalComments: "inline", logLevel: "silent",
-      nodePaths: process.env.VELO_SEMANTIC_BUILD_NODE_MODULES ? [resolve(process.env.VELO_SEMANTIC_BUILD_NODE_MODULES)] : [],
+      nodePaths: semanticEnv("BUILD_NODE_MODULES") ? [resolve(semanticEnv("BUILD_NODE_MODULES"))] : [],
     });
     const builtins = new Set([...builtinModules, ...builtinModules.map((name) => "node:" + name)]);
     for (const file of Object.values(result.metafile.outputs)) for (const dependency of file.imports) {
@@ -189,22 +190,22 @@ if (!supported) {
     ["indexer.cjs", prepareWorker],
     ["node", async () => { const input = await binaryInputs("node"); await copyExecutable("node", input.source, input.license); }],
     ["typesense-server", async () => {
-      const explicitBinary = process.env.VELO_SEMANTIC_TYPESENSE_PATH;
+      const explicitBinary = semanticEnv("TYPESENSE_PATH");
       if (explicitBinary) {
-        const expected = process.env.VELO_SEMANTIC_TYPESENSE_SHA256;
+        const expected = semanticEnv("TYPESENSE_SHA256");
         if (!expected || !/^[a-f0-9]{64}$/i.test(expected)) {
-          throw new Error("explicit Typesense overrides require VELO_SEMANTIC_TYPESENSE_SHA256 from verified Typesense 30.2 binary provenance");
+          throw new Error("explicit Typesense overrides require SNDMAIL_SEMANTIC_TYPESENSE_SHA256 from verified Typesense 30.2 binary provenance");
         }
         const actual = createHash("sha256").update(await readFile(await realpath(explicitBinary))).digest("hex");
         if (actual !== expected.toLowerCase()) throw new Error("explicit Typesense binary does not match its pinned SHA256");
       }
-      const input = process.env.VELO_SEMANTIC_TYPESENSE_PATH
+      const input = semanticEnv("TYPESENSE_PATH")
         ? await binaryInputs("typesense")
         : await provisionTypesense({ root, architecture: targetArch, offline });
       await copyExecutable("typesense-server", input.source, input.license);
       await atomicText("typesense-server.source.txt", input.sourceNotice ||
         "Typesense 30.2; explicitly provisioned executable. Upstream license and supplied binary SHA256 checked without executing the server.\n" +
-        "Expected binary SHA256: " + process.env.VELO_SEMANTIC_TYPESENSE_SHA256 + "\n" +
+        "Expected binary SHA256: " + semanticEnv("TYPESENSE_SHA256") + "\n" +
         "Release/version provenance for this checksum was supplied by the release owner, not established by an official archive download.\n" +
         "Upstream corresponding source: https://github.com/typesense/typesense/tree/v30.2\n" +
         "Release owner must supply corresponding source and notices for this exact binary.\n");
@@ -236,7 +237,7 @@ await atomicText("runtime-manifest.json", JSON.stringify({ ready, platform: proc
   preparedAt: new Date().toISOString(), resources, status: results,
   distributionStatus: "Requires enclosing-app signing, license/source review, and release validation.",
   model: { name: "ts/multilingual-e5-small", license: "MIT", bundled: false,
-    source: "https://huggingface.co/intfloat/multilingual-e5-small", downloadOwner: "Velo Settings" },
+    source: "https://huggingface.co/intfloat/multilingual-e5-small", downloadOwner: "sndmail Settings" },
 }, null, 2) + "\n");
 if (!ready) {
   console.warn(supported

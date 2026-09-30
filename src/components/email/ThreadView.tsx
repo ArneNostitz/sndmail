@@ -388,8 +388,8 @@ export function ThreadView({ thread }: ThreadViewProps) {
   // this thread contains
   useEffect(() => {
     const handler = () => { reloadMessages().catch(console.error); };
-    window.addEventListener("velo-threads-merged", handler);
-    return () => window.removeEventListener("velo-threads-merged", handler);
+    window.addEventListener("sndmail-threads-merged", handler);
+    return () => window.removeEventListener("sndmail-threads-merged", handler);
   }, [reloadMessages]);
 
   // Listen for "View Source" event from context menu
@@ -401,8 +401,8 @@ export function ThreadView({ thread }: ThreadViewProps) {
       };
       setRawMessageTarget(detail);
     };
-    window.addEventListener("velo-view-raw-message", handler);
-    return () => window.removeEventListener("velo-view-raw-message", handler);
+    window.addEventListener("sndmail-view-raw-message", handler);
+    return () => window.removeEventListener("sndmail-view-raw-message", handler);
   }, []);
 
   // Listen for extract-task event from keyboard shortcut
@@ -413,8 +413,8 @@ export function ThreadView({ thread }: ThreadViewProps) {
         setShowTaskExtract(true);
       }
     };
-    window.addEventListener("velo-extract-task", handler);
-    return () => window.removeEventListener("velo-extract-task", handler);
+    window.addEventListener("sndmail-extract-task", handler);
+    return () => window.removeEventListener("sndmail-extract-task", handler);
   }, [thread.id]);
 
   const handleMessageContextMenu = useCallback((e: React.MouseEvent, msg: DbMessage) => {
@@ -566,7 +566,7 @@ export function ThreadView({ thread }: ThreadViewProps) {
                   await unmergeThread(threadAccountId, id).catch(console.error);
                 }
                 await reloadMessages().catch(console.error);
-                window.dispatchEvent(new CustomEvent("velo-threads-merged"));
+                window.dispatchEvent(new CustomEvent("sndmail-threads-merged"));
               }}
               className="text-accent hover:underline shrink-0"
             >

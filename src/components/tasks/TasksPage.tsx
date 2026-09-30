@@ -79,8 +79,8 @@ export function TasksPage() {
   // A reminder set or cancelled from a thread is a task appearing or leaving
   useEffect(() => {
     const handler = () => { loadTasks(); };
-    window.addEventListener("velo-tasks-changed", handler);
-    return () => window.removeEventListener("velo-tasks-changed", handler);
+    window.addEventListener("sndmail-tasks-changed", handler);
+    return () => window.removeEventListener("sndmail-tasks-changed", handler);
   }, [loadTasks]);
 
   // Load subtasks

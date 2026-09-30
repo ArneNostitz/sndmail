@@ -8,7 +8,7 @@ import type { QuerySourceFilter, SearchHit, SearchStatus, TypesenseQueryResponse
 export const HIGHLIGHT_START = "\uE000";
 export const HIGHLIGHT_END = "\uE001";
 const RESULT_FIELDS = "id,source,title,subtitle,snippet,open_type,open_target,app,tags,metadata,updated_at";
-const SOURCES = ["velo", "file", "obsidian"];
+const SOURCES = ["sndmail", "velo", "file", "obsidian"];
 const MODEL_CONFIG = { model_name: SEMANTIC_MODEL, indexing_prefix: "passage: ", query_prefix: "query: " };
 
 function baseUrl(config: TypesenseConnection) {
@@ -198,7 +198,7 @@ export async function indexSemanticBatch(config: TypesenseConnection, documents:
     embedded += batch.length;
     batch = [];
     // Success-only pacing: errors bypass the wait. The worker's abort signal
-    // cancels rests immediately when disabled or when its Velo parent exits.
+    // cancels rests immediately when disabled or when its sndmail parent exits.
     await restAfterEmbedding(startedAt, (remaining) => progress?.(embedded, reused, remaining));
   };
   for (const document of changed) for (const passage of documentPassages(document, generation)) {
@@ -370,12 +370,14 @@ export async function searchCollection(config: TypesenseConnection, input: Query
   const count = Number.isFinite(limit) ? Math.max(1, Math.min(100, Math.trunc(limit))) : 20;
   const candidates = Math.min(100, Math.max(40, count * 3));
   const filters: string[] = [];
-  if (input.source) filters.push(`source:=${filterValue(input.source)}`);
-  if (input.app) filters.push(`app:=${filterValue(input.app)}`);
+  if (input.source === "sndmail") filters.push("source:=[sndmail,velo]");
+  else if (input.source) filters.push(`source:=${filterValue(input.source)}`);
+  if (input.app === "sndmail" || input.app === "Velo") filters.push("app:=[sndmail,Velo]");
+  else if (input.app) filters.push(`app:=${filterValue(input.app)}`);
   const scoped: Record<string, string> = {};
   if (filters.length) scoped.filter_by = filters.join(" && ");
   // A recognized application scope needs only that source to be ready.
-  const healthSource = input.source || ({ Velo: "velo", Finder: "file", Obsidian: "obsidian" } as Record<string, string>)[input.app || ""];
+  const healthSource = input.source || ({ sndmail: "sndmail", Velo: "sndmail", Finder: "file", Obsidian: "obsidian" } as Record<string, string>)[input.app || ""];
   if (healthSource && !SOURCES.includes(healthSource)) throw new Error("Unknown search source.");
   try {
     const states = await readyStates(config, healthSource, signal);

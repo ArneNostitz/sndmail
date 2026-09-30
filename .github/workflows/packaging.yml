@@ -33,13 +33,13 @@ jobs:
 
       - name: Build Flatpak bundle
         run: |
-          flatpak-builder --user --force-clean --repo=repo build-dir com.anydaysomething.velopro.yml
-          flatpak build-bundle repo velo.flatpak com.anydaysomething.velopro
+          flatpak-builder --user --force-clean --repo=repo build-dir com.anydaysomething.sndmail.yml
+          flatpak build-bundle repo sndmail.flatpak com.anydaysomething.sndmail
 
       - name: Upload Flatpak to release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload "${{ inputs.tag_name }}" velo.flatpak --clobber
+        run: gh release upload "${{ inputs.tag_name }}" sndmail.flatpak --clobber
 
   build-srpm:
     name: Build SRPM
@@ -62,19 +62,19 @@ jobs:
             --exclude='.github' \
             --exclude='*.flatpak' \
             --exclude='*.tar.gz' \
-            --transform "s/^\./velo-${{ env.APP_VERSION }}/" \
-            -czf "/tmp/velo-${{ env.APP_VERSION }}.tar.gz" .
+            --transform "s/^\./sndmail-${{ env.APP_VERSION }}/" \
+            -czf "/tmp/sndmail-${{ env.APP_VERSION }}.tar.gz" .
 
       - name: Set up RPM build environment
         run: |
           rpmdev-setuptree
           # Ensure spec version matches the actual release version
-          sed -i "s/^%global app_version.*/%global app_version ${{ env.APP_VERSION }}/" velo.spec
-          cp velo.spec ~/rpmbuild/SPECS/
-          cp "/tmp/velo-${{ env.APP_VERSION }}.tar.gz" ~/rpmbuild/SOURCES/
+          sed -i "s/^%global app_version.*/%global app_version ${{ env.APP_VERSION }}/" sndmail.spec
+          cp sndmail.spec ~/rpmbuild/SPECS/
+          cp "/tmp/sndmail-${{ env.APP_VERSION }}.tar.gz" ~/rpmbuild/SOURCES/
 
       - name: Build Source RPM
-        run: rpmbuild -bs ~/rpmbuild/SPECS/velo.spec
+        run: rpmbuild -bs ~/rpmbuild/SPECS/sndmail.spec
 
       - name: Upload SRPM to release
         env:

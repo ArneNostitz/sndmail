@@ -54,7 +54,7 @@ export function Navbar() {
 
         <div className="hidden md:flex items-center gap-3">
           <a
-            href="https://github.com/avihaymenahem/velo"
+            href="https://github.com/ArneNostitz/sndmail"
             target="_blank"
             rel="noopener noreferrer"
             className="btn-secondary !py-2 !px-4 !text-sm"
@@ -63,7 +63,7 @@ export function Navbar() {
             GitHub
           </a>
           <a
-            href="https://github.com/avihaymenahem/velo/releases"
+            href="https://github.com/ArneNostitz/sndmail/releases"
             target="_blank"
             rel="noopener noreferrer"
             className="btn-primary !py-2 !px-4 !text-sm"
@@ -99,11 +99,11 @@ export function Navbar() {
                 {link.label}
               </a>
             ))}
-            <a href="https://github.com/avihaymenahem/velo" target="_blank" rel="noopener noreferrer" className="btn-secondary text-sm !py-2.5 mt-2 justify-center">
+            <a href="https://github.com/ArneNostitz/sndmail" target="_blank" rel="noopener noreferrer" className="btn-secondary text-sm !py-2.5 mt-2 justify-center">
               <Github size={16} />
               GitHub
             </a>
-            <a href="https://github.com/avihaymenahem/velo/releases" target="_blank" rel="noopener noreferrer" className="btn-primary text-sm !py-2.5 justify-center">
+            <a href="https://github.com/ArneNostitz/sndmail/releases" target="_blank" rel="noopener noreferrer" className="btn-primary text-sm !py-2.5 justify-center">
               Download
             </a>
           </div>

@@ -32,8 +32,8 @@ interface MailRow {
 }
 
 // Read the live WAL through SQLite; never copy, checkpoint, or write sndmail's DB.
-export async function collectVeloDocuments(_exportPath?: string, dbPathOverride?: string, onBatch?: (documents: UniversalDocument[]) => Promise<void>): Promise<UniversalDocument[]> {
-  const path = expandPath(dbPathOverride || process.env.SNDMAIL_DB_PATH || process.env.VELO_DB_PATH || process.env.VELO_DATABASE_PATH ||
+export async function collectSndmailDocuments(_exportPath?: string, dbPathOverride?: string, onBatch?: (documents: UniversalDocument[]) => Promise<void>): Promise<UniversalDocument[]> {
+  const path = expandPath(dbPathOverride || process.env.SNDMAIL_DB_PATH || 
     join(homedir(), "Library", "Application Support", "com.anydaysomething.sndmail", "sndmail.db"));
   try { await access(path); } catch {
     throw new Error(`sndmail database not found: ${path}. Set sndmail DB Path in extension preferences.`);
@@ -95,9 +95,9 @@ export function readableBody(plain: unknown, html: unknown): string {
 
 export interface MailContent { subject: string; body: string; from: string; to: string; date: number; truncated: boolean }
 
-export async function readVeloMessage(accountId: string, messageId: string, dbPathOverride?: string, signal?: AbortSignal): Promise<MailContent> {
+export async function readSndmailMessage(accountId: string, messageId: string, dbPathOverride?: string, signal?: AbortSignal): Promise<MailContent> {
   signal?.throwIfAborted();
-  const path = expandPath(dbPathOverride || process.env.SNDMAIL_DB_PATH || process.env.VELO_DB_PATH || process.env.VELO_DATABASE_PATH ||
+  const path = expandPath(dbPathOverride || process.env.SNDMAIL_DB_PATH || 
     join(homedir(), "Library", "Application Support", "com.anydaysomething.sndmail", "sndmail.db"));
   const literal = (value: string) => `'${value.replace(/'/g, "''")}'`;
   const query = `SELECT subject, substr(body_text,1,1000000) AS body_text, substr(body_html,1,1000000) AS body_html,

@@ -10,9 +10,9 @@ describe("trimHtmlBody", () => {
     expect(result.html).not.toContain("old mail");
   });
 
-  it("continues to remove legacy Velo quote and signature attributes", () => {
+  it("removes sndmail quote and signature attributes", () => {
     const result = trimHtmlBody(
-      '<p>New note</p><div data-velo-quote>Old reply</div><div data-velo-signature>Old signature</div>',
+      '<p>New note</p><div data-sndmail-quote>Old reply</div><div data-sndmail-signature>Old signature</div>',
     );
     expect(result.html).toContain("New note");
     expect(result.html).not.toContain("Old reply");
@@ -61,7 +61,7 @@ describe("trimHtmlBody", () => {
   });
 
   it("treats a bare forward as empty rather than keeping the quoted mail", () => {
-    // The shape Velo's own forward produces: no note, attribution, then quote
+    // The shape sndmail's own forward produces: no note, attribution, then quote
     const html =
       '<html><body><br> <br><div class="gmail_signature"></div>'
       + '<p class="gmail_quote">On 8. May 2026 at 15:21:52, Rainer Newald wrote:</p>'

@@ -55,6 +55,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
     gets = 0
     full_lists = 0
     full_includes_trash = 0
+    rate_limit_next_history = 0
+    rate_limit_responses = 0
+    long_retry_next_history = 0
     def log_message(self, *_args):
         pass
 
@@ -64,6 +67,22 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_error(401)
             return
         path = urlparse(self.path).path
+        if path.endswith("/history") and (self.rate_limit_next_history or self.long_retry_next_history):
+            long_retry = bool(self.long_retry_next_history)
+            if long_retry:
+                self.__class__.long_retry_next_history -= 1
+                self.send_response(429)
+                self.send_header("Retry-After", "120")
+            else:
+                self.__class__.rate_limit_next_history -= 1
+                self.send_response(403)
+            self.__class__.rate_limit_responses += 1
+            body = json.dumps({"error": {"errors": [{"reason": "rateLimitExceeded"}]}}).encode()
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
         if path.endswith("/profile"):
             data = {"historyId": "100"}
         elif path.endswith("/labels"):
@@ -312,6 +331,7 @@ def main():
             assert changes["ok"] and len(changes["data"]["events"]) == 1
             cursor = changes["data"]["next_cursor"]
             Handler.delta = True
+            Handler.rate_limit_next_history = 1
             RelayHandler.push({"type": "gmail-history", "email": "reader@example.test"})
             deadline = time.monotonic() + (45 if HOLD_SECONDS else 20)
             while time.monotonic() < deadline:
@@ -324,6 +344,7 @@ def main():
                 time.sleep(0.1)
             else:
                 raise AssertionError("SSE push did not trigger Gmail History delta")
+            assert Handler.rate_limit_responses == 1, "transient Gmail 403 was not retried"
             with RelayHandler.lock:
                 first_connections = RelayHandler.connections
             wake(data)
@@ -400,7 +421,18 @@ def main():
             with sqlite3.connect(data / "sndmail.db") as db:
                 assert db.execute("SELECT COUNT(*) FROM worker_otp_notifications").fetchone()[0] == 1
                 assert Handler.refreshes == initial_refreshes, "restarted worker did not decrypt persisted access token"
-            print("PASS: separate worker encrypted OAuth refresh, SSE push/reconfigure, baseline, history delta, force resync, API profile/replay, lock, SIGKILL recovery, OTP dedup")
+            Handler.long_retry_next_history = 1
+            before_retry = Handler.rate_limit_responses
+            wake(data)
+            deadline = time.monotonic() + 10
+            while Handler.rate_limit_responses == before_retry and time.monotonic() < deadline:
+                time.sleep(0.05)
+            assert Handler.rate_limit_responses > before_retry, "Retry-After fixture was not reached"
+            started = time.monotonic()
+            process.send_signal(signal.SIGTERM)
+            process.communicate(timeout=3)
+            assert time.monotonic() - started < 3, "worker did not cancel a bounded retry wait"
+            print("PASS: separate worker encrypted OAuth refresh, SSE push/reconfigure, transient Gmail 403 recovery, bounded retry cancellation, baseline, history delta, force resync, API profile/replay, lock, SIGKILL recovery, OTP dedup")
         finally:
             process.send_signal(signal.SIGTERM)
             try:

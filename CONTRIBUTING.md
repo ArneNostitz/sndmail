@@ -13,8 +13,8 @@ Thank you for your interest in contributing to sndmail! This guide will help you
 ### Setup
 
 ```bash
-git clone https://github.com/avihaymenahem/velo.git
-cd velo
+git clone https://github.com/ArneNostitz/sndmail.git sndmail
+cd sndmail
 npm install
 npm run tauri dev
 ```
@@ -93,7 +93,7 @@ chore: bump tauri to v2.10
 
 ## Reporting Bugs
 
-Use the [bug report template](https://github.com/avihaymenahem/velo/issues/new?template=bug_report.yml) on GitHub Issues. Include:
+Use the [bug report template](https://github.com/ArneNostitz/sndmail/issues/new?template=bug_report.yml) on GitHub Issues. Include:
 
 - Steps to reproduce
 - Expected vs. actual behavior
@@ -102,7 +102,7 @@ Use the [bug report template](https://github.com/avihaymenahem/velo/issues/new?t
 
 ## Feature Requests
 
-Use the [feature request template](https://github.com/avihaymenahem/velo/issues/new?template=feature_request.yml) on GitHub Issues.
+Use the [feature request template](https://github.com/ArneNostitz/sndmail/issues/new?template=feature_request.yml) on GitHub Issues.
 
 ## License
 
@@ -202,9 +202,9 @@ To publish a new release to a Fedora COPR repository using the `sndmail.spec` fi
 
     ```bash
     VERSION=$(grep -oP '(?<=^%global app_version ).*' sndmail.spec)
-    tar --exclude='.git' --transform "s/^\./velo-${VERSION}/" -czf "velo-${VERSION}.tar.gz" .
+    tar --exclude='.git' --transform "s/^\./sndmail-${VERSION}/" -czf "sndmail-${VERSION}.tar.gz" .
     
-    cp "velo-${VERSION}.tar.gz" ~/rpmbuild/SOURCES/
+    cp "sndmail-${VERSION}.tar.gz" ~/rpmbuild/SOURCES/
     cp sndmail.spec ~/rpmbuild/SPECS/
     
     rpmbuild -bs ~/rpmbuild/SPECS/sndmail.spec
@@ -215,7 +215,7 @@ To publish a new release to a Fedora COPR repository using the `sndmail.spec` fi
     Submit the generated SRPM to your COPR project.
 
     ```bash
-    copr build your-username/velo ~/rpmbuild/SRPMS/velo-${VERSION}-1.*.src.rpm
+    copr build your-username/sndmail ~/rpmbuild/SRPMS/sndmail-${VERSION}-1.*.src.rpm
     ```
     
     *Note: Because our RPM build runs `npm ci` and Cargo, ensure **"Enable network in buildroot"** is turned on in your COPR project settings.*

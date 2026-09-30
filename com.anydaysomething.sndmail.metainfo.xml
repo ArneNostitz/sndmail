@@ -8,13 +8,13 @@
   <description>
     <p>sndmail is a local-first desktop email client, built with modern web technologies.</p>
   </description>
-  <url type="homepage">https://github.com/avihaymenahem/velo</url>
-  <url type="bugtracker">https://github.com/avihaymenahem/velo/issues</url>
+  <url type="homepage">https://github.com/ArneNostitz/sndmail</url>
+  <url type="bugtracker">https://github.com/ArneNostitz/sndmail/issues</url>
   <launchable type="desktop-id">com.anydaysomething.sndmail.desktop</launchable>
   <releases>
     <release version="0.4.21" date="2026-02-20" /> <!-- x-release-please-version -->
   </releases>
-  <developer id="app.velomail">
+  <developer id="com.anydaysomething.sndmail">
     <name>sndmail contributors</name>
   </developer>
   <content_rating type="oars-1.1" />

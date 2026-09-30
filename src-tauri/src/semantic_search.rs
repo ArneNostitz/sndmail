@@ -224,7 +224,7 @@ impl SemanticSearchManager {
                 ["node", "typesense-server", "indexer.cjs"].iter().all(|name| p.join(name).is_file())
             });
         #[cfg(target_os = "macos")]
-        let discovery = app.path().home_dir().ok().map(|p| p.join("Library/Application Support/universal-search/velo-runtime.json"));
+        let discovery = app.path().home_dir().ok().map(|p| p.join("Library/Application Support/universal-search/sndmail-runtime.json"));
         #[cfg(not(target_os = "macos"))]
         let discovery: Option<PathBuf> = None;
         let mut status = Status {
@@ -287,9 +287,9 @@ impl SemanticSearchManager {
         match fs::read(path) {
             Ok(bytes) => {
                 let existing: serde_json::Value = serde_json::from_slice(&bytes)
-                    .map_err(|_| "Cannot update the existing Raycast discovery file: it is not owned by sndmail or the legacy Velo integration.".to_string())?;
-                if existing["managedBy"] != "velo" || existing["dataPath"].as_str() != Some(inner.status.data_path.as_str()) {
-                    return Err("Another installation owns the Raycast discovery file. Resolve universal-search/velo-runtime.json before enabling.".into());
+                    .map_err(|_| "Cannot update the existing sndmail Raycast discovery file.".to_string())?;
+                if existing["managedBy"] != "sndmail" || existing["dataPath"].as_str() != Some(inner.status.data_path.as_str()) {
+                    return Err("Another installation owns the sndmail Raycast discovery file.".into());
                 }
             }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound && !config.enabled => return Ok(()),
@@ -298,7 +298,7 @@ impl SemanticSearchManager {
         }
         private_write(path, &encode(&serde_json::json!({
             "url": URL, "apiKey": config.api_key, "collection": COLLECTION,
-            "managedBy": "velo", "dataPath": inner.status.data_path,
+            "managedBy": "sndmail", "dataPath": inner.status.data_path,
             "enabled": config.enabled, "state": state, "modelId": MODEL_ID
         }))?)
     }
@@ -349,7 +349,7 @@ impl SemanticSearchManager {
 
     fn recover_worker_lock(&self) -> Result<(), String> {
         const BUSY: &str = "The managed mail indexer lock cannot be safely recovered. Another worker may still be running, or its ownership cannot be confirmed. sndmail left the lock untouched.";
-        let directory = self.root.join("velo-worker-v1.lock");
+        let directory = self.root.join("sndmail-worker-v1.lock");
         match fs::symlink_metadata(&directory) {
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
             Ok(metadata) if metadata.file_type().is_dir() => {},
@@ -614,8 +614,8 @@ impl SemanticSearchManager {
             let path = self.root.join("worker.json");
             private_write(&path, &encode(&serde_json::json!({
                 "url": URL, "apiKey": config.api_key, "collection": COLLECTION,
-                "veloDatabasePath": self.database,
-                "lockPath": self.root.join("velo-worker-v1.lock"),
+                "sndmailDatabasePath": self.database,
+                "lockPath": self.root.join("sndmail-worker-v1.lock"),
                 "lockOwnerToken": token
             }))?)?;
             lock_owner_token = Some(token);

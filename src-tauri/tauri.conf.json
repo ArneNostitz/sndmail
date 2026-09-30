@@ -59,7 +59,7 @@
       "files": {
         "Helpers/SndmailWorker.app": "binaries/SndmailWorker.app"
       },
-      "bundleVersion": "010"
+      "bundleVersion": "012"
     },
     "resources": {
       "../LICENSE": "LICENSE",
@@ -75,17 +75,14 @@
     },
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDVCN0UzOUU1Mzg2NTc5N0UKUldSK2VXVTQ1VGwrVzVQcVQ4Sk5qVGNPeWE3Y2RJODJQZW9xZi9uRk1XWnMrWXl6Z2M5YzNxTVYK",
-      "endpoints": [
-        "https://github.com/ArneNostitz/velo/releases/latest/download/latest.json"
-      ]
+      "endpoints": []
     },
     "deep-link": {
       "mobile": [],
       "desktop": {
         "schemes": [
           "mailto",
-          "sndmail",
-          "velo"
+          "sndmail"
         ]
       }
     }

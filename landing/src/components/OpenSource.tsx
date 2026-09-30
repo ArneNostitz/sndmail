@@ -60,7 +60,7 @@ export function OpenSource() {
           transition={{ duration: 0.5, delay: 0.15 }}
         >
           <a
-            href="https://github.com/avihaymenahem/velo"
+            href="https://github.com/ArneNostitz/sndmail"
             target="_blank"
             rel="noopener noreferrer"
             className="btn-secondary"

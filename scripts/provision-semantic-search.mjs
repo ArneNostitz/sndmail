@@ -104,7 +104,7 @@ async function extractServer(archive, destination, architecture) {
 export async function provisionTypesense({ root, architecture, offline = false }) {
   const target = ARCHIVES[architecture];
   if (!target) throw new Error("No pinned Typesense archive is configured for this architecture.");
-  const directory = join(root, "node_modules", ".cache", "velo-semantic-search", "typesense", VERSION, architecture);
+  const directory = join(root, "node_modules", ".cache", "sndmail-semantic-search", "typesense", VERSION, architecture);
   await mkdir(directory, { recursive: true });
   const archive = join(directory, "typesense-server.tar.gz");
   const binary = join(directory, "typesense-server");

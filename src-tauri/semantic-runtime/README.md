@@ -62,7 +62,7 @@ Explicit local provisioning overrides:
 
 Without a Typesense override, preparation uses the pinned official release and
 keeps verified archives/licenses under
-node_modules/.cache/velo-semantic-search/typesense/30.2/<architecture>/.
+node_modules/.cache/sndmail-semantic-search/typesense/30.2/<architecture>/.
 Downloads have size limits, timeouts, unique temporary files, and atomic publication
 after verification. Only the recognized server member is extracted to stdout and
 written to a known destination; other archive members are not extracted. Cached
@@ -112,7 +112,7 @@ or other permissions (normally mode 0600), containing:
 }
 ```
 
-For migration compatibility, `veloDatabasePath` remains accepted when `sndmailDatabasePath` is absent. Canonical `SNDMAIL_SEMANTIC_*` environment variables take precedence; existing `VELO_SEMANTIC_*` variables remain supported.
+The worker accepts only `sndmailDatabasePath` and `SNDMAIL_SEMANTIC_*` settings.
 
 Credentials are never passed on the command line. Only loopback HTTP(S) is allowed;
 URL credentials, non-root paths, redirects, and remote hosts are rejected. Config
@@ -134,7 +134,7 @@ supervision must also terminate/reap the child on disable/quit. The worker itsel
 does not start/stop Typesense, install a launch agent, or schedule work outside
 sndmail's lifetime. It remains alive between scans, defaulting to 300 seconds with
 bounded error backoff. `SNDMAIL_SEMANTIC_INTERVAL_SECONDS` is clamped to 60..3600;
-backoff is capped at one hour. The worker writes the canonical `sndmail` source; searches for sndmail include legacy `velo` records already in the shared index.
+backoff is capped at one hour. The worker writes the canonical `sndmail` source; searches for sndmail include only `sndmail` records in the shared index.
 
 An exclusive lock directory beside the config has one unpredictable owner marker.
 Normal shutdown removes only that marker and an empty lock directory. It never

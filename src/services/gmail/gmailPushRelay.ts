@@ -53,7 +53,7 @@ function relayUrl(value: string): string {
   return value.trim().replace(/\/+$/, "");
 }
 
-/** Listen for Gmail history notifications from the optional Velo relay. */
+/** Listen for Gmail history notifications from the optional sndmail relay. */
 export async function startGmailPushRelay(): Promise<void> {
   stopGmailPushRelay();
   const runId = relayRunId;

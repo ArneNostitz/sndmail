@@ -6,20 +6,19 @@ describe("public mail links", () => {
     expect(parseMailLink(createMailLink(target))).toEqual(target);
   });
   it("allows a thread-only link", () => {
-    expect(parseMailLink("velo://open?account=a&thread=t")).toEqual({ accountId: "a", threadId: "t" });
+    expect(parseMailLink("sndmail://open?account=a&thread=t")).toEqual({ accountId: "a", threadId: "t" });
   });
-  it("creates canonical sndmail links and still accepts Velo links", () => {
+  it("creates and parses sndmail links", () => {
     const target = { accountId: "a", threadId: "t", messageId: "m" };
     expect(createMailLink(target)).toBe("sndmail://open?account=a&thread=t&message=m");
     expect(parseMailLink("sndmail://open?account=a&thread=t&message=m")).toEqual(target);
-    expect(parseMailLink("velo://open?account=a&thread=t&message=m")).toEqual(target);
   });
   it.each([
-    "velo://delete?account=a&thread=t", "https://open?account=a&thread=t",
-    "velo://user@open?account=a&thread=t", "velo://open/file?account=a&thread=t",
-    "velo://open?account=a&thread=t#x", "velo://open?account=a&thread=t&thread=other",
-    "velo://open?account=a&thread=t&message=", "velo://open?account=a&thread=t&execute=x",
-    "velo://open?account=a&thread=%00", "velo://open?thread=t",
+    "sndmail://delete?account=a&thread=t", "https://open?account=a&thread=t",
+    "sndmail://user@open?account=a&thread=t", "sndmail://open/file?account=a&thread=t",
+    "sndmail://open?account=a&thread=t#x", "sndmail://open?account=a&thread=t&thread=other",
+    "sndmail://open?account=a&thread=t&message=", "sndmail://open?account=a&thread=t&execute=x",
+    "sndmail://open?account=a&thread=%00", "sndmail://open?thread=t",
   ])("rejects malformed or ambiguous input: %s", (url) => {
     expect(() => parseMailLink(url)).toThrow();
   });

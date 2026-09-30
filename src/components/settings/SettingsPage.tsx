@@ -18,6 +18,7 @@ import {
 } from "@/services/notifications/notificationManager";
 import { PROVIDER_MODELS, resolveModelId } from "@/services/ai/types";
 import { FIX_NUMBER } from "@/constants/build";
+import { UPDATE_SOURCE_CONFIGURED } from "@/services/updateManager";
 import { deleteAccount, updateAccountColor } from "@/services/db/accounts";
 import { ACCOUNT_COLORS, accountColor } from "@/constants/accountColors";
 import { removeClient, reauthorizeAccount } from "@/services/gmail/tokenManager";
@@ -55,8 +56,6 @@ import {
   Github,
   GitFork,
   Scale,
-  Globe,
-  Download,
   ChevronUp,
   ChevronDown,
   RotateCcw,
@@ -2253,10 +2252,6 @@ function DeveloperTab() {
   const [tauriVersion, setTauriVersion] = useState("");
   const [webviewVersion, setWebviewVersion] = useState("");
   const [platformLabel, setPlatformLabel] = useState("...");
-  const [checkingForUpdate, setCheckingForUpdate] = useState(false);
-  const [updateVersion, setUpdateVersion] = useState<string | null>(null);
-  const [updateCheckDone, setUpdateCheckDone] = useState(false);
-  const [installingUpdate, setInstallingUpdate] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -2286,44 +2281,9 @@ function DeveloperTab() {
         setPlatformLabel(`${p} (${archLabel})`);
       }
 
-      // Check if there's already a known update
-      const { getAvailableUpdate } = await import("@/services/updateManager");
-      const existing = getAvailableUpdate();
-      if (existing) setUpdateVersion(existing.version);
     }
     load();
   }, []);
-
-  const handleCheckForUpdate = async () => {
-    setCheckingForUpdate(true);
-    setUpdateCheckDone(false);
-    setUpdateVersion(null);
-    try {
-      const { checkForUpdateNow } = await import("@/services/updateManager");
-      const result = await checkForUpdateNow();
-      if (result) {
-        setUpdateVersion(result.version);
-      } else {
-        setUpdateCheckDone(true);
-      }
-    } catch (err) {
-      console.error("Update check failed:", err);
-      setUpdateCheckDone(true);
-    } finally {
-      setCheckingForUpdate(false);
-    }
-  };
-
-  const handleInstallUpdate = async () => {
-    setInstallingUpdate(true);
-    try {
-      const { installUpdate } = await import("@/services/updateManager");
-      await installUpdate();
-    } catch (err) {
-      console.error("Update install failed:", err);
-      setInstallingUpdate(false);
-    }
-  };
 
   return (
     <>
@@ -2335,43 +2295,11 @@ function DeveloperTab() {
       </Section>
 
       <Section title="Updates">
-        <div className="flex items-center justify-between">
-          <div>
-            <span className="text-sm text-text-secondary">Software updates</span>
-            {updateVersion && (
-              <p className="text-xs text-accent mt-0.5">
-                v{updateVersion} available
-              </p>
-            )}
-            {updateCheckDone && !updateVersion && (
-              <p className="text-xs text-success mt-0.5">Up to date</p>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            {updateVersion ? (
-              <Button
-                variant="primary"
-                size="md"
-                icon={<Download size={14} />}
-                onClick={handleInstallUpdate}
-                disabled={installingUpdate}
-              >
-                {installingUpdate ? "Updating..." : "Update & Restart"}
-              </Button>
-            ) : (
-              <Button
-                variant="secondary"
-                size="md"
-                icon={<RefreshCw size={14} className={checkingForUpdate ? "animate-spin" : ""} />}
-                onClick={handleCheckForUpdate}
-                disabled={checkingForUpdate}
-                className="bg-bg-tertiary text-text-primary border border-border-primary"
-              >
-                {checkingForUpdate ? "Checking..." : "Check for Updates"}
-              </Button>
-            )}
-          </div>
-        </div>
+        <p className="text-sm text-text-secondary">
+          {UPDATE_SOURCE_CONFIGURED
+            ? "sndmail checks for signed updates in the background."
+            : "Automatic updates are unavailable until a signed sndmail release source is configured."}
+        </p>
       </Section>
 
       <Section title="Developer Tools">
@@ -2433,40 +2361,16 @@ function AboutTab() {
       <Section title="Links">
         <div className="space-y-1">
           <button
-            onClick={() => openExternal("https://velomail.app")}
-            className="flex items-center gap-3 w-full px-4 py-2.5 rounded-lg bg-bg-secondary hover:bg-bg-hover transition-colors text-left"
-          >
-            <Globe size={16} className="text-text-tertiary shrink-0" />
-            <div className="min-w-0 flex-1">
-              <span className="text-sm text-text-primary">Website</span>
-              <p className="text-xs text-text-tertiary">velomail.app</p>
-            </div>
-            <ExternalLink size={14} className="text-text-tertiary shrink-0" />
-          </button>
-
-          <button
-            onClick={() => openExternal("https://github.com/avihaymenahem/velo")}
+            onClick={() => openExternal("https://github.com/ArneNostitz/sndmail")}
             className="flex items-center gap-3 w-full px-4 py-2.5 rounded-lg bg-bg-secondary hover:bg-bg-hover transition-colors text-left"
           >
             <Github size={16} className="text-text-tertiary shrink-0" />
             <div className="min-w-0 flex-1">
               <span className="text-sm text-text-primary">GitHub Repository</span>
-              <p className="text-xs text-text-tertiary">avihaymenahem/velo</p>
             </div>
             <ExternalLink size={14} className="text-text-tertiary shrink-0" />
           </button>
 
-          <button
-            onClick={() => openExternal("mailto:info@velomail.app")}
-            className="flex items-center gap-3 w-full px-4 py-2.5 rounded-lg bg-bg-secondary hover:bg-bg-hover transition-colors text-left"
-          >
-            <Mail size={16} className="text-text-tertiary shrink-0" />
-            <div className="min-w-0 flex-1">
-              <span className="text-sm text-text-primary">Contact</span>
-              <p className="text-xs text-text-tertiary">info@velomail.app</p>
-            </div>
-            <ExternalLink size={14} className="text-text-tertiary shrink-0" />
-          </button>
         </div>
       </Section>
 
@@ -2486,7 +2390,7 @@ function AboutTab() {
             </button>
           </p>
           <p className="text-xs text-text-tertiary leading-relaxed">
-            Copyright 2025 Velo Mail. You may use, distribute, and modify this software under the terms of the Apache 2.0 license. This software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND.
+            Copyright 2025 sndmail. You may use, distribute, and modify this software under the terms of the Apache 2.0 license. This software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND.
           </p>
         </div>
       </Section>
@@ -2495,13 +2399,10 @@ function AboutTab() {
         <div className="px-4 py-3 bg-bg-secondary rounded-lg">
           <div className="flex items-center gap-2 mb-2">
             <GitFork size={15} className="text-text-tertiary" />
-            <span className="text-sm font-medium text-text-primary">Modified from Velo</span>
+            <span className="text-sm font-medium text-text-primary">Third-party attribution</span>
           </div>
           <p className="text-xs text-text-secondary leading-relaxed">
-            sndmail is a modified version of Velo by Avihay Menahem, used under
-            the Apache License 2.0. sndmail is not affiliated with, endorsed by,
-            or supported by the Velo project. Changes have been made to the
-            original software.
+            Third-party copyright and license notices are included in NOTICE.
           </p>
         </div>
       </Section>

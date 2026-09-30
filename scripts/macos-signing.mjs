@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * The Developer ID identity Velo is signed with, made without Xcode.
+ * The Developer ID identity sndmail is signed with, made without Xcode.
  *
  * A Mac app distributed outside the App Store needs a *Developer ID
  * Application* certificate — it is the only kind Gatekeeper accepts from a
@@ -13,7 +13,7 @@
  * Idempotent: a second run finds the certificate the first one made and
  * changes nothing. The private key never leaves this machine — the API only
  * ever sees the CSR — and key, certificate and keychain live in
- * ~/.config/velo/signing/.
+ * ~/.config/sndmail/signing/.
  *
  * Adapted from matchmii's scripts/ios-signing.mjs, which does the same for an
  * iOS distribution certificate.
@@ -25,16 +25,16 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 
 const CERT_TYPE = 'DEVELOPER_ID_APPLICATION'
-const SUBJECT = '/CN=Velo Pro Developer ID/O=anydaysomething/C=AT'
+const SUBJECT = '/CN=sndmail Developer ID/O=anydaysomething/C=AT'
 
-const DIR = join(homedir(), '.config/velo/signing')
+const DIR = join(homedir(), '.config/sndmail/signing')
 const KEY = join(DIR, 'developer-id.key')
 const CSR = join(DIR, 'developer-id.csr')
 const CER = join(DIR, 'developer-id.cer')
 const PEM = join(DIR, 'developer-id.pem')
 const P12 = join(DIR, 'developer-id.p12')
-const KEYCHAIN = join(DIR, 'velo-signing.keychain-db')
-const KEYCHAIN_PASSWORD = 'velo-signing'
+const KEYCHAIN = join(DIR, 'sndmail-signing.keychain-db')
+const KEYCHAIN_PASSWORD = 'sndmail-signing'
 
 const sh = (cmd, args, opts = {}) => execFileSync(cmd, args, { encoding: 'utf8', ...opts })
 
@@ -153,7 +153,7 @@ sh('openssl', ['x509', '-inform', 'DER', '-in', CER, '-out', PEM])
 // refuses to read ("MAC verification failed"). The old algorithms are what the
 // keychain understands, and the file lives for exactly one import.
 sh('openssl', ['pkcs12', '-export', '-inkey', KEY, '-in', PEM, '-out', P12,
-  '-passout', `pass:${KEYCHAIN_PASSWORD}`, '-name', 'Velo Developer ID',
+  '-passout', `pass:${KEYCHAIN_PASSWORD}`, '-name', 'sndmail Developer ID',
   '-keypbe', 'PBE-SHA1-3DES', '-certpbe', 'PBE-SHA1-3DES', '-macalg', 'sha1'])
 
 if (!existsSync(KEYCHAIN)) {

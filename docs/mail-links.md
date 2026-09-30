@@ -17,8 +17,8 @@ show an error. A valid link activates sndmail, opens the conversation even outsi
 current list, and expands/scrolls to the requested message in either reading layout.
 No content, credentials, or executable commands are accepted in the link.
 
-Existing `velo://` links remain accepted for compatibility. The native deep-link plugin retains a cold-start URL until migrations and account
-loading finish. Running instances accept OS URL events and single-instance
+Mail links use the `sndmail://open` scheme. The native deep-link plugin retains a cold-start URL until account
+loading finishes. Running instances accept OS URL events and single-instance
 forwarding; duplicate deliveries are coalesced. Existing mailto composition remains.
 
 On macOS, changing this scheme requires a new application bundle installed and

@@ -4,7 +4,7 @@
 //! until the app has opened it.
 
 use std::collections::{HashMap, HashSet};
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use async_imap::extensions::idle::IdleResponse;
 use base64::Engine;
@@ -26,6 +26,11 @@ const GMAIL: &str = "https://www.googleapis.com/gmail/v1/users/me";
 const MAX_INITIAL_THREADS: usize = 10_000;
 const BATCH_SIZE: usize = 50;
 const RETRY_INTERVAL: Duration = Duration::from_secs(5 * 60);
+// A threads.get costs 40 Gmail quota units. Four GET starts per two seconds
+// remain below the per-user minute limit even when every call is a thread.
+const GMAIL_GET_SPACING: Duration = Duration::from_millis(500);
+const GMAIL_MAX_RETRIES: u32 = 5;
+const GMAIL_MAX_BACKOFF_MS: u64 = 32_000;
 // The relay currently sends no heartbeat. Reopen a quiet stream periodically
 // so a half-open connection cannot suppress push forever.
 const RELAY_INACTIVITY: Duration = Duration::from_secs(10 * 60);
@@ -77,8 +82,7 @@ pub(crate) async fn run(context: &WorkerContext) -> Result<(), String> {
             _ = context.wait_for_mail_change() => {},
         }
         if let Err(error) = sync_cycle(context, &client, &mut idle_watchers).await {
-            // Error text may contain server details. Keep logs useful but bounded.
-            log::warn!("background mail cycle failed: {}", truncate(&error, 240));
+            log::warn!("background mail cycle failed: {}", error_category(&error));
             persist_file_status(context, "error", None, Some(error_category(&error)));
         }
     }
@@ -110,7 +114,7 @@ async fn watch_gmail_relay(context: WorkerContext) {
                 _ = tokio::time::sleep(RETRY_INTERVAL) => {},
             },
             Err(error) => {
-                log::warn!("Gmail relay reconnecting: {}", truncate(&error, 140));
+                log::warn!("Gmail relay reconnecting: {}", error_category(&error));
                 // A missed stream event is repaired by the authoritative History API.
                 context.notify_mail_changed(String::new());
                 tokio::select! {
@@ -165,9 +169,8 @@ async fn relay_session(context: &WorkerContext, http: &reqwest::Client) -> Resul
     for account in accounts.values_mut() {
         if let Err(error) = register_relay(&mut db, http, base, &secret, &topic, account).await {
             log::warn!(
-                "Gmail relay registration {} failed: {}",
-                account.id,
-                truncate(&error, 100)
+                "Gmail relay registration failed: {}",
+                error_category(&error)
             );
         }
     }
@@ -221,9 +224,8 @@ async fn relay_session(context: &WorkerContext, http: &reqwest::Client) -> Resul
                         register_relay(&mut db, http, base, &secret, &topic, account).await
                     {
                         log::warn!(
-                            "Gmail relay renewal {} failed: {}",
-                            account.id,
-                            truncate(&error, 100)
+                            "Gmail relay renewal failed: {}",
+                            error_category(&error)
                         );
                     }
                 }
@@ -347,7 +349,7 @@ async fn sync_cycle(
             }
             Err(error) => {
                 failures += 1;
-                log::warn!("background sync of account {} failed: {}", account.id, truncate(&error, 180));
+                log::warn!("background sync failed: {}", error_category(&error));
                 set_status(context, &mut db, "error", Some(&account.id), Some(error_category(&error))).await?;
                 sqlx::query("INSERT INTO worker_mail_account_status (account_id, phase, error) VALUES (?, 'error', ?) ON CONFLICT(account_id) DO UPDATE SET phase = 'error', error = excluded.error, updated_at = unixepoch()")
                     .bind(&account.id).bind(error_category(&error)).execute(&mut db).await.map_err(db_error)?;
@@ -449,7 +451,7 @@ fn encryption_key() -> Result<Vec<u8>, String> {
             .ok().and_then(|entry| entry.get_password().ok())
     };
     let encoded = if let Some(stored) = stored { stored } else {
-        // Match the frontend's fallback order. Never create a new key here:
+        // Use only sndmail's canonical fallback file. Never create a new key here:
         // a wrong key would make existing credentials appear corrupt.
         let directory = if std::env::var("SNDMAIL_WORKER_FIXTURE").as_deref() == Ok("1") {
             std::env::var_os("SNDMAIL_WORKER_DATA_DIR").map(std::path::PathBuf::from)
@@ -465,9 +467,8 @@ fn encryption_key() -> Result<Vec<u8>, String> {
                 .or_else(|| home.map(|home| home.join("AppData/Roaming")));
             base.map(|base| base.join("com.anydaysomething.sndmail"))
         }.ok_or("encryption key unavailable")?;
-        ["sndmail.key", "velo.key"].iter()
-            .find_map(|name| std::fs::read_to_string(directory.join(name)).ok())
-            .ok_or("encryption key unavailable")?
+        std::fs::read_to_string(directory.join("sndmail.key"))
+            .map_err(|_| "encryption key unavailable")?
     };
     base64::engine::general_purpose::STANDARD
         .decode(encoded.trim())
@@ -538,11 +539,80 @@ fn truncate(value: &str, limit: usize) -> String {
 
 fn error_category(error: &str) -> &'static str {
     let lower = error.to_ascii_lowercase();
-    if lower.contains("credential") || lower.contains("keychain") || lower.contains("encrypt") { "credential unavailable" }
-    else if lower.contains("auth") || lower.contains("unauthorized") || lower.contains("401") { "provider authentication failed" }
-    else if lower.contains("database") || lower.contains("sqlite") { "mail database unavailable" }
-    else if lower.contains("gmail") || lower.contains("imap") || lower.contains("relay") { "mail provider unavailable" }
-    else { "background sync failed" }
+    if lower.contains("credential") || lower.contains("keychain") || lower.contains("encrypt") { return "credential unavailable"; }
+    if lower.contains("database") || lower.contains("sqlite") { return "mail database unavailable"; }
+    if lower.contains("gmail rate limited") { return "Gmail API rate limited"; }
+    if lower.contains("oauth invalid_grant") { return "provider OAuth invalid_grant"; }
+    if lower.contains("oauth invalid_client") { return "provider OAuth invalid_client"; }
+    if lower.contains("oauth unauthorized_client") { return "provider OAuth unauthorized_client"; }
+    if lower.contains("token refresh") || lower.contains("gmail returned http") {
+        for (code, category) in [
+            (400, "provider HTTP 400"), (401, "provider HTTP 401"),
+            (403, "provider HTTP 403"), (408, "provider HTTP 408"),
+            (429, "provider HTTP 429"), (500, "provider HTTP 500"),
+            (502, "provider HTTP 502"), (503, "provider HTTP 503"),
+            (504, "provider HTTP 504"),
+        ] {
+            if lower.contains(&format!("http {code}")) { return category; }
+        }
+        if lower.contains("http ") { return "provider HTTP error"; }
+    }
+    if lower.contains("request failed") || lower.contains("refresh gmail token:") || lower.contains("imap oauth refresh:") || lower.contains("timed out") {
+        return "provider network unavailable";
+    }
+    if lower.contains("auth") || lower.contains("unauthorized") || lower.contains("401") { return "provider authentication failed"; }
+    if lower.contains("gmail") || lower.contains("imap") || lower.contains("relay") { return "mail provider unavailable"; }
+    "background sync failed"
+}
+
+fn gmail_retry_delay(attempt: u32, retry_after_secs: Option<u64>, jitter_ms: u64) -> Duration {
+    let base_secs = 1_u64 << attempt.min(5);
+    let requested_secs = base_secs.max(retry_after_secs.unwrap_or(0));
+    Duration::from_millis(
+        (requested_secs.saturating_mul(1_000) + jitter_ms.min(999)).min(GMAIL_MAX_BACKOFF_MS),
+    )
+}
+
+async fn pace_gmail_get() {
+    if std::env::var("SNDMAIL_WORKER_FIXTURE").as_deref() == Ok("1") {
+        return;
+    }
+    static NEXT_GET: std::sync::OnceLock<tokio::sync::Mutex<Option<tokio::time::Instant>>> =
+        std::sync::OnceLock::new();
+    let mut next = NEXT_GET.get_or_init(|| tokio::sync::Mutex::new(None)).lock().await;
+    if let Some(instant) = *next {
+        tokio::time::sleep_until(instant).await;
+    }
+    *next = Some(tokio::time::Instant::now() + GMAIL_GET_SPACING);
+}
+
+async fn gmail_rate_limited(response: reqwest::Response) -> bool {
+    let mut stream = response.bytes_stream();
+    let mut body = Vec::new();
+    while let Some(chunk) = stream.next().await {
+        let Ok(chunk) = chunk else { return false; };
+        if body.len().saturating_add(chunk.len()) > 8_192 { return false; }
+        body.extend_from_slice(&chunk);
+    }
+    let Ok(payload) = serde_json::from_slice::<Value>(&body) else { return false; };
+    is_gmail_rate_reason(&payload)
+}
+
+fn is_gmail_rate_reason(payload: &Value) -> bool {
+    payload["error"]["errors"]
+        .as_array()
+        .is_some_and(|errors| errors.iter().any(|error| {
+            matches!(error["reason"].as_str(), Some("rateLimitExceeded" | "userRateLimitExceeded"))
+        }))
+}
+
+fn oauth_refresh_error(provider: &str, status: reqwest::StatusCode, payload: Option<&Value>) -> String {
+    let code = payload.and_then(|value| value.get("error")).and_then(Value::as_str);
+    match code {
+        Some(code @ ("invalid_grant" | "invalid_client" | "unauthorized_client")) =>
+            format!("{provider} OAuth {code}"),
+        _ => format!("{provider} token refresh returned HTTP {}", status.as_u16()),
+    }
 }
 
 async fn set_status(context: &WorkerContext, db: &mut SqliteConnection, phase: &str, account: Option<&str>, error: Option<&str>) -> Result<(), String> {
@@ -661,10 +731,9 @@ async fn gmail_token(
         .await
         .map_err(|e| format!("refresh Gmail token: {e}"))?;
     if !response.status().is_success() {
-        return Err(format!(
-            "Gmail token refresh returned HTTP {}",
-            response.status()
-        ));
+        let status = response.status();
+        let payload = response.json::<Value>().await.ok();
+        return Err(oauth_refresh_error("Gmail", status, payload.as_ref()));
     }
     let payload: Value = response
         .json()
@@ -691,26 +760,37 @@ async fn gmail_get(
     path: &str,
 ) -> Result<Option<Value>, String> {
     let base = fixture_endpoint("SNDMAIL_WORKER_GMAIL_URL", GMAIL);
-    let response = http
-        .get(format!("{base}{path}"))
-        .bearer_auth(token)
-        .send()
-        .await
-        .map_err(|e| format!("Gmail request failed: {e}"))?;
-    if response.status() == reqwest::StatusCode::NOT_FOUND {
-        return Ok(None);
+    for attempt in 0..=GMAIL_MAX_RETRIES {
+        pace_gmail_get().await;
+        let response = http
+            .get(format!("{base}{path}"))
+            .bearer_auth(token)
+            .send()
+            .await
+            .map_err(|e| format!("Gmail request failed: {e}"))?;
+        let status = response.status();
+        if status == reqwest::StatusCode::NOT_FOUND { return Ok(None); }
+        if status == reqwest::StatusCode::UNAUTHORIZED { return Err("GMAIL_UNAUTHORIZED".into()); }
+        if status.is_success() {
+            return response.json().await.map(Some)
+                .map_err(|_| "invalid Gmail JSON response".to_string());
+        }
+        let retry_after = response.headers()
+            .get(reqwest::header::RETRY_AFTER)
+            .and_then(|value| value.to_str().ok())
+            .and_then(|value| value.parse::<u64>().ok());
+        let rate_limited = status == reqwest::StatusCode::TOO_MANY_REQUESTS
+            || (status == reqwest::StatusCode::FORBIDDEN && gmail_rate_limited(response).await);
+        if (rate_limited || status.is_server_error()) && attempt < GMAIL_MAX_RETRIES {
+            let jitter = SystemTime::now().duration_since(UNIX_EPOCH)
+                .map(|duration| u64::from(duration.subsec_millis()) % 1_000).unwrap_or(0);
+            tokio::time::sleep(gmail_retry_delay(attempt, retry_after, jitter)).await;
+            continue;
+        }
+        if rate_limited { return Err("Gmail rate limited".into()); }
+        return Err(format!("Gmail returned HTTP {status}"));
     }
-    if response.status() == reqwest::StatusCode::UNAUTHORIZED {
-        return Err("GMAIL_UNAUTHORIZED".into());
-    }
-    if !response.status().is_success() {
-        return Err(format!("Gmail returned HTTP {}", response.status()));
-    }
-    response
-        .json()
-        .await
-        .map(Some)
-        .map_err(|_| "invalid Gmail JSON response".to_string())
+    Err("Gmail rate limited".into())
 }
 
 async fn sync_gmail(
@@ -1222,7 +1302,11 @@ async fn fresh_imap_token(db: &mut SqliteConnection, http: &reqwest::Client, acc
     if let Some(ref secret) = secret { if !secret.is_empty() { form.push(("client_secret", secret.as_str())); } }
     if let Some(scope) = scope { form.push(("scope", scope)); }
     let response = http.post(url).form(&form).send().await.map_err(|e| format!("IMAP OAuth refresh: {e}"))?;
-    if !response.status().is_success() { return Err(format!("IMAP OAuth refresh returned HTTP {}", response.status())); }
+    if !response.status().is_success() {
+        let status = response.status();
+        let payload = response.json::<Value>().await.ok();
+        return Err(oauth_refresh_error("IMAP", status, payload.as_ref()));
+    }
     let payload: Value = response.json().await.map_err(|_| "invalid IMAP OAuth response".to_string())?;
     let access = payload["access_token"].as_str().ok_or("IMAP OAuth response missing access token")?;
     let rotated = payload["refresh_token"].as_str();
@@ -1277,9 +1361,8 @@ async fn watch_imap_idle(context: WorkerContext, account_id: String, config: Ima
         .await;
         if let Err(error) = outcome {
             log::warn!(
-                "IMAP IDLE {} reconnecting: {}",
-                account_id,
-                truncate(&error, 140)
+                "IMAP IDLE reconnecting: {}",
+                error_category(&error)
             );
         }
         // A dropped socket or laptop wake also gets a catch-up sync before
@@ -1788,8 +1871,41 @@ async fn store_imap_message(
 
 #[cfg(test)]
 mod tests {
-    use super::{decrypt, encrypt};
+    use super::{decrypt, encrypt, error_category, gmail_retry_delay, is_gmail_rate_reason, oauth_refresh_error};
     use base64::Engine;
+
+    #[test]
+    fn oauth_failures_keep_only_allowlisted_codes_and_http_status() {
+        let rejected = serde_json::json!({
+            "error": "invalid_grant",
+            "error_description": "private account and token details"
+        });
+        let known = oauth_refresh_error("Gmail", reqwest::StatusCode::BAD_REQUEST, Some(&rejected));
+        assert_eq!(known, "Gmail OAuth invalid_grant");
+        assert_eq!(error_category(&known), "provider OAuth invalid_grant");
+
+        let unknown = serde_json::json!({
+            "error": "private account and token details",
+            "error_description": "even more private details"
+        });
+        let safe = oauth_refresh_error("Gmail", reqwest::StatusCode::BAD_REQUEST, Some(&unknown));
+        assert_eq!(safe, "Gmail token refresh returned HTTP 400");
+        assert_eq!(error_category(&safe), "provider HTTP 400");
+        assert_eq!(error_category("Gmail returned HTTP 403 Forbidden"), "provider HTTP 403");
+        assert_eq!(error_category("Gmail request failed: network timeout"), "provider network unavailable");
+        assert_eq!(error_category("Gmail rate limited"), "Gmail API rate limited");
+    }
+
+    #[test]
+    fn gmail_retry_backoff_is_bounded_and_honors_retry_after() {
+        assert_eq!(gmail_retry_delay(0, None, 0), std::time::Duration::from_secs(1));
+        assert_eq!(gmail_retry_delay(2, None, 250), std::time::Duration::from_millis(4_250));
+        assert_eq!(gmail_retry_delay(0, Some(10), 0), std::time::Duration::from_secs(10));
+        assert_eq!(gmail_retry_delay(5, Some(3_600), 999), std::time::Duration::from_secs(32));
+        assert!(is_gmail_rate_reason(&serde_json::json!({"error": {"errors": [{"reason": "rateLimitExceeded"}]}})));
+        assert!(is_gmail_rate_reason(&serde_json::json!({"error": {"errors": [{"reason": "userRateLimitExceeded"}]}})));
+        assert!(!is_gmail_rate_reason(&serde_json::json!({"error": {"errors": [{"reason": "insufficientPermissions"}], "message": "private details"}})));
+    }
 
     #[test]
     fn frontend_aes_gcm_credential_format_roundtrips_and_rejects_wrong_key() {

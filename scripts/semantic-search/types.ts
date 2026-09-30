@@ -2,7 +2,7 @@ export type OpenType = "path" | "url" | "app";
 
 export interface UniversalDocument {
   id: string;
-  source: "sndmail" | "velo" | "obsidian" | "file" | string;
+  source: "sndmail" | "obsidian" | "file" | string;
   title: string;
   subtitle?: string;
   snippet?: string;

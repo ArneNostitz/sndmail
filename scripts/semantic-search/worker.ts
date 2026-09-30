@@ -2,14 +2,14 @@ import { randomUUID } from "node:crypto";
 import { lstat, mkdir, readFile, rmdir, unlink, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { createTypesenseConnection, type TypesenseConnection } from "./shared";
-import { collectVeloDocuments } from "./providers/velo";
+import { collectSndmailDocuments } from "./providers/sndmail";
 import { beginSemanticSource, ensureCollection, ensureSemanticCollections, failSemanticSource,
   finishSemanticSource, indexSemanticBatch, type SemanticSourceState } from "./typesense";
 import { indexingCpuBudgetPercent } from "./indexing-budget";
 import { stopWorker, waitForNextWork, workerSignal } from "./runtime-control";
 
 interface WorkerConfig {
-  url: string; apiKey: string; collection: string; sndmailDatabasePath?: string; veloDatabasePath?: string;
+  url: string; apiKey: string; collection: string; sndmailDatabasePath: string;
   lockPath?: string; lockOwnerToken?: string;
 }
 let nativeState: "indexing" | "ready" | "error" = "indexing";
@@ -55,12 +55,12 @@ async function loadConfig(path: string): Promise<WorkerConfig> {
   catch { throw new WorkerError("invalid_config", "Worker configuration is not valid JSON."); }
   if (!value || typeof value.url !== "string" || typeof value.apiKey !== "string" || !value.apiKey.trim() ||
     typeof value.collection !== "string" || !/^[a-zA-Z0-9_-]+$/.test(value.collection) ||
-    typeof (value.sndmailDatabasePath || value.veloDatabasePath) !== "string" || !isAbsolute(value.sndmailDatabasePath || value.veloDatabasePath || "")) {
+    typeof value.sndmailDatabasePath !== "string" || !isAbsolute(value.sndmailDatabasePath)) {
     throw new WorkerError("invalid_config", "Worker configuration requires a local URL, API key, collection, and absolute mail database path.");
   }
   if (value.lockPath !== undefined || value.lockOwnerToken !== undefined) {
     if (typeof value.lockPath !== "string" || !isAbsolute(value.lockPath) ||
-      resolve(value.lockPath) !== resolve(dirname(path), "velo-worker-v1.lock") ||
+      resolve(value.lockPath) !== resolve(dirname(path), "sndmail-worker-v1.lock") ||
       typeof value.lockOwnerToken !== "string" ||
       !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value.lockOwnerToken)) {
       throw new WorkerError("invalid_lock_config", "Managed worker locking requires its dedicated lock path and a launch ownership token.");
@@ -116,7 +116,7 @@ async function ownLock(configPath: string, collection: string, lockPath?: string
         throw error;
       }
     }
-    // Legacy mode still deletes only its unpredictable UUID marker. Never
+    // Standalone mode deletes only its unpredictable UUID marker. Never
     // recursively remove a lock or clear the standalone indexer's index.lock.
     try { await unlink(marker); }
     catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return; throw error; }
@@ -173,7 +173,7 @@ async function awaitNativeOwnership(configPath: string, ownerToken: string): Pro
 }
 
 function scanIntervalMs(): number {
-  const value = Number(process.env.SNDMAIL_SEMANTIC_INTERVAL_SECONDS || process.env.VELO_SEMANTIC_INTERVAL_SECONDS || 300);
+  const value = Number(process.env.SNDMAIL_SEMANTIC_INTERVAL_SECONDS || 300);
   return (Number.isFinite(value) ? Math.min(3600, Math.max(60, value)) : 300) * 1000;
 }
 
@@ -193,7 +193,7 @@ async function scan(connection: TypesenseConnection, config: WorkerConfig): Prom
     try {
       state = await beginSemanticSource(connection, source);
       const active = state;
-      await collectVeloDocuments(undefined, config.sndmailDatabasePath || config.veloDatabasePath, async (documents) => {
+      await collectSndmailDocuments(undefined, config.sndmailDatabasePath, async (documents) => {
         workerSignal.throwIfAborted();
         let batchEmbedded = 0;
         let batchReused = 0;

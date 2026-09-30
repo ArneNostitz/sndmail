@@ -13,7 +13,7 @@ We only provide security fixes for the latest release. Please keep sndmail up to
 
 **Please do not report security vulnerabilities through public GitHub issues.**
 
-Instead, please report them via email to **security@velomail.app** (or by opening a [private security advisory](https://github.com/avihaymenahem/velo/security/advisories/new) on GitHub).
+Instead, open a [private security advisory](https://github.com/ArneNostitz/sndmail/security/advisories/new) on GitHub.
 
 Include as much of the following as possible:
 
@@ -34,7 +34,7 @@ sndmail is a desktop application. Your emails, tokens, and settings are stored l
 
 - **Gmail**: OAuth 2.0 with PKCE -- no client secret stored. Tokens are encrypted with AES-256-GCM before being saved to the local database.
 - **IMAP/SMTP**: Passwords and app passwords are encrypted with AES-256-GCM in the local SQLite database.
-- **Encryption key**: The AES-256-GCM key lives in the OS credential store (macOS Keychain, Windows Credential Manager, Linux Secret Service) -- not on disk beside the database it protects. Installs from before v0.5 migrate their `velo.key` file into the credential store on first launch and the file is deleted. If no credential store is reachable (e.g. headless Linux with no Secret Service provider), sndmail falls back to the on-disk key file and logs a warning; in that configuration the encryption is obfuscation only.
+- **Encryption key**: The AES-256-GCM key lives in the OS credential store (macOS Keychain, Windows Credential Manager, Linux Secret Service). If no credential store is reachable (e.g. headless Linux with no Secret Service provider), sndmail uses its private `sndmail.key` app-data fallback and logs a warning; in that configuration the encryption is obfuscation only.
 - **AI API keys**: Stored in the local SQLite settings table. Keys are sent directly to the respective provider (Anthropic, OpenAI, Google) over HTTPS -- never to any sndmail server.
 
 ### Email Rendering

@@ -15,7 +15,7 @@ export const NATIVE_ACTION_EVENT = "sndmail-notification-action";
 export interface NativeAction {
   id: string;
   title: string;
-  /** Bring Velo to the front when pressed (reply, open a link). */
+  /** Bring sndmail to the front when pressed (reply, open a link). */
   foreground?: boolean;
   /** Drawn in red. */
   destructive?: boolean;
@@ -68,7 +68,7 @@ export function showNativeNotification(request: NativeNotificationRequest): Prom
 
 /**
  * Hear every press. Listens first and only then tells Rust the webview is
- * ready: a press that arrived before that — the click that *launched* Velo —
+ * ready: a press that arrived before that — the click that *launched* sndmail —
  * is queued in Rust and comes back from the ready call, so nothing is lost
  * and nothing is heard twice.
  */

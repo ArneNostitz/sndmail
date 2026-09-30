@@ -53,11 +53,11 @@ export function Hero() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.15 }}
         >
-          <a href="https://github.com/avihaymenahem/velo/releases" target="_blank" rel="noopener noreferrer" className="btn-primary">
+          <a href="https://github.com/ArneNostitz/sndmail/releases" target="_blank" rel="noopener noreferrer" className="btn-primary">
             <Download size={17} />
             Download for Free
           </a>
-          <a href="https://github.com/avihaymenahem/velo" target="_blank" rel="noopener noreferrer" className="btn-secondary">
+          <a href="https://github.com/ArneNostitz/sndmail" target="_blank" rel="noopener noreferrer" className="btn-secondary">
             <Github size={16} />
             View on GitHub
           </a>

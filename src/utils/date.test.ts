@@ -3,6 +3,7 @@ import {
   formatRelativeDate,
   formatFullDate,
   formatDateTime,
+  formatThreadListDate,
   hourCycleOption,
   setTimeFormatPreference,
   getTimeFormatPreference,
@@ -72,5 +73,22 @@ describe("time format preference", () => {
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
     expect(formatRelativeDate(yesterday.getTime())).toBe("Yesterday");
+  });
+
+  it("formats inbox rows with time today and yesterday, then date only", () => {
+    const today = new Date();
+    today.setHours(13, 30, 0, 0);
+    expect(formatThreadListDate(today.getTime())).toMatch(/\d{1,2}:30/);
+
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    yesterday.setHours(13, 30, 0, 0);
+    expect(formatThreadListDate(yesterday.getTime())).toMatch(/^Yesterday, /);
+
+    const older = new Date();
+    older.setDate(older.getDate() - 3);
+    const formatted = formatThreadListDate(older.getTime());
+    expect(formatted).not.toMatch(/Mon|Tue|Wed|Thu|Fri|Sat|Sun/);
+    expect(formatted).toMatch(/[A-Za-z]{3}/);
   });
 });

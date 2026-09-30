@@ -7,6 +7,6 @@
  *
  * It is also written to `bundle.macOS.bundleVersion` in `tauri.conf.json`
  * (what Finder's Get Info shows) and onto `package.json`'s version as
- * `0.4.21+014` (what every `npm run` prints) — a test keeps the three in step.
+ * `0.4.21+015` (what every `npm run` prints) — a test keeps the three in step.
  */
-export const FIX_NUMBER = "014";
+export const FIX_NUMBER = "015";

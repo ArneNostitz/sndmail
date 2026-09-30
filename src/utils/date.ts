@@ -33,7 +33,6 @@ export function formatRelativeDate(timestamp: number): string {
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffDays = Math.floor(diffMs / 86_400_000);
-
   // Today: show time
   if (isSameDay(date, now)) {
     return date.toLocaleTimeString(undefined, {
@@ -69,6 +68,27 @@ export function formatRelativeDate(timestamp: number): string {
     day: "numeric",
     year: "numeric",
   });
+}
+
+/** Compact inbox timestamp: time today, time plus label yesterday, date otherwise. */
+export function formatThreadListDate(timestamp: number): string {
+  const date = new Date(timestamp);
+  const now = new Date();
+  const formatTime = (value: Date) => value.toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+    ...hourCycleOption(),
+  });
+
+  if (isSameDay(date, now)) return formatTime(date);
+
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (isSameDay(date, yesterday)) return `Yesterday, ${formatTime(date)}`;
+
+  const options: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" };
+  if (date.getFullYear() !== now.getFullYear()) options.year = "numeric";
+  return date.toLocaleDateString(undefined, options);
 }
 
 /**

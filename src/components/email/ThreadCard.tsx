@@ -4,12 +4,14 @@ import type { Thread } from "@/stores/threadStore";
 import { useThreadStore } from "@/stores/threadStore";
 import { useUIStore } from "@/stores/uiStore";
 import { useActiveLabel } from "@/hooks/useRouteNavigation";
-import { formatRelativeDate } from "@/utils/date";
+import { formatThreadListDate } from "@/utils/date";
 import { useTimeFormat } from "@/hooks/useTimeFormat";
 import { Paperclip, Star, Check, Pin, BellRing, VolumeX, CheckSquare } from "lucide-react";
 import { SenderAvatar } from "./SenderAvatar";
 import type { DragData } from "@/components/dnd/DndProvider";
 import { useLabelStore } from "@/stores/labelStore";
+import { useAccountStore } from "@/stores/accountStore";
+import { accountColor } from "@/constants/accountColors";
 import { threadFolder, type ThreadFolderId } from "@/utils/threadFolder";
 import { HighlightedText } from "@/components/search/HighlightedText";
 
@@ -52,6 +54,12 @@ export const ThreadCard = memo(function ThreadCard({ thread, isSelected, onClick
   const selectThreadRange = useThreadStore((s) => s.selectThreadRange);
   const activeLabel = useActiveLabel();
   const emailDensity = useUIStore((s) => s.emailDensity);
+  const accounts = useAccountStore((s) => s.accounts);
+  const receivedAccountIndex = accounts.findIndex((account) => account.id === thread.accountId);
+  const receivedAccount = receivedAccountIndex < 0 ? null : accounts[receivedAccountIndex]!;
+  const receivedAccountColor = receivedAccount
+    ? accountColor(receivedAccount.color, receivedAccountIndex)
+    : null;
   // Repaint when the 12/24-hour preference changes
   useTimeFormat();
   const isSpam = thread.labelIds.includes("SPAM");
@@ -134,7 +142,7 @@ export const ThreadCard = memo(function ThreadCard({ thread, isSelected, onClick
             />
           )}
           <span className={`truncate text-[0.8125rem] ${thread.isRead ? "text-text-secondary" : "font-semibold text-text-primary"}`}>
-            {!thread.isRead && <span aria-hidden="true" className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-text-tertiary align-middle" />}
+            {!thread.isRead && <span aria-hidden="true" className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-sky-500 align-middle" />}
             <HighlightedText
               text={thread.fromName ?? thread.fromAddress ?? "Unknown"}
               terms={highlightTerms}
@@ -152,8 +160,22 @@ export const ThreadCard = memo(function ThreadCard({ thread, isSelected, onClick
             </span>
           )}
           <span className="whitespace-nowrap text-xs text-text-tertiary">
-            {formatRelativeDate(thread.lastMessageAt)}
+            {formatThreadListDate(thread.lastMessageAt)}
           </span>
+          {receivedAccount && receivedAccountColor && (
+            <span
+              className="flex h-4 w-4 shrink-0 items-center justify-center overflow-hidden rounded-full text-[0.5rem] font-semibold text-white"
+              style={{ backgroundColor: receivedAccountColor.hex }}
+              title={`Received by ${receivedAccount.displayName || receivedAccount.email}`}
+              aria-label={`Received by ${receivedAccount.displayName || receivedAccount.email}`}
+            >
+              {receivedAccount.avatarUrl ? (
+                <img src={receivedAccount.avatarUrl} alt="" className="h-full w-full object-cover" />
+              ) : (
+                (receivedAccount.displayName || receivedAccount.email).charAt(0).toUpperCase()
+              )}
+            </span>
+          )}
         </span>
       </div>
 

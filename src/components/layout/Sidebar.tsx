@@ -97,7 +97,7 @@ function DroppableNavItem({
       onClick={onClick}
       onContextMenu={onContextMenu}
       title={title}
-      className={`flex items-center w-full py-2 text-sm transition-colors press-scale ${
+      className={`flex items-center w-full py-2.5 text-sm transition-colors press-scale ${
         collapsed ? "justify-center px-0" : "gap-3 px-3 text-left"
       } ${
         isOver
@@ -136,7 +136,7 @@ function DroppableLabelItem({
       onClick={onClick}
       onContextMenu={onContextMenu}
       title={collapsed ? label.name : undefined}
-      className={`group flex items-center w-full py-2 text-sm transition-colors ${
+      className={`group flex items-center w-full py-2.5 text-sm transition-colors ${
         collapsed ? "justify-center px-0" : "gap-3 px-3 text-left"
       } ${
         isOver
@@ -416,7 +416,7 @@ export function Sidebar({ collapsed }: SidebarProps) {
                     {isSyncingFolder === item.id ? (
                       <Loader2 size={18} className="shrink-0 animate-spin text-accent" />
                     ) : (
-                      <Icon size={18} className="shrink-0" />
+                      <Icon size={18} strokeWidth={1.65} className="shrink-0 text-sidebar-text/75" />
                     )}
                     {!collapsed && (
                       <span className="flex-1 truncate">{item.label}</span>
@@ -510,7 +510,7 @@ export function Sidebar({ collapsed }: SidebarProps) {
                   onClick={() => navigateToLabel(`smart-folder:${folder.id}`)}
                   onContextMenu={(e) => handleSmartFolderContextMenu(e, folder)}
                   title={collapsed ? folder.name : undefined}
-                  className={`flex items-center w-full py-2 text-sm transition-colors press-scale ${
+                  className={`flex items-center w-full py-2.5 text-sm transition-colors press-scale ${
                     collapsed ? "justify-center px-0" : "gap-3 px-3 text-left"
                   } ${
                     isActive
@@ -520,7 +520,8 @@ export function Sidebar({ collapsed }: SidebarProps) {
                 >
                   <Icon
                     size={18}
-                    className="shrink-0"
+                    strokeWidth={1.65}
+                    className="shrink-0 text-sidebar-text/75"
                     style={folder.color ? { color: folder.color } : undefined}
                   />
                   {!collapsed && (

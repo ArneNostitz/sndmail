@@ -101,7 +101,7 @@ function DroppableNavItem({
         collapsed ? "justify-center px-0" : "gap-3 px-3 text-left"
       } ${
         isOver
-          ? "bg-accent/20 ring-1 ring-accent"
+          ? "bg-bg-tertiary ring-1 ring-border-primary"
           : isActive
             ? "bg-sidebar-hover text-sidebar-text font-medium"
             : "hover:bg-sidebar-hover text-sidebar-text"
@@ -140,7 +140,7 @@ function DroppableLabelItem({
         collapsed ? "justify-center px-0" : "gap-3 px-3 text-left"
       } ${
         isOver
-          ? "bg-accent/20 ring-1 ring-accent"
+          ? "bg-bg-tertiary ring-1 ring-border-primary"
           : isActive
             ? "bg-sidebar-hover text-sidebar-text font-medium"
             : "hover:bg-sidebar-hover text-sidebar-text"
@@ -422,7 +422,7 @@ export function Sidebar({ collapsed }: SidebarProps) {
                       <span className="flex-1 truncate">{item.label}</span>
                     )}
                     {item.id === "tasks" && taskIncompleteCount > 0 && !collapsed && (
-                      <span className="text-[0.625rem] bg-accent/15 text-accent px-1.5 rounded-full leading-normal">
+                      <span className="text-[0.625rem] bg-bg-tertiary text-text-secondary px-1.5 rounded-full leading-normal">
                         {taskIncompleteCount}
                       </span>
                     )}
@@ -444,7 +444,7 @@ export function Sidebar({ collapsed }: SidebarProps) {
                         title={inboxViewMode === "split" ? "Switch to unified inbox" : "Switch to split inbox"}
                         className={`p-1 rounded transition-colors ${
                           inboxViewMode === "split"
-                            ? "text-accent hover:bg-accent/10"
+                            ? "text-sidebar-text hover:bg-sidebar-hover"
                             : "text-sidebar-text/40 hover:text-sidebar-text hover:bg-sidebar-hover"
                         }`}
                       >
@@ -527,7 +527,7 @@ export function Sidebar({ collapsed }: SidebarProps) {
                     <>
                       <span className="flex-1 truncate">{folder.name}</span>
                       {count > 0 && (
-                        <span className="text-[0.625rem] bg-accent/15 text-accent px-1.5 rounded-full leading-normal">
+                        <span className="text-[0.625rem] bg-bg-tertiary text-text-secondary px-1.5 rounded-full leading-normal">
                           {count}
                         </span>
                       )}
@@ -704,7 +704,7 @@ function PendingOpsIndicator({ collapsed }: { collapsed: boolean }) {
     <div className={`py-2 border-t border-border-primary ${collapsed ? "px-2" : "px-3"}`}>
       {collapsed ? (
         <div className="flex justify-center">
-          <span className="bg-accent/20 text-accent text-xs font-medium px-1.5 py-0.5 rounded-full">{pendingOpsCount}</span>
+          <span className="bg-bg-tertiary text-text-secondary text-xs font-medium px-1.5 py-0.5 rounded-full">{pendingOpsCount}</span>
         </div>
       ) : (
         <div className="text-xs text-text-secondary">

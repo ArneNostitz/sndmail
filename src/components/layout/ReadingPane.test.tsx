@@ -1,4 +1,4 @@
-import { act, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { ReadingPane } from "./ReadingPane";
 import { useThreadStore, type Thread } from "@/stores/threadStore";
 import { useUIStore } from "@/stores/uiStore";
@@ -30,6 +30,14 @@ it("shows the details column by default when no conversation is selected", () =>
   render(<ReadingPane />);
   expect(screen.getByText("Details")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Hide details" })).toBeInTheDocument();
+});
+
+it("resizes the details pane with keyboard controls", () => {
+  route.id = "";
+  useUIStore.setState({ contactSidebarVisible: true, detailsPaneWidth: 240 });
+  render(<ReadingPane />);
+  fireEvent.keyDown(screen.getByRole("separator", { name: "Resize details pane" }), { key: "ArrowLeft" });
+  expect(useUIStore.getState().detailsPaneWidth).toBe(256);
 });
 
 it("recovers from a rendering error when another email is selected", () => {

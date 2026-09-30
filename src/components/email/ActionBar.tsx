@@ -60,7 +60,7 @@ function MoreActionItem({
       role="menuitem"
       disabled={disabled}
       onClick={onClick}
-      className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-xs transition-colors hover:bg-bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:cursor-not-allowed disabled:opacity-45 ${active ? "text-accent" : "text-text-secondary hover:text-text-primary"}`}
+      className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-xs transition-colors hover:bg-bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:cursor-not-allowed disabled:opacity-45 ${active ? "text-text-primary" : "text-text-secondary hover:text-text-primary"}`}
     >
       <span className="shrink-0">{icon}</span>
       <span className="min-w-0 flex-1 truncate">{label}</span>
@@ -300,7 +300,7 @@ export function ActionBar({ thread, messages, noReply, defaultReplyMode = "reply
           icon={<Star size={15} className={thread.isStarred ? "fill-current" : ""} />}
           onClick={handleToggleStar}
           title={thread.isStarred ? "Unstar (s)" : "Star (s)"}
-          className={thread.isStarred ? "text-warning" : ""}
+          className={thread.isStarred ? "text-text-secondary" : ""}
         />
         <Separator />
         <div ref={moreActionsRef} className="relative ml-auto shrink-0">

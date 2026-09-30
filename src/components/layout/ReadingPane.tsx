@@ -6,6 +6,7 @@ import { ReadingPaneIllustration } from "../ui/illustrations";
 import { ErrorBoundary } from "../ui/ErrorBoundary";
 import { useUIStore } from "@/stores/uiStore";
 import { DetailsPlaceholder } from "../email/ContactSidebar";
+import { ResizableDetailsPane } from "./ResizableDetailsPane";
 
 export function ReadingPane() {
   const contactSidebarVisible = useUIStore((s) => s.contactSidebarVisible);
@@ -28,7 +29,11 @@ export function ReadingPane() {
         <div className="flex flex-1 min-w-0 flex-col">
           <EmptyState illustration={ReadingPaneIllustration} title="sndmail" subtitle="Select an email to read" />
         </div>
-        {contactSidebarVisible && <DetailsPlaceholder onClose={toggleContactSidebar} />}
+        {contactSidebarVisible && (
+          <ResizableDetailsPane>
+            <DetailsPlaceholder onClose={toggleContactSidebar} />
+          </ResizableDetailsPane>
+        )}
       </div>
     );
   }

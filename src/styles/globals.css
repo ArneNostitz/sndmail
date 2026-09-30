@@ -1,18 +1,18 @@
 @import "tailwindcss";
 
 @theme {
-  --color-bg-primary: rgba(255, 253, 249, 0.94);
-  --color-bg-secondary: rgba(248, 244, 238, 0.9);
-  --color-bg-tertiary: rgba(238, 232, 223, 0.84);
-  --color-bg-hover: rgba(235, 226, 216, 0.7);
-  --color-bg-selected: rgba(231, 232, 255, 0.8);
+  --color-bg-primary: rgba(255, 255, 255, 0.98);
+  --color-bg-secondary: rgba(248, 250, 252, 0.96);
+  --color-bg-tertiary: rgba(241, 245, 249, 0.92);
+  --color-bg-hover: rgba(244, 244, 245, 0.92);
+  --color-bg-selected: rgba(241, 245, 249, 0.96);
 
-  --color-text-primary: #252029;
-  --color-text-secondary: #625b61;
-  --color-text-tertiary: #8a8080;
+  --color-text-primary: #18181b;
+  --color-text-secondary: #52525b;
+  --color-text-tertiary: #71717a;
 
-  --color-border-primary: rgba(0, 0, 0, 0.08);
-  --color-border-secondary: rgba(0, 0, 0, 0.04);
+  --color-border-primary: rgba(24, 24, 27, 0.1);
+  --color-border-secondary: rgba(24, 24, 27, 0.07);
 
   --color-accent: #4f46e5;
   --color-accent-hover: #4338ca;
@@ -22,16 +22,16 @@
   --color-warning: #d97706;
   --color-success: #059669;
 
-  --color-sidebar-bg: rgba(249, 246, 241, 0.96);
-  --color-sidebar-text: #252029;
-  --color-sidebar-hover: rgba(235, 226, 216, 0.82);
+  --color-sidebar-bg: rgba(248, 250, 252, 0.96);
+  --color-sidebar-text: #3f3f46;
+  --color-sidebar-hover: rgba(24, 24, 27, 0.06);
   --color-sidebar-active: #4f46e5;
 
   --glass-blur: 20px;
   --glass-blur-heavy: 24px;
   --glass-border: rgba(255, 255, 255, 0.2);
-  --glass-shadow: 0 10px 32px rgba(80, 66, 50, 0.08);
-  --glass-shadow-elevated: 0 18px 54px rgba(80, 66, 50, 0.15);
+  --glass-shadow: 0 10px 32px rgba(24, 24, 27, 0.08);
+  --glass-shadow-elevated: 0 18px 54px rgba(24, 24, 27, 0.15);
   --glass-highlight: inset 0 1px 0 0 rgba(255, 255, 255, 0.4);
   --backdrop-blur-overlay: 16px;
 
@@ -45,33 +45,33 @@
  * Dark mode overrides — applied when <html class="dark">
  */
 .dark {
-  --color-bg-primary: rgba(15, 23, 42, 0.88);
-  --color-bg-secondary: rgba(30, 41, 59, 0.82);
-  --color-bg-tertiary: rgba(51, 65, 85, 0.78);
-  --color-bg-hover: rgba(51, 65, 85, 0.58);
-  --color-bg-selected: rgba(30, 58, 95, 0.68);
+  --color-bg-primary: rgba(24, 24, 27, 0.97);
+  --color-bg-secondary: rgba(39, 39, 42, 0.96);
+  --color-bg-tertiary: rgba(63, 63, 70, 0.9);
+  --color-bg-hover: rgba(63, 63, 70, 0.72);
+  --color-bg-selected: rgba(63, 63, 70, 0.84);
 
-  --color-text-primary: #f8fafc;
-  --color-text-secondary: #cbd5e1;
-  --color-text-tertiary: #94a3b8;
+  --color-text-primary: #f4f4f5;
+  --color-text-secondary: #d4d4d8;
+  --color-text-tertiary: #a1a1aa;
 
-  --color-border-primary: rgba(255, 255, 255, 0.1);
-  --color-border-secondary: rgba(255, 255, 255, 0.06);
+  --color-border-primary: rgba(255, 255, 255, 0.12);
+  --color-border-secondary: rgba(255, 255, 255, 0.08);
 
   --color-accent: #818cf8;
   --color-accent-hover: #6366f1;
   --color-accent-light: #312e81;
 
-  --color-sidebar-bg: rgba(15, 23, 42, 0.88);
-  --color-sidebar-text: #e2e8f0;
-  --color-sidebar-hover: rgba(30, 41, 59, 0.7);
+  --color-sidebar-bg: rgba(24, 24, 27, 0.97);
+  --color-sidebar-text: #d4d4d8;
+  --color-sidebar-hover: rgba(63, 63, 70, 0.72);
 
   --glass-border: rgba(255, 255, 255, 0.1);
   --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
   --glass-shadow-elevated: 0 16px 48px rgba(0, 0, 0, 0.3);
   --glass-highlight: inset 0 1px 0 0 rgba(255, 255, 255, 0.06);
 
-  --color-app-bg: #0f172a;
+  --color-app-bg: #18181b;
 }
 
 /* Font scale — set on <html> like .dark */
@@ -124,8 +124,8 @@ body {
 
 .canvas-shell {
   background: var(--color-bg-primary);
-  border: 1px solid var(--color-border-secondary);
-  border-radius: 1rem;
+  border: 0;
+  border-radius: 0;
   box-shadow: none;
 }
 
@@ -144,14 +144,15 @@ body {
 }
 
 .app-workspace {
-  background: var(--color-app-bg);
+  background: transparent;
   box-shadow: none;
 }
 
 .workspace-toolbar {
   --color-sidebar-text: #52525b;
   --color-sidebar-hover: rgba(24, 24, 27, 0.06);
-  background: transparent;
+  background: var(--color-bg-primary);
+  border-bottom: 1px solid var(--color-border-secondary);
   box-shadow: none;
 }
 
@@ -253,13 +254,9 @@ body {
 .dark .reference-sidebar,
 .dark .canvas-nav,
 .dark .workspace-toolbar {
-  --color-sidebar-text: #cbd5e1;
+  --color-sidebar-text: #d4d4d8;
   --color-sidebar-hover: rgba(255, 255, 255, 0.07);
   --color-sidebar-active: var(--color-accent);
-}
-
-.dark .canvas-shell {
-  border-color: var(--color-border-secondary);
 }
 
 .task-row:hover {

@@ -16,16 +16,16 @@ import { HighlightedText } from "@/components/search/HighlightedText";
 // A search result names where it lives. Trash and Spam shout: acting on a
 // hit there is not the same as acting on one in the inbox.
 const FOLDER_COLORS: Partial<Record<ThreadFolderId, string>> = {
-  trash: "bg-danger/15 text-danger",
-  spam: "bg-warning/15 text-warning",
-  drafts: "bg-accent/15 text-accent",
+  trash: "bg-bg-tertiary text-text-secondary",
+  spam: "bg-bg-tertiary text-text-secondary",
+  drafts: "bg-bg-tertiary text-text-secondary",
 };
 
 const CATEGORY_COLORS: Record<string, string> = {
-  Updates: "bg-yellow-500/15 text-yellow-600 dark:text-yellow-400",
-  Promotions: "bg-green-500/15 text-green-600 dark:text-green-400",
-  Social: "bg-purple-500/15 text-purple-600 dark:text-purple-400",
-  Newsletters: "bg-orange-500/15 text-orange-600 dark:text-orange-400",
+  Updates: "bg-bg-tertiary text-text-secondary",
+  Promotions: "bg-bg-tertiary text-text-secondary",
+  Social: "bg-bg-tertiary text-text-secondary",
+  Newsletters: "bg-bg-tertiary text-text-secondary",
 };
 
 interface ThreadCardProps {
@@ -106,7 +106,7 @@ export const ThreadCard = memo(function ThreadCard({ thread, isSelected, onClick
       onContextMenu={handleContextMenu}
       aria-label={`${thread.isRead ? "" : "Unread "}email from ${thread.fromName ?? thread.fromAddress ?? "Unknown"}: ${thread.subject ?? "(No subject)"}`}
       aria-selected={isSelected}
-      className={`relative w-full border-b border-border-secondary px-3 text-left transition-colors duration-150 ${
+      className={`relative mx-1.5 my-0.5 w-[calc(100%-0.75rem)] rounded-lg px-2.5 text-left transition-colors duration-150 ${
         isRemoving ? "thread-exit " : ""
       }${
         emailDensity === "compact" ? "py-1.5" : emailDensity === "spacious" ? "py-2.5" : "py-2"
@@ -120,18 +120,10 @@ export const ThreadCard = memo(function ThreadCard({ thread, isSelected, onClick
               : "bg-bg-primary hover:bg-bg-hover"
       } ${isSpam ? "bg-red-500/8 dark:bg-red-500/10" : ""}`}
     >
-      <div className="flex items-start gap-2">
-        {/* Avatar (sender photo → domain logo → initial); unread is a ring
-            around it plus a dot below, so the avatar itself never changes.
-            The column stretches to the row's height so the dot can sit in the
-            space under the avatar rather than hanging off its edge. */}
-        <div className="flex items-center self-start shrink-0 pt-0.5">
+      <div className="flex min-w-0 items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
           {isMultiSelected ? (
-              <div
-                className={`rounded-full flex items-center justify-center font-medium text-text-secondary bg-bg-tertiary ${
-                  emailDensity === "compact" ? "w-7 h-7 text-xs" : "w-7 h-7 text-xs"
-                }`}
-            >
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-bg-tertiary text-xs font-medium text-text-secondary">
               <Check size={emailDensity === "compact" ? 14 : 16} />
             </div>
           ) : (
@@ -141,116 +133,96 @@ export const ThreadCard = memo(function ThreadCard({ thread, isSelected, onClick
               className="w-7 h-7 text-xs"
             />
           )}
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 min-w-0">
-          {/* First row: sender + date */}
-          <div className="flex items-center justify-between gap-2">
-            <span
-              className={`text-[0.8125rem] truncate ${
-                thread.isRead
-                  ? "text-text-secondary"
-                  : "font-semibold text-text-primary"
-              }`}
-            >
-              {!thread.isRead && <span aria-hidden="true" className="inline-block w-1.5 h-1.5 mr-1.5 rounded-full bg-text-tertiary align-middle" />}
-              <HighlightedText
-                text={thread.fromName ?? thread.fromAddress ?? "Unknown"}
-                terms={highlightTerms}
-              />
-            </span>
-            <span className="flex items-center gap-1.5 shrink-0">
-              {folder && (
-                <span
-                  data-testid="thread-folder"
-                  className={`text-[0.625rem] px-1.5 rounded-full leading-normal whitespace-nowrap max-w-24 truncate ${
-                    FOLDER_COLORS[folder.id] ?? "bg-bg-tertiary text-text-secondary"
-                  }`}
-                  title={`In ${folder.name}`}
-                >
-                  {folder.name}
-                </span>
-              )}
-              <span className="text-xs text-text-tertiary whitespace-nowrap">
-                {formatRelativeDate(thread.lastMessageAt)}
-              </span>
-            </span>
-          </div>
-
-          {/* Subject */}
-          <div
-            className={`text-[0.8125rem] truncate mt-0.5 ${
-              thread.isRead ? "text-text-secondary" : "text-text-primary"
-            }`}
-          >
+          <span className={`truncate text-[0.8125rem] ${thread.isRead ? "text-text-secondary" : "font-semibold text-text-primary"}`}>
+            {!thread.isRead && <span aria-hidden="true" className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-text-tertiary align-middle" />}
             <HighlightedText
-              text={thread.subject ?? "(No subject)"}
+              text={thread.fromName ?? thread.fromAddress ?? "Unknown"}
               terms={highlightTerms}
             />
-          </div>
-
-          {/* Snippet + indicators */}
-          <div className={`flex items-center gap-1.5 mt-0.5 ${emailDensity === "compact" ? "hidden" : ""}`}>
-            <span className="text-[0.6875rem] text-text-tertiary truncate flex-1">
-              {/* Who spoke last — a thread waiting on them reads differently
-                  from one waiting on you */}
-              {searchExcerpt == null && thread.lastFromMe && (
-                <span
-                  className="mr-1 px-1 py-px bg-bg-tertiary text-text-secondary font-medium align-baseline"
-                  style={{ borderRadius: "5px" }}
-                  title="You sent the last message"
-                >
-                  me:
-                </span>
-              )}
-              <HighlightedText
-                text={searchExcerpt ?? thread.snippet}
-                terms={highlightTerms}
-              />
-            </span>
-            {showCategoryBadge && category && category !== "Primary" && CATEGORY_COLORS[category] && (
-              <span className={`shrink-0 text-[0.625rem] px-1.5 rounded-full leading-normal ${CATEGORY_COLORS[category]}`}>
-                {category}
-              </span>
-            )}
-            {hasFollowUp && (
-              <span className="shrink-0 text-accent" title="Follow-up reminder set">
-                <BellRing size={12} />
-              </span>
-            )}
-            {hasTask && (
-              <span className="shrink-0 text-accent" title="Has an open task">
-                <CheckSquare size={12} />
-              </span>
-            )}
-            {thread.isMuted && (
-              <span className="shrink-0 text-warning" title="Muted">
-                <VolumeX size={12} />
-              </span>
-            )}
-            {thread.isPinned && (
-              <span className="shrink-0 text-accent" title="Pinned">
-                <Pin size={12} className="fill-current" />
-              </span>
-            )}
-            {thread.hasAttachments && (
-              <span className="shrink-0 text-text-tertiary" title="Has attachments">
-                <Paperclip size={12} />
-              </span>
-            )}
-            {thread.isStarred && (
-              <span className="shrink-0 text-warning star-animate" title="Starred">
-                <Star size={12} className="fill-current" />
-              </span>
-            )}
-            {thread.messageCount > 1 && (
-              <span className="text-xs text-text-tertiary shrink-0 bg-bg-tertiary rounded-full px-1.5">
-                {thread.messageCount}
-              </span>
-            )}
-          </div>
+          </span>
         </div>
+        <span className="flex shrink-0 items-center gap-1.5">
+          {folder && (
+            <span
+              data-testid="thread-folder"
+              className={`max-w-24 truncate whitespace-nowrap rounded-full px-1.5 text-[0.625rem] leading-normal ${FOLDER_COLORS[folder.id] ?? "bg-bg-tertiary text-text-secondary"}`}
+              title={`In ${folder.name}`}
+            >
+              {folder.name}
+            </span>
+          )}
+          <span className="whitespace-nowrap text-xs text-text-tertiary">
+            {formatRelativeDate(thread.lastMessageAt)}
+          </span>
+        </span>
+      </div>
+
+      {/* Subject and preview use the full row width below the sender line. */}
+      <div className={`mt-1 truncate text-[0.8125rem] ${thread.isRead ? "text-text-secondary" : "text-text-primary"}`}>
+        <HighlightedText
+          text={thread.subject ?? "(No subject)"}
+          terms={highlightTerms}
+        />
+      </div>
+
+      {/* Snippet + indicators */}
+      <div className={`mt-0.5 flex items-center gap-1.5 ${emailDensity === "compact" ? "hidden" : ""}`}>
+        <span className="flex-1 truncate text-[0.6875rem] text-text-tertiary">
+          {/* Who spoke last — a thread waiting on them reads differently
+              from one waiting on you */}
+          {searchExcerpt == null && thread.lastFromMe && (
+            <span
+              className="mr-1 rounded px-1 py-px align-baseline font-medium text-text-secondary bg-bg-tertiary"
+              title="You sent the last message"
+            >
+              me:
+            </span>
+          )}
+          <HighlightedText
+            text={searchExcerpt ?? thread.snippet}
+            terms={highlightTerms}
+          />
+        </span>
+        {showCategoryBadge && category && category !== "Primary" && CATEGORY_COLORS[category] && (
+          <span className={`shrink-0 rounded-full px-1.5 text-[0.625rem] leading-normal ${CATEGORY_COLORS[category]}`}>
+            {category}
+          </span>
+        )}
+        {hasFollowUp && (
+          <span className="shrink-0 text-text-tertiary" title="Follow-up reminder set">
+            <BellRing size={12} />
+          </span>
+        )}
+        {hasTask && (
+          <span className="shrink-0 text-text-tertiary" title="Has an open task">
+            <CheckSquare size={12} />
+          </span>
+        )}
+        {thread.isMuted && (
+          <span className="shrink-0 text-text-tertiary" title="Muted">
+            <VolumeX size={12} />
+          </span>
+        )}
+        {thread.isPinned && (
+          <span className="shrink-0 text-text-tertiary" title="Pinned">
+            <Pin size={12} className="fill-current" />
+          </span>
+        )}
+        {thread.hasAttachments && (
+          <span className="shrink-0 text-text-tertiary" title="Has attachments">
+            <Paperclip size={12} />
+          </span>
+        )}
+        {thread.isStarred && (
+          <span className="star-animate shrink-0 text-text-tertiary" title="Starred">
+            <Star size={12} className="fill-current" />
+          </span>
+        )}
+        {thread.messageCount > 1 && (
+          <span className="shrink-0 rounded-full bg-bg-tertiary px-1.5 text-xs text-text-tertiary">
+            {thread.messageCount}
+          </span>
+        )}
       </div>
 
     </button>

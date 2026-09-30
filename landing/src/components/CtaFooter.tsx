@@ -39,7 +39,7 @@ export function CtaFooter() {
             transition={{ duration: 0.5, delay: 0.1 }}
           >
             <a
-              href="https://github.com/avihaymenahem/velo/releases"
+              href="https://github.com/ArneNostitz/sndmail/releases"
               target="_blank"
               rel="noopener noreferrer"
               className="btn-primary"
@@ -74,16 +74,16 @@ export function CtaFooter() {
           </div>
 
           <div className="flex items-center gap-6 text-sm text-text-muted">
-            <a href="https://github.com/avihaymenahem/velo" target="_blank" rel="noopener noreferrer" className="hover:text-text-secondary transition-colors no-underline">
+            <a href="https://github.com/ArneNostitz/sndmail" target="_blank" rel="noopener noreferrer" className="hover:text-text-secondary transition-colors no-underline">
               GitHub
             </a>
-            <a href="https://github.com/avihaymenahem/velo/releases" target="_blank" rel="noopener noreferrer" className="hover:text-text-secondary transition-colors no-underline">
+            <a href="https://github.com/ArneNostitz/sndmail/releases" target="_blank" rel="noopener noreferrer" className="hover:text-text-secondary transition-colors no-underline">
               Releases
             </a>
-            <a href="mailto:info@velomail.app" className="hover:text-text-secondary transition-colors no-underline">
-              Contact
+            <a href="https://github.com/ArneNostitz/sndmail/issues" className="hover:text-text-secondary transition-colors no-underline">
+              Issues
             </a>
-            <a href="https://github.com/avihaymenahem/velo/blob/main/LICENSE" target="_blank" rel="noopener noreferrer" className="hover:text-text-secondary transition-colors no-underline">
+            <a href="https://github.com/ArneNostitz/sndmail/blob/main/LICENSE" target="_blank" rel="noopener noreferrer" className="hover:text-text-secondary transition-colors no-underline">
               Apache 2.0
             </a>
           </div>

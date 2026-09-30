@@ -72,9 +72,9 @@ Task { @MainActor in
         try await Task.sleep(nanoseconds: 200_000_000)
         let image = try await web.takeSnapshot(configuration: nil)
         if let data = image.tiffRepresentation, let bitmap = NSBitmapImageRep(data: data), let png = bitmap.representation(using: .png, properties: [:]) {
-            try png.write(to: URL(fileURLWithPath: "/private/tmp/velo-email-menus-webkit.png"))
+            try png.write(to: URL(fileURLWithPath: "/private/tmp/sndmail-email-menus-webkit.png"))
         }
-        print("WebKit regression checks passed. Screenshot: /private/tmp/velo-email-menus-webkit.png")
+        print("WebKit regression checks passed. Screenshot: /private/tmp/sndmail-email-menus-webkit.png")
         exit(0)
     } catch {
         print("FAIL:", error)

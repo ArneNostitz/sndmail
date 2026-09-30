@@ -121,7 +121,7 @@ Google Calendar sync with month, week, and day views. Create events without leav
 
 Download the latest release for your platform:
 
-**[Download sndmail](https://github.com/avihaymenahem/velo/releases/latest)** -- Windows `.msi` / `.exe` &nbsp;&bull;&nbsp; macOS `.dmg` &nbsp;&bull;&nbsp; Linux `.deb` / `.AppImage`
+**[Download sndmail](https://github.com/ArneNostitz/sndmail/releases/latest)** -- Windows `.msi` / `.exe` &nbsp;&bull;&nbsp; macOS `.dmg` &nbsp;&bull;&nbsp; Linux `.deb` / `.AppImage`
 
 No build tools or programming knowledge required -- just download, install, and run.
 
@@ -138,8 +138,8 @@ No build tools or programming knowledge required -- just download, install, and 
 For developers who want to build sndmail themselves or contribute:
 
 ```bash
-git clone https://github.com/avihaymenahem/velo.git
-cd velo
+git clone https://github.com/ArneNostitz/sndmail.git sndmail
+cd sndmail
 npm install
 npm run tauri dev
 ```
@@ -181,10 +181,7 @@ npm run tauri build
 
 [Apache-2.0](LICENSE)
 
-sndmail is a modified version of [Velo](https://github.com/avihaymenahem/velo)
-by Avihay Menahem, used under the Apache License 2.0. Changes have been made to
-the original software. sndmail is not affiliated with, endorsed by, or
-supported by the sndmail project.
+Licensed under the Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE) for required notices and attribution.
 
 ---
 

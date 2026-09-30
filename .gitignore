@@ -81,7 +81,6 @@ __pycache__/
 build-dir/
 repo/
 src-tauri/binaries/
-velo-*.tar.gz
 sndmail-*.tar.gz
 *.flatpak
 *.rpm

@@ -4,7 +4,7 @@ ENV APP_VERSION=$SOURCE_COMMIT
 WORKDIR /app
 COPY package.json server.mjs ./
 RUN npm install --omit=dev
-RUN addgroup -S velo && adduser -S velo -G velo && mkdir -p /data && chown -R velo:velo /app /data
-USER velo
+RUN addgroup -S sndmail && adduser -S sndmail -G sndmail && mkdir -p /data && chown -R sndmail:sndmail /app /data
+USER sndmail
 EXPOSE 8787
 CMD ["node", "server.mjs"]

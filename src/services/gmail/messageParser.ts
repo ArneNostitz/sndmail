@@ -37,7 +37,7 @@ export interface ParsedMessage {
   messageIdHeader: string | null;
   /**
    * Threading headers. Gmail groups mail into its own threads, but these are
-   * what lets Velo relate messages Gmail split — a ticket system replying
+   * what lets sndmail relate messages Gmail split — a ticket system replying
    * under a new subject, say — and they are the only link an IMAP account has.
    */
   inReplyToHeader: string | null;

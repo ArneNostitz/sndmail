@@ -90,7 +90,7 @@ async function showAndFocusMainWindow(): Promise<void> {
  * Pick a backend and, on the native one, ask for permission and start
  * listening for presses.
  */
-export async function initNotifications(): Promise<void> {
+export async function initNotifications(options: { quietNativeFailure?: boolean } = {}): Promise<void> {
   if (initialized) return;
   initialized = true;
 
@@ -121,7 +121,9 @@ export async function initNotifications(): Promise<void> {
       // buttons" and "this build was rejected", and the settings page has no
       // other way to tell the two apart.
       nativeFailure = err instanceof Error ? err.message : String(err);
-      reportError("Notification buttons are unavailable", err);
+      // The separate background worker has its own macOS notification grant.
+      // A refusal for the main app must not claim its mail alerts are broken.
+      if (!options.quietNativeFailure) reportError("Notification buttons are unavailable", err);
       // Plain notifications still beat none
     }
   } else {
@@ -143,7 +145,7 @@ export function getNotificationBackend(): NotificationBackend {
 
 /**
  * Why the buttons are missing when the notification centre was there but
- * turned Velo down — `null` when nothing was refused. An ad-hoc "linker
+ * turned sndmail down — `null` when nothing was refused. An ad-hoc "linker
  * signed" bundle is the usual cause: the centre identifies an app by its
  * code-signing identifier, and an unsigned bundle has none it recognises.
  */

@@ -27,7 +27,6 @@ const invoke = vi.fn(async (cmd: string, args?: Record<string, unknown>) => {
 vi.mock("@tauri-apps/api/core", () => ({ invoke: (...a: unknown[]) => invoke(...(a as [string, Record<string, unknown>])) }));
 
 const KEY_FILE = "sndmail.key";
-const LEGACY_KEY_FILE = "velo.key";
 
 describe("crypto", () => {
   beforeEach(() => {
@@ -93,7 +92,7 @@ describe("crypto", () => {
 
   it("uses baseDir option for FS operations", async () => {
     // The keychain is now the primary store, so the only FS access on a normal
-    // launch is the check for a legacy key file to migrate.
+    // launch is the check for a sndmail fallback key file.
     const { encryptValue } = await import("./crypto");
 
     await encryptValue("test");
@@ -120,13 +119,13 @@ describe("crypto", () => {
   it("reads existing key from file using baseDir", async () => {
     // Pre-seed a key in the mock store
     const mockKey = btoa(String.fromCharCode(...new Uint8Array(32).fill(42)));
-    tauriFs.store.set(LEGACY_KEY_FILE, mockKey);
+    tauriFs.store.set(KEY_FILE, mockKey);
 
     const { encryptValue, decryptValue } = await import("./crypto");
     const encrypted = await encryptValue("round-trip-test");
 
     expect(tauriFs.mock.readTextFile).toHaveBeenCalledWith(
-      LEGACY_KEY_FILE,
+      KEY_FILE,
       expect.objectContaining({ baseDir: 26 }),
     );
 
@@ -155,33 +154,32 @@ describe("crypto", () => {
       expect(tauriFs.store.has(KEY_FILE)).toBe(false);
     });
 
-    it("migrates a legacy velo.key into the keychain and deletes the file", async () => {
-      const legacy = btoa(String.fromCharCode(...new Uint8Array(32).fill(3)));
-      tauriFs.store.set(LEGACY_KEY_FILE, legacy);
+    it("stores an existing sndmail fallback key in the keychain and deletes the file", async () => {
+      const fallback = btoa(String.fromCharCode(...new Uint8Array(32).fill(3)));
+      tauriFs.store.set(KEY_FILE, fallback);
 
       const { encryptValue } = await import("./crypto");
       await encryptValue("hello");
 
-      expect(keychain.value).toBe(legacy);
-      expect(tauriFs.mock.remove).toHaveBeenCalledWith(LEGACY_KEY_FILE, expect.anything());
+      expect(keychain.value).toBe(fallback);
+      expect(tauriFs.mock.remove).toHaveBeenCalledWith(KEY_FILE, expect.anything());
     });
 
-    it("can still decrypt data written before the migration", async () => {
-      // Encrypt with the legacy on-disk key, with no keychain available
-      const legacy = btoa(String.fromCharCode(...new Uint8Array(32).fill(9)));
-      tauriFs.store.set(LEGACY_KEY_FILE, legacy);
+    it("can decrypt data after storing a fallback key in the keychain", async () => {
+      const fallback = btoa(String.fromCharCode(...new Uint8Array(32).fill(9)));
+      tauriFs.store.set(KEY_FILE, fallback);
       keychain.available = false;
 
       const before = await import("./crypto");
-      const ciphertext = await before.encryptValue("pre-migration-secret");
+      const ciphertext = await before.encryptValue("saved-secret");
 
-      // Now the keychain works: the key migrates, and old ciphertext still opens
+      // Now the keychain works and the same ciphertext still opens.
       vi.resetModules();
       keychain.available = true;
 
       const after = await import("./crypto");
-      expect(await after.decryptValue(ciphertext)).toBe("pre-migration-secret");
-      expect(keychain.value).toBe(legacy);
+      expect(await after.decryptValue(ciphertext)).toBe("saved-secret");
+      expect(keychain.value).toBe(fallback);
     });
 
     it("falls back to a file when no credential store is available", async () => {

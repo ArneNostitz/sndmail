@@ -55,7 +55,7 @@ export function dispatchEmailNavigation(url: string): void {
     const parts = parsed.pathname.split("/").filter(Boolean).map(decodeURIComponent);
     const appOrigin = (parsed.protocol === "tauri:" && parsed.hostname === "localhost")
       || (parsed.origin !== "null" && parsed.origin === window.location.origin);
-    if (appOrigin && ["__sndmail_email_action__", "__velo_email_action__"].includes(parts[0] ?? "")) {
+    if (appOrigin && parts[0] === "__sndmail_email_action__") {
       const [, rendererId, actionId] = parts;
       if (rendererId && actionId && handlers.get(rendererId)?.run(actionId)) return;
       reportError("Could not open email action", "The message action is no longer available.");

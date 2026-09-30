@@ -374,7 +374,7 @@ export function Sidebar({ collapsed }: SidebarProps) {
     >
       <div className={`flex h-12 items-center ${collapsed ? "justify-center" : "px-4"}`}>
         <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/10 text-sm font-semibold text-white shadow-sm">
-          V
+          S
         </span>
       </div>
 

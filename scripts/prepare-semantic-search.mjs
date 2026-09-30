@@ -12,7 +12,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const destination = join(root, "src-tauri", "semantic-runtime");
 const require = createRequire(join(root, "package.json"));
 const args = process.argv.slice(2);
-const semanticEnv = (name) => process.env[`SNDMAIL_SEMANTIC_${name}`] ?? process.env[`VELO_SEMANTIC_${name}`];
+const semanticEnv = (name) => process.env[`SNDMAIL_SEMANTIC_${name}`];
 if (args.some((arg) => !["--strict", "--offline"].includes(arg))) throw new Error("Usage: node scripts/prepare-semantic-search.mjs [--strict] [--offline]");
 const strict = args.includes("--strict") || semanticEnv("STRICT") === "1";
 const offline = args.includes("--offline") || semanticEnv("OFFLINE") === "1";

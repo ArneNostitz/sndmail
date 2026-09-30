@@ -263,7 +263,7 @@ export function instrumentEmailActions(
   const actions = new Map<string, InstrumentedEmailAction>();
   let index = 0;
   for (const anchor of doc.querySelectorAll<HTMLAnchorElement>("a")) {
-    if (anchor.dataset.sndmailActionId || anchor.dataset.veloActionId) continue;
+    if (anchor.dataset.sndmailActionId) continue;
     const action = actionForAnchor(anchor);
     if (!action) continue;
     const actionId = String(index++);
@@ -286,16 +286,16 @@ export function instrumentEmailActions(
 
 /** Classify both sender-provided anchors and anchors created by decorateEmailData. */
 export function actionForAnchor(anchor: HTMLAnchorElement): EmailDataAction | null {
-  const kind = (anchor.dataset.sndmailKind ?? anchor.dataset.veloKind) as EmailDataKind | undefined;
+  const kind = anchor.dataset.sndmailKind as EmailDataKind | undefined;
   if (kind) {
-    const value = anchor.dataset.sndmailValue ?? anchor.dataset.veloValue;
+    const value = anchor.dataset.sndmailValue;
     return {
       kind,
       value: value ?? anchor.textContent?.trim() ?? "",
       label: kind === "address" ? value ?? "" : anchor.textContent?.trim() || value || "",
       href: anchor.getAttribute("href") ?? undefined,
-      startTime: anchor.dataset.sndmailStart ?? anchor.dataset.veloStart,
-      endTime: anchor.dataset.sndmailEnd ?? anchor.dataset.veloEnd,
+      startTime: anchor.dataset.sndmailStart,
+      endTime: anchor.dataset.sndmailEnd,
     };
   }
 

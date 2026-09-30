@@ -8,7 +8,7 @@ let nativeGranted = true;
 let actionHandler: ((r: NativeNotificationResponse) => void | Promise<void>) | null = null;
 
 const mockRegisterCategories = vi.fn(() => Promise.resolve());
-const mockShowNative = vi.fn(() => Promise.resolve("velo-1-0"));
+const mockShowNative = vi.fn(() => Promise.resolve("sndmail-1-0"));
 const mockSendPlugin = vi.fn();
 const mockPluginGranted = vi.fn(() => Promise.resolve(true));
 const mockShowWindow = vi.fn(() => Promise.resolve());
@@ -73,7 +73,7 @@ import {
 
 async function press(actionId: string, context: unknown = {}): Promise<void> {
   if (!actionHandler) throw new Error("not listening");
-  await actionHandler({ actionId, notificationId: "velo-1-0", context });
+  await actionHandler({ actionId, notificationId: "sndmail-1-0", context });
 }
 
 /** Wait for the promise chain inside `show()` to settle. */
@@ -116,6 +116,13 @@ describe("choosing a backend", () => {
     await settle();
     expect(mockShowNative).not.toHaveBeenCalled();
     expect(mockSendPlugin).not.toHaveBeenCalled();
+  });
+
+  it("does not warn that mail alerts are broken when the worker owns them", async () => {
+    mockRegisterCategories.mockRejectedValueOnce(new Error("Notifications are not allowed for this application"));
+    await initNotifications({ quietNativeFailure: true });
+    expect(mockReportError).not.toHaveBeenCalled();
+    expect(getNotificationBackend()).toBe("plugin");
   });
 
   it("honours the setting without a restart", async () => {

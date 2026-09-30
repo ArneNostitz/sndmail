@@ -48,7 +48,7 @@ sndmail follows a **three-layer architecture** with clear separation of concerns
 ## Project Structure
 
 ```
-velo/
+sndmail/
 ├── src/
 │   ├── components/           # React components (14 groups, ~108 files)
 │   │   ├── layout/           # Sidebar, EmailList, ReadingPane, TitleBar

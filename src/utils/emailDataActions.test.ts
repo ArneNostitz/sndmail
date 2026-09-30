@@ -33,8 +33,8 @@ describe("emailDataActions", () => {
     expect([...doc.querySelectorAll("a")].map((anchor) => anchor.dataset.sndmailKind)).toEqual(["date"]);
   });
 
-  it("still classifies legacy Velo action attributes in saved message markup", () => {
-    const doc = documentWith('<a href="#" data-velo-kind="date" data-velo-value="12.09.2026" data-velo-start="2026-09-12T00:00" data-velo-end="2026-09-12T01:00">12.09.2026</a>');
+  it("classifies sndmail action attributes in saved message markup", () => {
+    const doc = documentWith('<a href="#" data-sndmail-kind="date" data-sndmail-value="12.09.2026" data-sndmail-start="2026-09-12T00:00" data-sndmail-end="2026-09-12T01:00">12.09.2026</a>');
     expect(actionForAnchor(doc.querySelector("a")!)).toMatchObject({
       kind: "date",
       value: "12.09.2026",

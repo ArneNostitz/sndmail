@@ -26,12 +26,8 @@ describe("native mail link delivery", () => {
     expect(mocks.onOpen.mock.invocationCallOrder[0]).toBeLessThan(mocks.current.mock.invocationCallOrder[0]!);
     cleanup(); expect(mocks.cleanup).toHaveBeenCalledTimes(2);
   });
-  it("continues to open legacy Velo links", async () => {
-    await handleUrl("velo://open?account=a&thread=t&message=m");
-    expect(mocks.openMail).toHaveBeenCalledWith({ accountId: "a", threadId: "t", messageId: "m" });
-  });
   it("coalesces warm OS, single-instance, and startup duplicate deliveries", async () => {
-    const url = "velo://open?account=a&thread=t";
+    const url = "sndmail://open?account=a&thread=t";
     mocks.onOpen.mockImplementation(async (receive) => { receive([url]); return mocks.cleanup; });
     mocks.listen.mockImplementation(async (_name, receive) => { receive({ payload: ["app", url] }); return mocks.cleanup; });
     mocks.current.mockResolvedValue([url]);
@@ -39,7 +35,7 @@ describe("native mail link delivery", () => {
     expect(mocks.openMail).toHaveBeenCalledTimes(1); cleanup();
   });
   it("reports failures and continues processing subsequent links", async () => {
-    mocks.current.mockResolvedValue(["velo://open?account=a", "velo://open?account=a&thread=t"]);
+    mocks.current.mockResolvedValue(["sndmail://open?account=a", "sndmail://open?account=a&thread=t"]);
     const cleanup = await initDeepLinkHandler();
     expect(mocks.report).toHaveBeenCalledWith("Could not open mail link", expect.any(Error));
     expect(mocks.openMail).toHaveBeenCalledTimes(1); cleanup();

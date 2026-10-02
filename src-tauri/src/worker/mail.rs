@@ -304,7 +304,12 @@ async fn sync_cycle(
         .execute(&mut db).await.map_err(db_error)?;
     sqlx::query("CREATE TABLE IF NOT EXISTS worker_resync_requests (account_id TEXT PRIMARY KEY, created_at INTEGER NOT NULL DEFAULT (unixepoch()))")
         .execute(&mut db).await.map_err(db_error)?;
+    sqlx::query("CREATE TABLE IF NOT EXISTS worker_sync_requests (account_id TEXT PRIMARY KEY, created_at INTEGER NOT NULL DEFAULT (unixepoch()))")
+        .execute(&mut db).await.map_err(db_error)?;
+    let requested_syncs: HashSet<String> = sqlx::query_scalar("SELECT account_id FROM worker_sync_requests")
+        .fetch_all(&mut db).await.map_err(db_error)?.into_iter().collect();
     let accounts = load_accounts(&mut db).await?;
+    let known_account_ids: HashSet<String> = accounts.iter().map(|account| account.id.clone()).collect();
     context.set_mail_ready(true);
     set_status(context, &mut db, "ready", None, None).await?;
     let mut active_imap = HashSet::new();
@@ -320,9 +325,13 @@ async fn sync_cycle(
         }
         let result = if account.provider == "imap" {
             set_status(context, &mut db, "syncing", Some(&account.id), None).await?;
+            sqlx::query("INSERT INTO worker_mail_account_status (account_id, phase, error) VALUES (?, 'syncing', NULL) ON CONFLICT(account_id) DO UPDATE SET phase = 'syncing', error = NULL, updated_at = unixepoch()")
+                .bind(&account.id).execute(&mut db).await.map_err(db_error)?;
             sync_imap(&mut db, client, &mut account, force_full).await
         } else if account.provider == "gmail_api" {
             set_status(context, &mut db, "syncing", Some(&account.id), None).await?;
+            sqlx::query("INSERT INTO worker_mail_account_status (account_id, phase, error) VALUES (?, 'syncing', NULL) ON CONFLICT(account_id) DO UPDATE SET phase = 'syncing', error = NULL, updated_at = unixepoch()")
+                .bind(&account.id).execute(&mut db).await.map_err(db_error)?;
             sync_gmail(&mut db, client, &mut account, force_full).await
         } else {
             continue;
@@ -334,6 +343,10 @@ async fn sync_cycle(
                     .bind(&account.id).execute(&mut db).await.map_err(db_error)?;
                 if force_full {
                     sqlx::query("DELETE FROM worker_resync_requests WHERE account_id = ?")
+                        .bind(&account.id).execute(&mut db).await.map_err(db_error)?;
+                }
+                if requested_syncs.contains(&account.id) {
+                    sqlx::query("DELETE FROM worker_sync_requests WHERE account_id = ?")
                         .bind(&account.id).execute(&mut db).await.map_err(db_error)?;
                 }
                 if changed {
@@ -353,6 +366,10 @@ async fn sync_cycle(
                 set_status(context, &mut db, "error", Some(&account.id), Some(error_category(&error))).await?;
                 sqlx::query("INSERT INTO worker_mail_account_status (account_id, phase, error) VALUES (?, 'error', ?) ON CONFLICT(account_id) DO UPDATE SET phase = 'error', error = excluded.error, updated_at = unixepoch()")
                     .bind(&account.id).bind(error_category(&error)).execute(&mut db).await.map_err(db_error)?;
+                if requested_syncs.contains(&account.id) {
+                    sqlx::query("DELETE FROM worker_sync_requests WHERE account_id = ?")
+                        .bind(&account.id).execute(&mut db).await.map_err(db_error)?;
+                }
             }
         }
         if account.provider == "imap" {
@@ -368,6 +385,12 @@ async fn sync_cycle(
                     }));
                 }
             }
+        }
+    }
+    for account_id in requested_syncs {
+        if !known_account_ids.contains(&account_id) {
+            sqlx::query("DELETE FROM worker_sync_requests WHERE account_id = ?")
+                .bind(account_id).execute(&mut db).await.map_err(db_error)?;
         }
     }
     idle_watchers.retain(|id, task| {

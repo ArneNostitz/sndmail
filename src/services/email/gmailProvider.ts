@@ -126,7 +126,24 @@ export class GmailApiProvider implements EmailProvider {
 
   async fetchMessage(messageId: string): Promise<ParsedMessage> {
     const msg = await this.client.getMessage(messageId);
-    return parseGmailMessage(msg);
+    const parsed = parseGmailMessage(msg);
+
+    // Gmail may return text body parts through attachmentId rather than inline
+    // body.data. Resolve those parts when a caller explicitly fetches a full
+    // message (for example, to repair a body that was missed during sync).
+    if (!parsed.bodyHtml && !parsed.bodyText) {
+      const bodyParts = findBodyAttachmentParts(msg.payload);
+      for (const part of bodyParts) {
+        if (!part.body.attachmentId) continue;
+        const attachment = await this.client.getAttachment(messageId, part.body.attachmentId);
+        const content = decodeBase64Url(attachment.data, getPartCharset(part));
+        if (!content) continue;
+        if (part.mimeType === "text/html") parsed.bodyHtml = content;
+        else if (part.mimeType === "text/plain") parsed.bodyText = content;
+      }
+    }
+
+    return parsed;
   }
 
   async fetchAttachment(
@@ -264,4 +281,28 @@ export class GmailApiProvider implements EmailProvider {
     const profile = await this.client.getProfile();
     return { email: profile.emailAddress };
   }
+}
+
+function findBodyAttachmentParts(part: import("../gmail/client").GmailMessagePart) {
+  const found: import("../gmail/client").GmailMessagePart[] = [];
+  if ((part.mimeType === "text/html" || part.mimeType === "text/plain") && !part.filename && part.body.attachmentId) {
+    found.push(part);
+  }
+  for (const child of part.parts ?? []) found.push(...findBodyAttachmentParts(child));
+  return found;
+}
+
+function getPartCharset(part: import("../gmail/client").GmailMessagePart): string | undefined {
+  const contentType = part.headers?.find((header) => header.name.toLowerCase() === "content-type")?.value;
+  return contentType?.match(/charset\s*=\s*["']?([^\s;"']+)/i)?.[1];
+}
+
+function decodeBase64Url(data: string, charset?: string): string {
+  const normalized = data.replace(/-/g, "+").replace(/_/g, "/");
+  const binary = atob(normalized);
+  const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+  if (charset) {
+    try { return new TextDecoder(charset).decode(bytes); } catch { /* use UTF-8 below */ }
+  }
+  return new TextDecoder("utf-8").decode(bytes);
 }

@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { Sparkles, RefreshCw } from "lucide-react";
 import { isAiAvailable } from "@/services/ai/providerManager";
 import { generateSmartReplies } from "@/services/ai/aiService";
+import { isTemporaryAiUnavailableError } from "@/services/ai/errors";
 import { deleteAiCache } from "@/services/db/aiCache";
 import { useComposerStore } from "@/stores/composerStore";
 import { recipientHeadersFromMessages } from "@/utils/resolveFromAddress";
@@ -18,6 +19,7 @@ export function SmartReplySuggestions({ threadId, accountId, messages, noReply }
   const [replies, setReplies] = useState<string[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [available, setAvailable] = useState(false);
+  const [temporarilyUnavailable, setTemporarilyUnavailable] = useState(false);
   const checkedRef = useRef(false);
   const loadingRef = useRef(false);
   const openComposer = useComposerStore((s) => s.openComposer);
@@ -32,11 +34,13 @@ export function SmartReplySuggestions({ threadId, accountId, messages, noReply }
     if (loadingRef.current) return;
     loadingRef.current = true;
     setLoading(true);
+    setTemporarilyUnavailable(false);
     try {
       const result = await generateSmartReplies(threadId, accountId, messages);
       setReplies(result);
     } catch (err) {
-      console.error("Failed to generate smart replies:", err);
+      if (isTemporaryAiUnavailableError(err)) setTemporarilyUnavailable(true);
+      else console.error("Failed to generate smart replies:", err);
     } finally {
       loadingRef.current = false;
       setLoading(false);
@@ -53,11 +57,13 @@ export function SmartReplySuggestions({ threadId, accountId, messages, noReply }
     await deleteAiCache(accountId, threadId, "smart_replies");
     setReplies(null);
     setLoading(true);
+    setTemporarilyUnavailable(false);
     try {
       const result = await generateSmartReplies(threadId, accountId, messages);
       setReplies(result);
     } catch (err) {
-      console.error("Failed to refresh smart replies:", err);
+      if (isTemporaryAiUnavailableError(err)) setTemporarilyUnavailable(true);
+      else console.error("Failed to refresh smart replies:", err);
     } finally {
       setLoading(false);
     }
@@ -100,6 +106,9 @@ export function SmartReplySuggestions({ threadId, accountId, messages, noReply }
           <div className="w-3 h-3 border-2 border-accent/30 border-t-accent rounded-full animate-spin" />
           <span className="text-xs">Generating suggestions...</span>
         </div>
+      )}
+      {temporarilyUnavailable && !loading && (
+        <p className="text-xs text-text-tertiary">Suggestions are temporarily unavailable. Try again shortly.</p>
       )}
       {replies && (
         <div className="flex flex-wrap gap-2">

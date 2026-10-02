@@ -1,5 +1,6 @@
 import { isAiAvailable } from "./providerManager";
 import { categorizeThreads } from "./aiService";
+import { isTemporaryAiUnavailableError } from "./errors";
 import { getSetting } from "@/services/db/settings";
 import {
   getRecentRuleCategorizedThreadIds,
@@ -35,6 +36,8 @@ export async function categorizeNewThreads(accountId: string): Promise<void> {
     await setThreadCategoriesBatch(accountId, categories);
   } catch (err) {
     // Non-blocking — log and continue
-    console.error("Auto-categorization failed:", err);
+    if (!isTemporaryAiUnavailableError(err)) {
+      console.error("Auto-categorization failed:", err);
+    }
   }
 }

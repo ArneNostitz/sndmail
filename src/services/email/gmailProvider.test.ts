@@ -126,7 +126,7 @@ describe("GmailApiProvider", () => {
   });
 
   describe("fetchMessage", () => {
-    it("downloads Gmail body parts stored as attachment data", async () => {
+    it("downloads missing HTML even when inline plain text is already present", async () => {
       vi.mocked(mockClient.getMessage).mockResolvedValue({
         id: "message-1",
         threadId: "thread-1",
@@ -141,24 +141,34 @@ describe("GmailApiProvider", () => {
           filename: "",
           headers: [{ name: "From", value: "sender@example.com" }],
           body: { size: 0 },
-          parts: [{
-            partId: "0.1",
-            mimeType: "text/plain",
-            filename: "",
-            headers: [],
-            body: { attachmentId: "body-part-1", size: 7 },
-          }],
+          parts: [
+            {
+              partId: "0.1",
+              mimeType: "text/plain",
+              filename: "",
+              headers: [],
+              body: { data: btoa("Cached plain text"), size: 17 },
+            },
+            {
+              partId: "0.2",
+              mimeType: "text/html",
+              filename: "",
+              headers: [],
+              body: { attachmentId: "html-body-part", size: 22 },
+            },
+          ],
         },
       });
       vi.mocked(mockClient.getAttachment).mockResolvedValue({
-        data: btoa("Hello!").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""),
-        size: 6,
+        data: btoa("<p>Formatted</p>").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""),
+        size: 17,
       });
 
       const fetched = await provider.fetchMessage("message-1");
 
-      expect(mockClient.getAttachment).toHaveBeenCalledWith("message-1", "body-part-1");
-      expect(fetched.bodyText).toBe("Hello!");
+      expect(mockClient.getAttachment).toHaveBeenCalledWith("message-1", "html-body-part");
+      expect(fetched.bodyHtml).toBe("<p>Formatted</p>");
+      expect(fetched.bodyText).toBe("Cached plain text");
     });
   });
 

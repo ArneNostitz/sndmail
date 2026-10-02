@@ -131,10 +131,12 @@ export class GmailApiProvider implements EmailProvider {
     // Gmail may return text body parts through attachmentId rather than inline
     // body.data. Resolve those parts when a caller explicitly fetches a full
     // message (for example, to repair a body that was missed during sync).
-    if (!parsed.bodyHtml && !parsed.bodyText) {
+    if (!parsed.bodyHtml || !parsed.bodyText) {
       const bodyParts = findBodyAttachmentParts(msg.payload);
       for (const part of bodyParts) {
         if (!part.body.attachmentId) continue;
+        if (part.mimeType === "text/html" && parsed.bodyHtml) continue;
+        if (part.mimeType === "text/plain" && parsed.bodyText) continue;
         const attachment = await this.client.getAttachment(messageId, part.body.attachmentId);
         const content = decodeBase64Url(attachment.data, getPartCharset(part));
         if (!content) continue;

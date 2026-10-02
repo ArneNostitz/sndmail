@@ -9,7 +9,7 @@ vi.mock("@/services/db/connection", async (importOriginal) => {
 });
 
 import { getDb } from "@/services/db/connection";
-import { deleteAllMessagesForAccount, updateMessageThreadIds } from "./messages";
+import { deleteAllMessagesForAccount, updateMessageThreadIds, updateMissingMessageBody } from "./messages";
 import { createMockDb } from "@/test/mocks";
 
 const mockDb = createMockDb();
@@ -88,5 +88,14 @@ describe("messages service", () => {
       const secondCall = mockDb.execute.mock.calls[1]!;
       expect(secondCall[1]).toHaveLength(3); // threadId + accountId + 1 ID
     });
+  });
+
+  it("fills missing HTML while preserving already-cached text", async () => {
+    await updateMissingMessageBody("account-1", "message-1", "<p>Formatted</p>", "fetched text");
+
+    const [sql, params] = mockDb.execute.mock.calls[mockDb.execute.mock.calls.length - 1]!;
+    expect(sql).toContain("body_text = CASE WHEN body_text IS NULL OR body_text = '' THEN COALESCE($2, body_text) ELSE body_text END");
+    expect(sql).toContain("AND ((body_html IS NULL OR body_html = '') OR (body_text IS NULL OR body_text = ''))");
+    expect(params).toEqual(["<p>Formatted</p>", "fetched text", "account-1", "message-1"]);
   });
 });

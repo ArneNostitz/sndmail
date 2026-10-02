@@ -1,6 +1,6 @@
 import { getActiveProvider } from "./providerManager";
 import { getAiCache, setAiCache } from "@/services/db/aiCache";
-import { AiError } from "./errors";
+import { AiError, isTemporaryProviderUnavailableMessage } from "./errors";
 import type { DbMessage } from "@/services/db/messages";
 import {
   SUMMARIZE_PROMPT,
@@ -23,6 +23,9 @@ async function callAi(systemPrompt: string, userContent: string): Promise<string
   } catch (err) {
     if (err instanceof AiError) throw err;
     const message = err instanceof Error ? err.message : String(err);
+    if (isTemporaryProviderUnavailableMessage(message)) {
+      throw new AiError("TEMPORARY_UNAVAILABLE", "AI provider is temporarily unavailable");
+    }
     if (message.includes("401") || message.includes("authentication")) {
       throw new AiError("AUTH_ERROR", "Invalid API key");
     }

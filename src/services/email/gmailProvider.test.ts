@@ -125,6 +125,43 @@ describe("GmailApiProvider", () => {
     });
   });
 
+  describe("fetchMessage", () => {
+    it("downloads Gmail body parts stored as attachment data", async () => {
+      vi.mocked(mockClient.getMessage).mockResolvedValue({
+        id: "message-1",
+        threadId: "thread-1",
+        labelIds: [],
+        snippet: "body preview",
+        historyId: "1",
+        internalDate: "1",
+        sizeEstimate: 100,
+        payload: {
+          partId: "0",
+          mimeType: "multipart/alternative",
+          filename: "",
+          headers: [{ name: "From", value: "sender@example.com" }],
+          body: { size: 0 },
+          parts: [{
+            partId: "0.1",
+            mimeType: "text/plain",
+            filename: "",
+            headers: [],
+            body: { attachmentId: "body-part-1", size: 7 },
+          }],
+        },
+      });
+      vi.mocked(mockClient.getAttachment).mockResolvedValue({
+        data: btoa("Hello!").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""),
+        size: 6,
+      });
+
+      const fetched = await provider.fetchMessage("message-1");
+
+      expect(mockClient.getAttachment).toHaveBeenCalledWith("message-1", "body-part-1");
+      expect(fetched.bodyText).toBe("Hello!");
+    });
+  });
+
   describe("archive", () => {
     it("calls modifyThread removing INBOX label", async () => {
       vi.mocked(mockClient.modifyThread).mockResolvedValue({

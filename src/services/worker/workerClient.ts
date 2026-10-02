@@ -6,6 +6,8 @@ import { useUIStore } from "@/stores/uiStore";
 import { drainWorkerPostprocessQueue } from "./postprocess";
 
 let workerOwnsSync = false;
+const WORKER_SYNC_TIMEOUT_MS = 15 * 60 * 1_000;
+const WORKER_SYNC_POLL_MS = 500;
 
 /** Install/attach once the frontend has migrated its database schema. */
 export async function attachBackgroundWorker(): Promise<boolean> {
@@ -55,6 +57,7 @@ export async function reconfigureBackgroundWorkerRelay(): Promise<void> {
 
 /** Queue a durable full reconciliation without starting a second sync owner. */
 export async function requestWorkerResync(accountIds: string[]): Promise<void> {
+  if (accountIds.length === 0) return;
   const db = await getDb();
   for (const accountId of accountIds) {
     await db.execute(
@@ -63,6 +66,67 @@ export async function requestWorkerResync(accountIds: string[]): Promise<void> {
     );
   }
   await wakeBackgroundWorker();
+  await waitForWorkerSync(accountIds, true);
+}
+
+/** Wake the helper and wait for the requested account batch to finish. */
+export async function wakeBackgroundWorkerAndWait(accountIds: string[]): Promise<void> {
+  if (accountIds.length === 0) return;
+  const db = await getDb();
+  for (const accountId of accountIds) {
+    await db.execute(
+      "INSERT OR IGNORE INTO worker_sync_requests (account_id) VALUES ($1)",
+      [accountId],
+    );
+  }
+  await wakeBackgroundWorker();
+  await waitForWorkerSync(accountIds, true);
+}
+
+type WorkerMailStatus = { phase: string | null; error: string | null; account_id: string | null; updated_at: number | null };
+
+async function readWorkerMailStatus(db: Awaited<ReturnType<typeof getDb>>): Promise<WorkerMailStatus> {
+  const rows = await db.select<WorkerMailStatus[]>(
+    "SELECT phase, error, account_id, updated_at FROM worker_mail_status WHERE id = 1",
+  );
+  return rows[0] ?? { phase: null, error: null, account_id: null, updated_at: null };
+}
+
+async function waitForWorkerSync(accountIds: string[], waitForResyncQueue: boolean): Promise<void> {
+  const db = await getDb();
+  const deadline = Date.now() + WORKER_SYNC_TIMEOUT_MS;
+  let latestStatus = await readWorkerMailStatus(db);
+
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, WORKER_SYNC_POLL_MS));
+    latestStatus = await readWorkerMailStatus(db);
+    const accountRows = await db.select<{ account_id: string; phase: string; error: string | null }[]>(
+      `SELECT account_id, phase, error FROM worker_mail_account_status WHERE account_id IN (${accountIds.map((_, i) => `$${i + 1}`).join(", ")})`,
+      accountIds,
+    );
+    const requestTable = waitForResyncQueue ? "worker_resync_requests" : "worker_sync_requests";
+    const failed = accountRows.find((row) => row.phase === "error");
+    if (failed) {
+      const [failedRequest] = await db.select<{ count: number }[]>(
+        `SELECT COUNT(*) AS count FROM ${requestTable} WHERE account_id = $1`,
+        [failed.account_id],
+      );
+      if ((failedRequest?.count ?? 0) === 0) {
+        throw new Error(failed.error || `Mail sync failed for ${failed.account_id}.`);
+      }
+    }
+
+    const pendingRows = await db.select<{ count: number }[]>(
+      `SELECT COUNT(*) AS count FROM ${requestTable} WHERE account_id IN (${accountIds.map((_, i) => `$${i + 1}`).join(", ")})`,
+      accountIds,
+    );
+    if ((pendingRows[0]?.count ?? 0) === 0 && latestStatus.phase !== "syncing") {
+      return;
+    }
+  }
+
+  const suffix = latestStatus.phase === "error" && latestStatus.error ? ` Last helper error: ${latestStatus.error}` : "";
+  throw new Error(`The background mail helper did not confirm sync completion within 15 minutes.${suffix}`);
 }
 
 /** Refresh visible mail when the worker commits a completed account delta. */

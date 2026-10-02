@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { getGravatarUrl } from "@/services/contacts/gravatar";
 
 /**
@@ -19,6 +19,19 @@ type AvatarSource = "gravatar" | "favicon" | "initial";
 
 // Remember what resolved per address so scrolling never re-requests dead URLs
 const sourceCache = new Map<string, AvatarSource>();
+const gravatarChecks = new Map<string, Promise<boolean>>();
+const verifiedGravatars = new Set<string>();
+
+function checkGravatar(address: string): Promise<boolean> {
+  const existing = gravatarChecks.get(address);
+  if (existing) return existing;
+
+  const check = fetch(getGravatarUrl(address), { method: "HEAD" })
+    .then((response) => response.ok)
+    .catch(() => false);
+  gravatarChecks.set(address, check);
+  return check;
+}
 
 function firstSource(address: string): AvatarSource {
   const cached = sourceCache.get(address);
@@ -68,12 +81,30 @@ export function SenderAvatar({
   };
 
   const handleLoad = () => {
+    verifiedGravatars.add(address);
     sourceCache.set(address, state.source);
   };
 
+  useEffect(() => {
+    if (state.address !== address || state.source !== "gravatar" || verifiedGravatars.has(address)) return;
+    let active = true;
+    void checkGravatar(address).then((available) => {
+      if (!active) return;
+      if (available) {
+        verifiedGravatars.add(address);
+        setState((current) => current.address === address ? { ...current } : current);
+      } else {
+        const source = nextSource("gravatar", domain);
+        sourceCache.set(address, source);
+        setState({ address, source });
+      }
+    });
+    return () => { active = false; };
+  }, [address, domain, state.address, state.source]);
+
   const initial = (name?.[0] ?? email?.[0] ?? "?").toUpperCase();
 
-  if (state.source === "gravatar") {
+  if (state.source === "gravatar" && verifiedGravatars.has(address)) {
     return (
       <div className={`${className} rounded-full overflow-hidden bg-bg-tertiary`}>
         <img
@@ -88,11 +119,19 @@ export function SenderAvatar({
     );
   }
 
+  if (state.source === "gravatar") {
+    return (
+      <div className={`${className} rounded-full overflow-hidden bg-bg-tertiary flex items-center justify-center font-medium text-white`}>
+        {initial}
+      </div>
+    );
+  }
+
   if (state.source === "favicon") {
     return (
       <div className={`${className} rounded-full overflow-hidden bg-white flex items-center justify-center`}>
         <img
-          src={`https://icons.duckduckgo.com/ip3/${domain}.ico`}
+          src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=64`}
           alt=""
           loading="lazy"
           onError={handleError}

@@ -199,6 +199,27 @@ export async function updateMessageThreadIds(
   }
 }
 
+/** Fill a message body that was not cached during its original sync. */
+export async function updateMissingMessageBody(
+  accountId: string,
+  messageId: string,
+  bodyHtml: string | null,
+  bodyText: string | null,
+): Promise<void> {
+  if (!bodyHtml && !bodyText) return;
+  const db = await getDb();
+  await db.execute(
+    `UPDATE messages SET
+       body_html = CASE WHEN body_html IS NULL OR body_html = '' THEN COALESCE($1, body_html) ELSE body_html END,
+       body_text = CASE WHEN body_text IS NULL OR body_text = '' THEN COALESCE($2, body_text) ELSE body_text END,
+       body_cached = 1
+     WHERE account_id = $3 AND id = $4
+       AND (body_html IS NULL OR body_html = '')
+       AND (body_text IS NULL OR body_text = '')`,
+    [bodyHtml, bodyText, accountId, messageId],
+  );
+}
+
 export async function deleteAllMessagesForAccount(
   accountId: string,
 ): Promise<void> {

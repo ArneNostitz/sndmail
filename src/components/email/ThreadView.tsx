@@ -32,6 +32,7 @@ import { MessageSkeleton } from "@/components/ui/Skeleton";
 import { RawMessageModal } from "./RawMessageModal";
 import { formatDateTime } from "@/utils/date";
 import { getBodySearchTerms } from "@/utils/searchHighlight";
+import { recoverMissingBodies } from "@/services/threads/recoverMissingBodies";
 import { SpamBanner } from "./SpamBanner";
 import { reportError, notify } from "@/stores/toastStore";
 import { useMailLinkStore } from "@/stores/mailLinkStore";
@@ -99,6 +100,8 @@ export function ThreadView({ thread }: ThreadViewProps) {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loadAttempt, setLoadAttempt] = useState(0);
+  const [recoveringBodies, setRecoveringBodies] = useState(false);
+  const bodyRecoveryAttemptedRef = useRef<string | null>(null);
   const markedReadRef = useRef<string | null>(null);
   // null = not yet loaded; defer iframe rendering until setting is known
   const [blockImages, setBlockImages] = useState<boolean | null>(null);
@@ -157,6 +160,7 @@ export function ThreadView({ thread }: ThreadViewProps) {
     let cancelled = false;
     setLoading(true);
     setLoadError(null);
+    setRecoveringBodies(false);
     const timeout = setTimeout(() => {
       if (!cancelled) { cancelled = true; setLoadError("Loading this email took too long. Please retry."); setLoading(false); }
     }, 15000);
@@ -174,6 +178,33 @@ export function ThreadView({ thread }: ThreadViewProps) {
     })();
     return () => { cancelled = true; clearTimeout(timeout); };
   }, [threadAccountId, thread.id, loadAttempt]);
+
+  // Repair missing bodies after the local thread has rendered. Remote retrieval
+  // must not hold the normal thread-load timeout open.
+  useEffect(() => {
+    if (loading || !threadAccountId || messages.length === 0) return;
+    const attemptKey = `${threadAccountId}:${thread.id}`;
+    if (bodyRecoveryAttemptedRef.current === attemptKey) return;
+    if (!messages.some((message) => !message.body_html && !message.body_text)) return;
+    bodyRecoveryAttemptedRef.current = attemptKey;
+
+    let cancelled = false;
+    setRecoveringBodies(true);
+    (async () => {
+      try {
+        const recovered = await recoverMissingBodies(threadAccountId, messages);
+        if (recovered && !cancelled) {
+          const refreshed = await getMessagesForThreads(threadAccountId, [thread.id, ...mergedIds]);
+          if (!cancelled) setMessages(refreshed);
+        }
+      } finally {
+        if (!cancelled) setRecoveringBodies(false);
+      }
+    })().catch((error) => {
+      console.warn("Could not recover missing email bodies:", error);
+    });
+    return () => { cancelled = true; };
+  }, [loading, threadAccountId, thread.id, messages, mergedIds]);
 
   // Check per-sender allowlist (single batch query instead of N queries)
   useEffect(() => {
@@ -602,6 +633,12 @@ export function ThreadView({ thread }: ThreadViewProps) {
 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto">
+          {recoveringBodies && (
+            <div className="flex items-center gap-2 px-5 py-2 text-xs text-text-secondary" role="status">
+              <span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-r-transparent" />
+              Retrieving missing email body…
+            </div>
+          )}
           <ErrorBoundary name="MessageList">
             {threadViewMode === "chat" ? (
               <ChatThread

@@ -24,7 +24,7 @@ import { ACCOUNT_COLORS, accountColor } from "@/constants/accountColors";
 import { removeClient, reauthorizeAccount } from "@/services/gmail/tokenManager";
 import { validateClientId, validateClientSecret } from "@/services/gmail/clientCredentials";
 import { triggerSync, forceFullSync, resyncAccount } from "@/services/gmail/syncManager";
-import { backgroundWorkerOwnsSync, reconfigureBackgroundWorkerRelay, requestWorkerResync, wakeBackgroundWorker } from "@/services/worker/workerClient";
+import { backgroundWorkerOwnsSync, reconfigureBackgroundWorkerRelay, requestWorkerResync, wakeBackgroundWorkerAndWait } from "@/services/worker/workerClient";
 import {
   getGmailPushRelayStatus,
   probeGmailPushRelay,
@@ -156,7 +156,8 @@ export function SettingsPage() {
   const [apiSettingsSaved, setApiSettingsSaved] = useState(false);
   const clientIdError = clientId.trim() ? validateClientId(clientId) : null;
   const clientSecretError = clientSecret.trim() ? validateClientSecret(clientSecret) : null;
-  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncOperation, setSyncOperation] = useState<"sync" | "resync" | null>(null);
+  const isSyncing = syncOperation !== null;
   const [syncPeriodDays, setSyncPeriodDays] = useState("365");
   const [blockRemoteImages, setBlockRemoteImages] = useState(true);
   const [phishingDetectionEnabled, setPhishingDetectionEnabled] = useState(true);
@@ -415,24 +416,28 @@ export function SettingsPage() {
   const handleManualSync = useCallback(async () => {
     const activeIds = accounts.filter((a) => a.isActive).map((a) => a.id);
     if (activeIds.length === 0) return;
-    setIsSyncing(true);
+    setSyncOperation("sync");
     try {
-      if (backgroundWorkerOwnsSync()) await wakeBackgroundWorker();
+      if (backgroundWorkerOwnsSync()) await wakeBackgroundWorkerAndWait(activeIds);
       else await triggerSync(activeIds);
+    } catch (error) {
+      reportError("Could not sync mail", error);
     } finally {
-      setIsSyncing(false);
+      setSyncOperation(null);
     }
   }, [accounts]);
 
   const handleForceFullSync = useCallback(async () => {
     const activeIds = accounts.filter((a) => a.isActive).map((a) => a.id);
     if (activeIds.length === 0) return;
-    setIsSyncing(true);
+    setSyncOperation("resync");
     try {
       if (backgroundWorkerOwnsSync()) await requestWorkerResync(activeIds);
       else await forceFullSync(activeIds);
+    } catch (error) {
+      reportError("Full resync failed", error);
     } finally {
-      setIsSyncing(false);
+      setSyncOperation(null);
     }
   }, [accounts]);
 
@@ -1604,7 +1609,7 @@ export function SettingsPage() {
                         onClick={handleManualSync}
                         disabled={isSyncing || accounts.length === 0}
                       >
-                        {isSyncing ? "Syncing..." : "Sync now"}
+                        {syncOperation === "sync" ? "Checking mail..." : "Sync now"}
                       </Button>
                     </div>
                     <div className="flex items-center justify-between">
@@ -1624,7 +1629,7 @@ export function SettingsPage() {
                         disabled={isSyncing || accounts.length === 0}
                         className="bg-bg-tertiary text-text-primary border border-border-primary"
                       >
-                        {isSyncing ? "Syncing..." : "Full resync"}
+                        {syncOperation === "resync" ? "Re-syncing..." : "Full resync"}
                       </Button>
                     </div>
                   </Section>

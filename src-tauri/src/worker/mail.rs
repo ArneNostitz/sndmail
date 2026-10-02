@@ -924,7 +924,7 @@ async fn sync_gmail_once(
         let path = format!("/threads/{id}?format=full");
         match gmail_get(http, &token, &path).await? {
             Some(thread) => {
-                store_gmail_thread(db, &account.id, &account.email, &id, &thread, &new_inbox).await?;
+                store_gmail_thread(db, http, &token, &account.id, &account.email, &id, &thread, &new_inbox).await?;
                 changed = true;
             }
             None => {
@@ -1018,23 +1018,78 @@ fn gmail_header<'a>(message: &'a Value, name: &str) -> Option<&'a str> {
         .as_str()
 }
 
-fn gmail_body(part: &Value, mime: &str) -> Option<String> {
-    if part["mimeType"].as_str() == Some(mime) {
-        if let Some(encoded) = part["body"]["data"].as_str() {
-            let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
-                .decode(encoded)
-                .ok()?;
-            return Some(String::from_utf8_lossy(&bytes).into_owned());
+async fn gmail_body(
+    http: &reqwest::Client,
+    token: &str,
+    message_id: &str,
+    part: &Value,
+    mime: &str,
+) -> Result<Option<String>, String> {
+    let Some(candidate) = find_gmail_body_part(part, mime) else {
+        return Ok(None);
+    };
+    if let Some(encoded) = candidate["body"]["data"].as_str() {
+        return Ok(decode_gmail_body(encoded));
+    }
+    // Gmail moves large MIME bodies out of the message payload and exposes
+    // them through the same attachment endpoint as files. Only fetch a part
+    // selected as text/plain or text/html by the caller.
+    if let Some(attachment_id) = candidate["body"]["attachmentId"].as_str() {
+        let path = format!("/messages/{message_id}/attachments/{attachment_id}");
+        let response = match gmail_get(http, token, &path).await {
+            Ok(Some(response)) => response,
+            Ok(None) => return Ok(None),
+            // Propagate auth, rate-limit, and transport failures so the sync
+            // cursor is not advanced after storing a thread without its body.
+            Err(error) => return Err(error),
+        };
+        let Some(encoded) = response["data"].as_str() else { return Ok(None); };
+        return Ok(decode_gmail_body(encoded));
+    }
+    Ok(None)
+}
+
+fn find_gmail_body_part<'a>(part: &'a Value, mime: &str) -> Option<&'a Value> {
+    let mut stack = vec![part];
+    while let Some(candidate) = stack.pop() {
+        let has_filename = candidate["filename"].as_str()
+            .is_some_and(|filename| !filename.trim().is_empty());
+        let is_attachment = candidate["headers"].as_array().is_some_and(|headers| {
+            headers.iter().any(|header| {
+                header["name"].as_str().is_some_and(|name| name.eq_ignore_ascii_case("Content-Disposition"))
+                    && header["value"].as_str().is_some_and(|value| {
+                        value.trim_start().to_ascii_lowercase().starts_with("attachment")
+                    })
+            })
+        });
+        if !has_filename
+            && !is_attachment
+            && candidate["mimeType"].as_str() == Some(mime)
+            && (candidate["body"]["data"].is_string()
+                || candidate["body"]["attachmentId"].is_string())
+        {
+            return Some(candidate);
+        }
+        if let Some(children) = candidate["parts"].as_array() {
+            // Reverse push keeps the original MIME traversal order.
+            stack.extend(children.iter().rev());
         }
     }
-    part["parts"]
-        .as_array()?
-        .iter()
-        .find_map(|child| gmail_body(child, mime))
+    None
+}
+
+fn decode_gmail_body(encoded: &str) -> Option<String> {
+    let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .decode(encoded)
+        .or_else(|_| base64::engine::general_purpose::URL_SAFE.decode(encoded))
+        .ok()?;
+    Some(String::from_utf8_lossy(&bytes).into_owned())
 }
 
 async fn store_gmail_thread(
     db: &mut SqliteConnection,
+    http: &reqwest::Client,
+    token: &str,
     account: &str,
     account_email: &str,
     id: &str,
@@ -1046,6 +1101,15 @@ async fn store_gmail_thread(
         .ok_or("Gmail thread has no messages")?;
     if messages.is_empty() {
         return Ok(());
+    }
+    // Resolve attachment-backed body parts before opening the write transaction
+    // so the network request does not hold SQLite's write lock.
+    let mut message_bodies = HashMap::new();
+    for message in messages {
+        let Some(message_id) = message["id"].as_str() else { continue; };
+        let html = gmail_body(http, token, message_id, &message["payload"], "text/html").await?;
+        let text = gmail_body(http, token, message_id, &message["payload"], "text/plain").await?;
+        message_bodies.insert(message_id.to_owned(), (html, text));
     }
     let mut labels = HashSet::new();
     let mut latest = &messages[0];
@@ -1116,7 +1180,11 @@ async fn store_gmail_thread(
                     .bind(account).bind(&old_id).execute(&mut *db).await.map_err(db_error)?;
             }
         }
-        for message in messages { store_gmail_message(db, account, id, message).await?; }
+        for message in messages {
+            let Some(message_id) = message["id"].as_str() else { continue; };
+            let (html, text) = message_bodies.get(message_id).cloned().unwrap_or_default();
+            store_gmail_message(db, account, id, message, html, text).await?;
+        }
         sqlx::query("DELETE FROM thread_labels WHERE account_id = ? AND thread_id = ?")
             .bind(account).bind(id).execute(&mut *db).await.map_err(db_error)?;
         for label in labels {
@@ -1140,10 +1208,10 @@ async fn store_gmail_thread(
                 let from = gmail_header(message, "From");
                 if split_address(from).1.is_some_and(|address| address.eq_ignore_ascii_case(account_email)) { continue; }
                 let date = message["internalDate"].as_str().and_then(|v| v.parse::<i64>().ok()).unwrap_or(0);
-                let body = gmail_body(&message["payload"], "text/plain")
-                    .or_else(|| gmail_body(&message["payload"], "text/html"));
-                otp::maybe_notify(db, account, id, message_id, gmail_header(message, "Subject"), body.as_deref(), date, gmail_header(message, "From")).await?;
-                otp::maybe_notify_mail(db, account, id, message_id, gmail_header(message, "Subject"), body.as_deref(), date,
+                let body = message_bodies.get(message_id)
+                    .and_then(|(html, text)| text.as_ref().or(html.as_ref()));
+                otp::maybe_notify(db, account, id, message_id, gmail_header(message, "Subject"), body.map(String::as_str), date, gmail_header(message, "From")).await?;
+                otp::maybe_notify_mail(db, account, id, message_id, gmail_header(message, "Subject"), body.map(String::as_str), date,
                     split_address(gmail_header(message, "From")).1).await?;
             }
             Ok(())
@@ -1167,6 +1235,8 @@ async fn store_gmail_message(
     account: &str,
     thread: &str,
     message: &Value,
+    html: Option<String>,
+    text: Option<String>,
 ) -> Result<(), String> {
     let Some(id) = message["id"].as_str() else {
         return Ok(());
@@ -1183,8 +1253,6 @@ async fn store_gmail_message(
     let starred = message["labelIds"]
         .as_array()
         .is_some_and(|ids| ids.iter().any(|v| v.as_str() == Some("STARRED")));
-    let html = gmail_body(&message["payload"], "text/html");
-    let text = gmail_body(&message["payload"], "text/plain");
     sqlx::query("INSERT INTO messages (id, account_id, thread_id, from_address, from_name, to_addresses, cc_addresses, bcc_addresses, reply_to, subject, snippet, date, is_read, is_starred, body_html, body_text, body_cached, raw_size, internal_date, list_unsubscribe, list_unsubscribe_post, message_id_header, references_header, in_reply_to_header, disposition_notification_to) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(account_id, id) DO UPDATE SET from_address = excluded.from_address, from_name = excluded.from_name, to_addresses = excluded.to_addresses, cc_addresses = excluded.cc_addresses, bcc_addresses = excluded.bcc_addresses, reply_to = excluded.reply_to, subject = excluded.subject, snippet = excluded.snippet, date = excluded.date, is_read = excluded.is_read, is_starred = excluded.is_starred, body_html = COALESCE(excluded.body_html, messages.body_html), body_text = COALESCE(excluded.body_text, messages.body_text), body_cached = MAX(messages.body_cached, excluded.body_cached), raw_size = excluded.raw_size, internal_date = excluded.internal_date, list_unsubscribe = excluded.list_unsubscribe, list_unsubscribe_post = excluded.list_unsubscribe_post, message_id_header = COALESCE(excluded.message_id_header, messages.message_id_header), references_header = COALESCE(excluded.references_header, messages.references_header), in_reply_to_header = COALESCE(excluded.in_reply_to_header, messages.in_reply_to_header), disposition_notification_to = COALESCE(excluded.disposition_notification_to, messages.disposition_notification_to)")
         .bind(id).bind(account).bind(thread).bind(from_address).bind(from_name)
         .bind(gmail_header(message, "To")).bind(gmail_header(message, "Cc")).bind(gmail_header(message, "Bcc"))
@@ -1871,7 +1939,7 @@ async fn store_imap_message(
 
 #[cfg(test)]
 mod tests {
-    use super::{decrypt, encrypt, error_category, gmail_retry_delay, is_gmail_rate_reason, oauth_refresh_error};
+    use super::{decode_gmail_body, decrypt, encrypt, error_category, find_gmail_body_part, gmail_retry_delay, is_gmail_rate_reason, oauth_refresh_error};
     use base64::Engine;
 
     #[test]
@@ -1905,6 +1973,37 @@ mod tests {
         assert!(is_gmail_rate_reason(&serde_json::json!({"error": {"errors": [{"reason": "rateLimitExceeded"}]}})));
         assert!(is_gmail_rate_reason(&serde_json::json!({"error": {"errors": [{"reason": "userRateLimitExceeded"}]}})));
         assert!(!is_gmail_rate_reason(&serde_json::json!({"error": {"errors": [{"reason": "insufficientPermissions"}], "message": "private details"}})));
+    }
+
+    #[test]
+    fn body_lookup_selects_inline_and_attachment_backed_body_parts_only() {
+        let message = serde_json::json!({
+            "mimeType": "multipart/mixed",
+            "parts": [
+                {"mimeType": "application/pdf", "filename": "invoice.pdf", "body": {"attachmentId": "file-1"}},
+                {"mimeType": "multipart/alternative", "parts": [
+                    {"mimeType": "text/plain", "filename": "notes.txt", "body": {"attachmentId": "file-2"}},
+                    {"mimeType": "text/plain", "body": {"data": "SGVsbG8"}},
+                    {"mimeType": "text/html", "body": {"attachmentId": "body-1", "size": 90000}}
+                ]}
+            ]
+        });
+
+        let plain = find_gmail_body_part(&message, "text/plain").unwrap();
+        assert_eq!(decode_gmail_body(plain["body"]["data"].as_str().unwrap()).as_deref(), Some("Hello"));
+        let html = find_gmail_body_part(&message, "text/html").unwrap();
+        assert_eq!(html["body"]["attachmentId"], "body-1");
+        assert!(find_gmail_body_part(&message, "application/octet-stream").is_none());
+        let attached_text_only = serde_json::json!({
+            "mimeType": "multipart/mixed",
+            "parts": [{
+                "mimeType": "text/plain",
+                "filename": "notes.txt",
+                "headers": [{"name": "Content-Disposition", "value": "attachment; filename=notes.txt"}],
+                "body": {"attachmentId": "file-2"}
+            }]
+        });
+        assert!(find_gmail_body_part(&attached_text_only, "text/plain").is_none());
     }
 
     #[test]

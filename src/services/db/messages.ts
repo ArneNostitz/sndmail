@@ -214,8 +214,7 @@ export async function updateMissingMessageBody(
        body_text = CASE WHEN body_text IS NULL OR body_text = '' THEN COALESCE($2, body_text) ELSE body_text END,
        body_cached = 1
      WHERE account_id = $3 AND id = $4
-       AND (body_html IS NULL OR body_html = '')
-       AND (body_text IS NULL OR body_text = '')`,
+       AND ((body_html IS NULL OR body_html = '') OR (body_text IS NULL OR body_text = ''))`,
     [bodyHtml, bodyText, accountId, messageId],
   );
 }

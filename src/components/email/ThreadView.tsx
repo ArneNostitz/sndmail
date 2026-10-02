@@ -185,7 +185,7 @@ export function ThreadView({ thread }: ThreadViewProps) {
     if (loading || !threadAccountId || messages.length === 0) return;
     const attemptKey = `${threadAccountId}:${thread.id}`;
     if (bodyRecoveryAttemptedRef.current === attemptKey) return;
-    if (!messages.some((message) => !message.body_html && !message.body_text)) return;
+    if (!messages.some((message) => !message.body_html)) return;
     bodyRecoveryAttemptedRef.current = attemptKey;
 
     let cancelled = false;
@@ -636,7 +636,7 @@ export function ThreadView({ thread }: ThreadViewProps) {
           {recoveringBodies && (
             <div className="flex items-center gap-2 px-5 py-2 text-xs text-text-secondary" role="status">
               <span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-r-transparent" />
-              Retrieving missing email body…
+              Checking for formatted email content…
             </div>
           )}
           <ErrorBoundary name="MessageList">

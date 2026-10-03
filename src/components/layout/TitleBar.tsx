@@ -3,6 +3,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Minus, Square, X, Copy } from "lucide-react";
 import { useHistoryNav } from "@/hooks/useHistoryNav";
 
+import { Tooltip } from "@/components/ui/Tooltip";
 const isMac = navigator.userAgent.includes("Macintosh");
 
 export function WindowControls() {
@@ -34,15 +35,15 @@ export function WindowControls() {
     >
       {!isMac && (
         <>
-          <button onClick={handleClose} title="Close" className="window-light window-light-close" aria-label="Close window">
+          <Tooltip content="Close"><button onClick={handleClose}  className="window-light window-light-close" aria-label="Close window">
             <X size={9} />
-          </button>
-          <button onClick={handleMinimize} title="Minimize" className="window-light window-light-minimize" aria-label="Minimize window">
+          </button></Tooltip>
+          <Tooltip content="Minimize"><button onClick={handleMinimize}  className="window-light window-light-minimize" aria-label="Minimize window">
             <Minus size={9} />
-          </button>
-          <button onClick={handleMaximize} title={maximized ? "Restore" : "Maximize"} className="window-light window-light-maximize" aria-label={maximized ? "Restore window" : "Maximize window"}>
+          </button></Tooltip>
+          <Tooltip content={maximized ? "Restore" : "Maximize"}><button onClick={handleMaximize}  className="window-light window-light-maximize" aria-label={maximized ? "Restore window" : "Maximize window"}>
             {maximized ? <Copy size={8} /> : <Square size={8} />}
-          </button>
+          </button></Tooltip>
         </>
       )}
       {!isMac && (

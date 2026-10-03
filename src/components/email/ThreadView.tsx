@@ -37,6 +37,7 @@ import { SpamBanner } from "./SpamBanner";
 import { reportError, notify } from "@/stores/toastStore";
 import { useMailLinkStore } from "@/stores/mailLinkStore";
 
+import { Tooltip } from "@/components/ui/Tooltip";
 interface ThreadViewProps {
   thread: Thread;
 }
@@ -612,9 +613,9 @@ export function ThreadView({ thread }: ThreadViewProps) {
           <h1 className="text-xl font-semibold tracking-tight text-text-primary flex items-center gap-2">
             {thread.subject ?? "(No subject)"}
             {thread.isMuted && (
-              <span className="text-text-secondary shrink-0" title="Muted">
+              <Tooltip content="Muted"><span className="text-text-secondary shrink-0" >
                 <VolumeX size={16} />
-              </span>
+              </span></Tooltip>
             )}
           </h1>
           <div className="text-xs text-text-tertiary mt-1">

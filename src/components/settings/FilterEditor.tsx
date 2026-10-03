@@ -4,6 +4,7 @@ import { TextField } from "@/components/ui/TextField";
 import { useAccountStore } from "@/stores/accountStore";
 import { getLabelsForAccount, type DbLabel } from "@/services/db/labels";
 import {
+import { Tooltip } from "@/components/ui/Tooltip";
   getFiltersForAccount,
   insertFilter,
   updateFilter,
@@ -180,19 +181,19 @@ export function FilterEditor() {
             </div>
           </div>
           <div className="flex items-center gap-1">
-            <button
+            <Tooltip content={filter.is_enabled === 1 ? "Disable" : "Enable"}><button
               onClick={() => handleToggleEnabled(filter)}
               className={`w-8 h-4 rounded-full transition-colors relative ${
                 filter.is_enabled === 1 ? "bg-accent" : "bg-bg-tertiary"
               }`}
-              title={filter.is_enabled === 1 ? "Disable" : "Enable"}
+
             >
               <span
                 className={`absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full transition-transform shadow ${
                   filter.is_enabled === 1 ? "translate-x-4" : ""
                 }`}
               />
-            </button>
+            </button></Tooltip>
             <button
               onClick={() => handleEdit(filter)}
               className="p-1 text-text-tertiary hover:text-text-primary"
@@ -292,13 +293,13 @@ export function FilterEditor() {
                   <input type="checkbox" checked={actionTrash} onChange={(e) => setActionTrash(e.target.checked)} className="rounded" />
                   Trash
                 </label>
-                <label
+                <Tooltip content="Always notify for a message this rule matches, whatever the notification filters say"><label
                   className="flex items-center gap-1.5 text-xs text-text-secondary"
-                  title="Always notify for a message this rule matches, whatever the notification filters say"
+
                 >
                   <input type="checkbox" checked={actionNotify} onChange={(e) => setActionNotify(e.target.checked)} className="rounded" />
                   Notify me
-                </label>
+                </label></Tooltip>
               </div>
             </div>
           </div>

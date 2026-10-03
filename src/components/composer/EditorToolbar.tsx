@@ -3,6 +3,7 @@ import type { Editor } from "@tiptap/react";
 import { InputDialog } from "@/components/ui/InputDialog";
 import { Sparkles } from "lucide-react";
 
+import { Tooltip } from "@/components/ui/Tooltip";
 interface EditorToolbarProps {
   editor: Editor | null;
   onToggleAiAssist?: () => void;
@@ -33,16 +34,16 @@ export function EditorToolbar({ editor, onToggleAiAssist, aiAssistOpen }: Editor
     onClick: () => void,
     title?: string,
   ) => (
-    <button
+    <Tooltip content={title ?? label}><button
       type="button"
       onClick={onClick}
-      title={title ?? label}
+
       className={`px-1.5 py-1 text-xs rounded hover:bg-bg-hover transition-colors ${
         isActive ? "bg-bg-hover text-accent font-semibold" : "text-text-secondary"
       }`}
     >
       {label}
-    </button>
+    </button></Tooltip>
   );
 
   return (
@@ -87,17 +88,17 @@ export function EditorToolbar({ editor, onToggleAiAssist, aiAssistOpen }: Editor
       <div className="flex-1" />
 
       {onToggleAiAssist && (
-        <button
+        <Tooltip content="AI Assist"><button
           type="button"
           onClick={onToggleAiAssist}
-          title="AI Assist"
+
           className={`px-1.5 py-1 text-xs rounded hover:bg-bg-hover transition-colors flex items-center gap-1 ${
             aiAssistOpen ? "bg-accent/10 text-accent font-semibold" : "text-text-secondary"
           }`}
         >
           <Sparkles size={12} />
           AI
-        </button>
+        </button></Tooltip>
       )}
 
       {btn("Undo", false, () => editor.chain().focus().undo().run())}

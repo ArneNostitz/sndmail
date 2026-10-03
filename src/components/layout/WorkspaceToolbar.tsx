@@ -5,6 +5,7 @@ import { useHistoryNav } from "@/hooks/useHistoryNav";
 import { SearchBar } from "../search/SearchBar";
 import { WindowControls } from "./TitleBar";
 
+import { Tooltip } from "@/components/ui/Tooltip";
 interface WorkspaceToolbarProps {
   onAddAccount: () => void;
 }
@@ -33,17 +34,17 @@ export function WorkspaceToolbar({ onAddAccount }: WorkspaceToolbarProps) {
         Compose
       </button>
       <div className="flex shrink-0 items-center gap-0.5">
-        <button
+        <Tooltip content="Back"><button
           onClick={back}
           disabled={!canGoBack}
-          title="Back"
+
           className="toolbar-icon-button"
         >
           <ChevronRight size={17} className="rotate-180" />
-        </button>
-        <button onClick={forward} title="Forward" className="toolbar-icon-button">
+        </button></Tooltip>
+        <Tooltip content="Forward"><button onClick={forward}  className="toolbar-icon-button">
           <ChevronRight size={17} />
-        </button>
+        </button></Tooltip>
       </div>
       <div className="min-w-0 max-w-xl flex-1" data-tauri-drag-region={undefined}>
         <SearchBar />

@@ -14,6 +14,7 @@ import { useAccountStore } from "@/stores/accountStore";
 import { accountColor } from "@/constants/accountColors";
 import { threadFolder, type ThreadFolderId } from "@/utils/threadFolder";
 import { HighlightedText } from "@/components/search/HighlightedText";
+import { Tooltip } from "@/components/ui/Tooltip";
 
 // A search result names where it lives. Trash and Spam shout: acting on a
 // hit there is not the same as acting on one in the inbox.
@@ -135,12 +136,17 @@ export const ThreadCard = memo(function ThreadCard({ thread, isSelected, onClick
               <Check size={emailDensity === "compact" ? 14 : 16} />
             </div>
           ) : (
-            <SenderAvatar
-              email={thread.fromAddress}
-              name={thread.fromName}
-              className="w-7 h-7 text-xs"
-            />
+            <Tooltip content={<span>{thread.fromName || thread.fromAddress || "Unknown sender"}{thread.fromAddress && thread.fromName ? <><br />{thread.fromAddress}</> : null}</span>}>
+              <span className="inline-flex shrink-0">
+                <SenderAvatar
+                  email={thread.fromAddress}
+                  name={thread.fromName}
+                  className="w-7 h-7 text-xs"
+                />
+              </span>
+            </Tooltip>
           )}
+          <Tooltip content={<span>{thread.fromName || thread.fromAddress || "Unknown sender"}{thread.fromAddress && thread.fromName ? <><br />{thread.fromAddress}</> : null}</span>}>
           <span className={`truncate text-[0.8125rem] ${thread.isRead ? "text-text-secondary" : "font-semibold text-text-primary"}`}>
             {!thread.isRead && <span aria-hidden="true" className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-sky-500 align-middle" />}
             <HighlightedText
@@ -148,33 +154,36 @@ export const ThreadCard = memo(function ThreadCard({ thread, isSelected, onClick
               terms={highlightTerms}
             />
           </span>
+          </Tooltip>
         </div>
         <span className="flex shrink-0 items-center gap-1.5">
           {folder && (
-            <span
-              data-testid="thread-folder"
-              className={`max-w-24 truncate whitespace-nowrap rounded-full px-1.5 text-[0.625rem] leading-normal ${FOLDER_COLORS[folder.id] ?? "bg-bg-tertiary text-text-secondary"}`}
-              title={`In ${folder.name}`}
-            >
-              {folder.name}
-            </span>
+            <Tooltip content={`In ${folder.name}`}>
+              <span
+                data-testid="thread-folder"
+                className={`max-w-24 truncate whitespace-nowrap rounded-full px-1.5 text-[0.625rem] leading-normal ${FOLDER_COLORS[folder.id] ?? "bg-bg-tertiary text-text-secondary"}`}
+              >
+                {folder.name}
+              </span>
+            </Tooltip>
           )}
           <span className="whitespace-nowrap text-xs text-text-tertiary">
             {formatThreadListDate(thread.lastMessageAt)}
           </span>
           {receivedAccount && receivedAccountColor && (
-            <span
-              className="flex h-4 w-4 shrink-0 items-center justify-center overflow-hidden rounded-full text-[0.5rem] font-semibold text-white"
-              style={{ backgroundColor: receivedAccountColor.hex }}
-              title={`Received by ${receivedAccount.displayName || receivedAccount.email}`}
-              aria-label={`Received by ${receivedAccount.displayName || receivedAccount.email}`}
-            >
-              {receivedAccount.avatarUrl ? (
-                <img src={receivedAccount.avatarUrl} alt="" className="h-full w-full object-cover" />
-              ) : (
-                (receivedAccount.displayName || receivedAccount.email).charAt(0).toUpperCase()
-              )}
-            </span>
+            <Tooltip content={<span>{receivedAccount.displayName || receivedAccount.email}<br />{receivedAccount.email}</span>}>
+              <span
+                className="flex h-4 w-4 shrink-0 items-center justify-center overflow-hidden rounded-full text-[0.5rem] font-semibold text-white"
+                style={{ backgroundColor: receivedAccountColor.hex }}
+                aria-label={`Received by ${receivedAccount.displayName || receivedAccount.email}`}
+              >
+                {receivedAccount.avatarUrl ? (
+                  <img src={receivedAccount.avatarUrl} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  (receivedAccount.displayName || receivedAccount.email).charAt(0).toUpperCase()
+                )}
+              </span>
+            </Tooltip>
           )}
         </span>
       </div>
@@ -193,12 +202,11 @@ export const ThreadCard = memo(function ThreadCard({ thread, isSelected, onClick
           {/* Who spoke last — a thread waiting on them reads differently
               from one waiting on you */}
           {searchExcerpt == null && thread.lastFromMe && (
-            <span
-              className="mr-1 rounded px-1 py-px align-baseline font-medium text-text-secondary bg-bg-tertiary"
-              title="You sent the last message"
-            >
-              me:
-            </span>
+            <Tooltip content="You sent the last message">
+              <span className="mr-1 rounded px-1 py-px align-baseline font-medium text-text-secondary bg-bg-tertiary">
+                me:
+              </span>
+            </Tooltip>
           )}
           <HighlightedText
             text={searchExcerpt ?? thread.snippet}
@@ -211,34 +219,34 @@ export const ThreadCard = memo(function ThreadCard({ thread, isSelected, onClick
           </span>
         )}
         {hasFollowUp && (
-          <span className="shrink-0 text-text-tertiary" title="Follow-up reminder set">
+          <Tooltip content="Follow-up reminder set"><span className="shrink-0 text-text-tertiary">
             <BellRing size={12} />
-          </span>
+          </span></Tooltip>
         )}
         {hasTask && (
-          <span className="shrink-0 text-text-tertiary" title="Has an open task">
+          <Tooltip content="Has an open task"><span className="shrink-0 text-text-tertiary">
             <CheckSquare size={12} />
-          </span>
+          </span></Tooltip>
         )}
         {thread.isMuted && (
-          <span className="shrink-0 text-text-tertiary" title="Muted">
+          <Tooltip content="Muted"><span className="shrink-0 text-text-tertiary">
             <VolumeX size={12} />
-          </span>
+          </span></Tooltip>
         )}
         {thread.isPinned && (
-          <span className="shrink-0 text-text-tertiary" title="Pinned">
+          <Tooltip content="Pinned"><span className="shrink-0 text-text-tertiary">
             <Pin size={12} className="fill-current" />
-          </span>
+          </span></Tooltip>
         )}
         {thread.hasAttachments && (
-          <span className="shrink-0 text-text-tertiary" title="Has attachments">
+          <Tooltip content="Has attachments"><span className="shrink-0 text-text-tertiary">
             <Paperclip size={12} />
-          </span>
+          </span></Tooltip>
         )}
         {thread.isStarred && (
-          <span className="star-animate shrink-0 text-text-tertiary" title="Starred">
+          <Tooltip content="Starred"><span className="star-animate shrink-0 text-text-tertiary">
             <Star size={12} className="fill-current" />
-          </span>
+          </span></Tooltip>
         )}
         {thread.messageCount > 1 && (
           <span className="shrink-0 rounded-full bg-bg-tertiary px-1.5 text-xs text-text-tertiary">

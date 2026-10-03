@@ -4,6 +4,7 @@ import { useComposerStore, type ComposerAttachment } from "@/stores/composerStor
 import { readFileAsBase64 } from "@/utils/fileUtils";
 import { formatFileSize } from "@/utils/fileTypeHelpers";
 
+import { Tooltip } from "@/components/ui/Tooltip";
 const MAX_TOTAL_SIZE = 24 * 1024 * 1024; // 24MB
 
 export function AttachmentPicker() {
@@ -48,15 +49,15 @@ export function AttachmentPicker() {
       />
 
       <div className="flex items-center gap-2 flex-wrap">
-        <button
+        <Tooltip content="Attach files"><button
           type="button"
           onClick={() => inputRef.current?.click()}
           className="flex items-center gap-1 text-xs text-text-tertiary hover:text-text-primary transition-colors py-1"
-          title="Attach files"
+
         >
           <Paperclip size={14} />
           <span>Attach</span>
-        </button>
+        </button></Tooltip>
 
         {attachments.map((att) => (
           <div

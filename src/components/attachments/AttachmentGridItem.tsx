@@ -2,6 +2,7 @@ import { Download, Eye, ExternalLink } from "lucide-react";
 import { formatFileSize, getFileIcon, canPreview } from "@/utils/fileTypeHelpers";
 import type { AttachmentWithContext } from "@/services/db/attachments";
 
+import { Tooltip } from "@/components/ui/Tooltip";
 interface AttachmentGridItemProps {
   attachment: AttachmentWithContext;
   onPreview: () => void;
@@ -39,12 +40,12 @@ export function AttachmentGridItem({ attachment, onPreview, onDownload, onJumpTo
 
       {/* Info */}
       <div className="px-3 py-2 flex flex-col gap-0.5 min-w-0">
-        <span className="text-xs font-medium text-text-primary truncate" title={attachment.filename ?? undefined}>
+        <Tooltip content={attachment.filename ?? undefined}><span className="text-xs font-medium text-text-primary truncate" >
           {attachment.filename ?? "Unnamed"}
-        </span>
-        <span className="text-[0.6875rem] text-text-tertiary truncate" title={senderName}>
+        </span></Tooltip>
+        <Tooltip content={senderName}><span className="text-[0.6875rem] text-text-tertiary truncate" >
           {senderName}
-        </span>
+        </span></Tooltip>
         <div className="flex items-center gap-2 text-[0.6875rem] text-text-tertiary">
           {attachment.size != null && <span>{formatFileSize(attachment.size)}</span>}
           {attachment.date && <span>{formatRelativeDate(attachment.date)}</span>}
@@ -54,28 +55,28 @@ export function AttachmentGridItem({ attachment, onPreview, onDownload, onJumpTo
       {/* Hover actions */}
       <div className="absolute top-1.5 right-1.5 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
         {previewable && (
-          <button
+          <Tooltip content="Preview"><button
             onClick={onPreview}
             className="p-1.5 rounded-md bg-bg-primary/90 border border-border-primary text-text-secondary hover:text-text-primary transition-colors"
-            title="Preview"
+
           >
             <Eye size={13} />
-          </button>
+          </button></Tooltip>
         )}
-        <button
+        <Tooltip content="Download"><button
           onClick={onDownload}
           className="p-1.5 rounded-md bg-bg-primary/90 border border-border-primary text-text-secondary hover:text-text-primary transition-colors"
-          title="Download"
+
         >
           <Download size={13} />
-        </button>
-        <button
+        </button></Tooltip>
+        <Tooltip content="Jump to email"><button
           onClick={onJumpToEmail}
           className="p-1.5 rounded-md bg-bg-primary/90 border border-border-primary text-text-secondary hover:text-text-primary transition-colors"
-          title="Jump to email"
+
         >
           <ExternalLink size={13} />
-        </button>
+        </button></Tooltip>
       </div>
     </div>
   );

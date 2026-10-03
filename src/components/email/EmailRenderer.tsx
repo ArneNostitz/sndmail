@@ -417,6 +417,28 @@ export function EmailRenderer({
       text-decoration-style: dotted;
       text-underline-offset: 2px;
     }
+    /* Email action links live in a sandboxed document, so render their hover
+       hint locally with the same instant, high-contrast treatment as Tooltip. */
+    a[data-sndmail-tooltip] { position: relative; }
+    a[data-sndmail-tooltip]:hover::after,
+    a[data-sndmail-tooltip]:focus-visible::after {
+      content: attr(data-sndmail-tooltip);
+      position: absolute;
+      z-index: 2147483647;
+      top: calc(100% + 8px);
+      left: 50%;
+      transform: translateX(-50%);
+      max-width: min(20rem, calc(100vw - 16px));
+      padding: 6px 10px;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      background: #fff;
+      color: #111827;
+      box-shadow: 0 8px 20px rgb(0 0 0 / 18%);
+      font: 12px/1.4 system-ui, sans-serif;
+      white-space: normal;
+      pointer-events: none;
+    }
     mark[data-sndmail-search-match="true"] {
       background: #fde68a;
       color: inherit;

@@ -4,6 +4,7 @@ import { useAccountStore } from "@/stores/accountStore";
 import { useLabelStore, type Label } from "@/stores/labelStore";
 import { LabelForm } from "@/components/labels/LabelForm";
 
+import { Tooltip } from "@/components/ui/Tooltip";
 export function LabelEditor() {
   const activeAccountId = useAccountStore((s) => s.activeAccountId);
   const { labels, loadLabels, deleteLabel, reorderLabels } = useLabelStore();
@@ -96,36 +97,36 @@ export function LabelEditor() {
               </span>
             </div>
             <div className="flex items-center gap-0.5">
-              <button
+              <Tooltip content="Move up"><button
                 onClick={() => handleMoveUp(index)}
                 disabled={index === 0}
                 className="p-1 text-text-tertiary hover:text-text-primary disabled:opacity-30 disabled:cursor-not-allowed"
-                title="Move up"
+
               >
                 <ChevronUp size={13} />
-              </button>
-              <button
+              </button></Tooltip>
+              <Tooltip content="Move down"><button
                 onClick={() => handleMoveDown(index)}
                 disabled={index === labels.length - 1}
                 className="p-1 text-text-tertiary hover:text-text-primary disabled:opacity-30 disabled:cursor-not-allowed"
-                title="Move down"
+
               >
                 <ChevronDown size={13} />
-              </button>
-              <button
+              </button></Tooltip>
+              <Tooltip content="Edit"><button
                 onClick={() => handleEdit(label)}
                 className="p-1 text-text-tertiary hover:text-text-primary"
-                title="Edit"
+
               >
                 <Pencil size={13} />
-              </button>
-              <button
+              </button></Tooltip>
+              <Tooltip content="Delete"><button
                 onClick={() => handleDelete(label)}
                 className="p-1 text-text-tertiary hover:text-danger"
-                title="Delete"
+
               >
                 <Trash2 size={13} />
-              </button>
+              </button></Tooltip>
             </div>
           </div>
           {/* Inline edit form under the label being edited */}

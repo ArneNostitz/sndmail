@@ -5,6 +5,7 @@ import { setSetting, setSecureSetting } from "@/services/db/settings";
 import { validateClientId, validateClientSecret } from "@/services/gmail/clientCredentials";
 import { Modal } from "@/components/ui/Modal";
 
+import { Tooltip } from "@/components/ui/Tooltip";
 const CREDENTIALS_URL = "https://console.cloud.google.com/apis/credentials";
 const REDIRECT_URI = "http://127.0.0.1:17248";
 
@@ -79,13 +80,13 @@ export function SetupClientId({ onComplete, onCancel, zIndex }: SetupClientIdPro
           <li>Create OAuth 2.0 credentials (Web application type)</li>
           <li className="flex flex-wrap items-center gap-1">
             <span>Add this authorized redirect URI:</span>
-            <button
+            <Tooltip content="Copy to clipboard"><button
               onClick={handleCopyRedirect}
-              title="Copy to clipboard"
+
               className="bg-bg-tertiary px-1.5 py-0.5 rounded text-xs font-mono text-text-primary hover:text-accent transition-colors"
             >
               {copied ? "Copied!" : REDIRECT_URI}
-            </button>
+            </button></Tooltip>
           </li>
           <li>Copy the Client ID and Client Secret below</li>
         </ol>

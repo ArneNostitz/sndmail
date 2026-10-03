@@ -17,6 +17,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { isImage, isPdf, isDocument, isSpreadsheet, isArchive } from "@/utils/fileTypeHelpers";
 import { navigateToLabel } from "@/router/navigate";
 
+import { Tooltip } from "@/components/ui/Tooltip";
 type TypeFilter = "all" | "images" | "pdfs" | "documents" | "spreadsheets" | "archives" | "other";
 type DateFilter = "all" | "today" | "week" | "month" | "year";
 type SizeFilter = "all" | "small" | "medium" | "large";
@@ -269,20 +270,20 @@ export function AttachmentLibrary() {
 
           {/* View toggle */}
           <div className="flex border border-border-primary rounded-md overflow-hidden">
-            <button
+            <Tooltip content="Grid view"><button
               onClick={() => setViewMode("grid")}
               className={`p-1.5 ${viewMode === "grid" ? "bg-accent/10 text-accent" : "text-text-tertiary hover:text-text-primary"}`}
-              title="Grid view"
+
             >
               <LayoutGrid size={14} />
-            </button>
-            <button
+            </button></Tooltip>
+            <Tooltip content="List view"><button
               onClick={() => setViewMode("list")}
               className={`p-1.5 ${viewMode === "list" ? "bg-accent/10 text-accent" : "text-text-tertiary hover:text-text-primary"}`}
-              title="List view"
+
             >
               <List size={14} />
-            </button>
+            </button></Tooltip>
           </div>
         </div>
       </div>

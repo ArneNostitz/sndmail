@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import type { DbCalendarEvent } from "@/services/db/calendarEvents";
 
+import { Tooltip } from "@/components/ui/Tooltip";
 interface WeekViewProps {
   currentDate: Date;
   events: DbCalendarEvent[];
@@ -115,14 +116,14 @@ export function WeekView({ currentDate, events, onEventClick }: WeekViewProps) {
                 return (
                   <div key={di} className="border-r border-b border-border-secondary h-12 relative px-0.5">
                     {hourEvents.map((e) => (
-                      <button
+                      <Tooltip content={e.summary ?? "Event"}><button
                         key={e.id}
                         onClick={() => onEventClick(e)}
                         className="absolute inset-x-0.5 text-[0.625rem] px-1 py-0.5 rounded bg-accent/15 text-accent truncate hover:bg-accent/25 transition-colors"
-                        title={e.summary ?? "Event"}
+
                       >
                         {e.summary ?? "Event"}
-                      </button>
+                      </button></Tooltip>
                     ))}
                   </div>
                 );

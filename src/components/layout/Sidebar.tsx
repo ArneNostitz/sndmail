@@ -43,6 +43,7 @@ import {
 } from "lucide-react";
 import { useTaskStore } from "@/stores/taskStore";
 
+import { Tooltip } from "@/components/ui/Tooltip";
 interface SidebarProps {
   collapsed: boolean;
 }
@@ -92,11 +93,11 @@ function DroppableNavItem({
   const { setNodeRef, isOver } = useDroppable({ id });
 
   return (
-    <button
+    <Tooltip content={title}><button
       ref={setNodeRef}
       onClick={onClick}
       onContextMenu={onContextMenu}
-      title={title}
+
       className={`flex items-center w-full py-2.5 text-sm transition-colors press-scale ${
         collapsed ? "justify-center px-0" : "gap-3 px-3 text-left"
       } ${
@@ -108,7 +109,7 @@ function DroppableNavItem({
       }`}
     >
       {children(isOver)}
-    </button>
+    </button></Tooltip>
   );
 }
 
@@ -131,11 +132,11 @@ function DroppableLabelItem({
   const initial = (label.name[0] ?? "?").toUpperCase();
 
   return (
-    <button
+    <Tooltip content={collapsed ? label.name : undefined}><button
       ref={setNodeRef}
       onClick={onClick}
       onContextMenu={onContextMenu}
-      title={collapsed ? label.name : undefined}
+
       className={`group flex items-center w-full py-2.5 text-sm transition-colors ${
         collapsed ? "justify-center px-0" : "gap-3 px-3 text-left"
       } ${
@@ -171,19 +172,19 @@ function DroppableLabelItem({
             <Tag size={14} className="shrink-0" />
           )}
           <span className="flex-1 truncate">{label.name}</span>
-          <span
+          <Tooltip content="Edit label"><span
             role="button"
             tabIndex={0}
             onClick={(e) => { e.stopPropagation(); onEditClick(); }}
             onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); onEditClick(); } }}
             className="opacity-0 group-hover:opacity-100 p-0.5 text-sidebar-text/40 hover:text-sidebar-text transition-opacity"
-            title="Edit label"
+
           >
             <Pencil size={12} />
-          </span>
+          </span></Tooltip>
         </>
       )}
-    </button>
+    </button></Tooltip>
   );
 }
 
@@ -427,7 +428,7 @@ export function Sidebar({ collapsed }: SidebarProps) {
                       </span>
                     )}
                     {isInbox && !collapsed && (
-                      <span
+                      <Tooltip content={inboxViewMode === "split" ? "Switch to unified inbox" : "Switch to split inbox"}><span
                         role="button"
                         tabIndex={0}
                         onClick={(e) => {
@@ -441,7 +442,7 @@ export function Sidebar({ collapsed }: SidebarProps) {
                             setInboxViewMode(inboxViewMode === "split" ? "unified" : "split");
                           }
                         }}
-                        title={inboxViewMode === "split" ? "Switch to unified inbox" : "Switch to split inbox"}
+
                         className={`p-1 rounded transition-colors ${
                           inboxViewMode === "split"
                             ? "text-sidebar-text hover:bg-sidebar-hover"
@@ -449,7 +450,7 @@ export function Sidebar({ collapsed }: SidebarProps) {
                         }`}
                       >
                         <Columns2 size={14} />
-                      </span>
+                      </span></Tooltip>
                     )}
                   </>
                 )}
@@ -491,13 +492,13 @@ export function Sidebar({ collapsed }: SidebarProps) {
                 <span className="text-xs font-medium text-sidebar-text/60 uppercase tracking-wider">
                   Smart Folders
                 </span>
-                <button
+                <Tooltip content="Add smart folder"><button
                   onClick={handleAddSmartFolder}
                   className="p-0.5 text-sidebar-text/40 hover:text-sidebar-text transition-colors"
-                  title="Add smart folder"
+
                 >
                   <Plus size={14} />
-                </button>
+                </button></Tooltip>
               </div>
             )}
             {smartFolders.map((folder) => {
@@ -505,11 +506,11 @@ export function Sidebar({ collapsed }: SidebarProps) {
               const isActive = activeLabel === `smart-folder:${folder.id}`;
               const count = smartFolderCounts[folder.id] ?? 0;
               return (
-                <button
+                <Tooltip content={collapsed ? folder.name : undefined}><button
                   key={folder.id}
                   onClick={() => navigateToLabel(`smart-folder:${folder.id}`)}
                   onContextMenu={(e) => handleSmartFolderContextMenu(e, folder)}
-                  title={collapsed ? folder.name : undefined}
+
                   className={`flex items-center w-full py-2.5 text-sm transition-colors press-scale ${
                     collapsed ? "justify-center px-0" : "gap-3 px-3 text-left"
                   } ${
@@ -534,7 +535,7 @@ export function Sidebar({ collapsed }: SidebarProps) {
                       )}
                     </>
                   )}
-                </button>
+                </button></Tooltip>
               );
             })}
           </>
@@ -548,13 +549,13 @@ export function Sidebar({ collapsed }: SidebarProps) {
                 <span className="text-xs font-medium text-sidebar-text/60 uppercase tracking-wider">
                   Labels
                 </span>
-                <button
+                <Tooltip content="Add label"><button
                   onClick={handleAddLabel}
                   className="p-0.5 text-sidebar-text/40 hover:text-sidebar-text transition-colors"
-                  title="Add label"
+
                 >
                   <Plus size={14} />
-                </button>
+                </button></Tooltip>
               </div>
             )}
             {/* Always-visible labels */}
@@ -637,7 +638,7 @@ export function Sidebar({ collapsed }: SidebarProps) {
 
       {/* Bottom bar: Settings + collapse toggle */}
       <div className={`py-2 flex ${collapsed ? "flex-col items-center gap-1 px-2" : "items-center gap-1 px-3"}`}>
-        <button
+        <Tooltip content="Settings (Ctrl+,)"><button
           onClick={() => navigateToLabel("settings")}
           className={`flex items-center text-sm rounded-md transition-colors ${
             collapsed ? "p-2 justify-center" : "gap-3 flex-1 px-3 py-2 text-left"
@@ -646,12 +647,12 @@ export function Sidebar({ collapsed }: SidebarProps) {
               ? "bg-sidebar-hover text-sidebar-text font-medium"
               : "text-sidebar-text hover:bg-sidebar-hover"
           }`}
-          title="Settings (Ctrl+,)"
+
         >
           <Settings size={18} className="shrink-0" />
           {!collapsed && <span>Settings</span>}
-        </button>
-        <button
+        </button></Tooltip>
+        <Tooltip content="Help"><button
           onClick={() => navigateToLabel("help")}
           className={`flex items-center text-sm rounded-md transition-colors ${
             collapsed ? "p-2 justify-center" : "p-2"
@@ -660,18 +661,18 @@ export function Sidebar({ collapsed }: SidebarProps) {
               ? "bg-sidebar-hover text-sidebar-text font-medium"
               : "text-sidebar-text hover:bg-sidebar-hover"
           }`}
-          title="Help"
+
         >
           <HelpCircle size={18} className="shrink-0" />
-        </button>
-        <button
+        </button></Tooltip>
+        <Tooltip content={collapsed ? "More destinations" : "Collapse sidebar"}><button
           onClick={toggleSidebar}
           className="p-2 text-sidebar-text/60 hover:text-sidebar-text hover:bg-sidebar-hover rounded-md transition-colors"
-          title={collapsed ? "More destinations" : "Collapse sidebar"}
+
           aria-label={collapsed ? "More destinations" : "Collapse sidebar"}
         >
           {collapsed ? <MoreHorizontal size={16} /> : <PanelLeftClose size={16} />}
-        </button>
+        </button></Tooltip>
       </div>
 
       <InputDialog

@@ -24,6 +24,7 @@ import {
 import type { DbMessage } from "@/services/db/messages";
 import type { Thread } from "@/stores/threadStore";
 
+import { Tooltip } from "@/components/ui/Tooltip";
 type ReplyMode = "reply" | "replyAll" | "forward";
 
 interface InlineReplyProps {
@@ -372,24 +373,24 @@ export function InlineReply({ thread, messages, accountId, noReply, onSent }: In
   if (!mode) {
     return (
       <div ref={containerRef} className="mx-4 my-3 flex items-center gap-2">
-        <button
+        <Tooltip content={noReply ? "This sender does not accept replies" : undefined}><button
           onClick={() => activateMode("reply")}
           disabled={noReply}
-          title={noReply ? "This sender does not accept replies" : undefined}
+
           className="flex items-center gap-1.5 px-4 py-2 text-xs text-text-secondary border border-border-primary rounded-lg hover:bg-bg-hover hover:text-text-primary transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-text-secondary"
         >
           <Reply size={14} />
           Reply
-        </button>
-        <button
+        </button></Tooltip>
+        <Tooltip content={noReply ? "This sender does not accept replies" : undefined}><button
           onClick={() => activateMode("replyAll")}
           disabled={noReply}
-          title={noReply ? "This sender does not accept replies" : undefined}
+
           className="flex items-center gap-1.5 px-4 py-2 text-xs text-text-secondary border border-border-primary rounded-lg hover:bg-bg-hover hover:text-text-primary transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-text-secondary"
         >
           <ReplyAll size={14} />
           Reply All
-        </button>
+        </button></Tooltip>
         <button
           onClick={() => activateMode("forward")}
           className="flex items-center gap-1.5 px-4 py-2 text-xs text-text-secondary border border-border-primary rounded-lg hover:bg-bg-hover hover:text-text-primary transition-colors"
@@ -471,33 +472,33 @@ export function InlineReply({ thread, messages, accountId, noReply, onSent }: In
       {/* Footer */}
       <div className="flex items-center justify-between px-3 py-2 border-t border-border-secondary bg-bg-secondary">
         <div className="flex items-center gap-1">
-          <button
+          <Tooltip content="Expand to full composer"><button
             onClick={handleExpandToComposer}
-            title="Expand to full composer"
+
             className="flex items-center gap-1.5 px-2 py-1 text-xs text-text-tertiary hover:text-text-primary transition-colors"
           >
             <Maximize2 size={12} />
             Expand
-          </button>
+          </button></Tooltip>
           {hasAutoDraft && mode !== "forward" && (
             <>
-              <button
+              <Tooltip content="Regenerate AI draft"><button
                 onClick={handleRegenerateDraft}
                 disabled={autoDraftLoading}
-                title="Regenerate AI draft"
+
                 className="flex items-center gap-1 px-2 py-1 text-xs text-text-tertiary hover:text-accent transition-colors disabled:opacity-50"
               >
                 <RotateCcw size={11} />
                 Regenerate
-              </button>
-              <button
+              </button></Tooltip>
+              <Tooltip content="Clear AI draft"><button
                 onClick={handleClearDraft}
-                title="Clear AI draft"
+
                 className="flex items-center gap-1 px-2 py-1 text-xs text-text-tertiary hover:text-danger transition-colors"
               >
                 <X size={11} />
                 Clear
-              </button>
+              </button></Tooltip>
             </>
           )}
         </div>

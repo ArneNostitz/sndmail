@@ -5,6 +5,7 @@ import { summarizeThread } from "@/services/ai/aiService";
 import { deleteAiCache } from "@/services/db/aiCache";
 import type { DbMessage } from "@/services/db/messages";
 
+import { Tooltip } from "@/components/ui/Tooltip";
 interface ThreadSummaryProps {
   threadId: string;
   accountId: string;
@@ -73,16 +74,16 @@ export function ThreadSummary({ threadId, accountId, messages }: ThreadSummaryPr
         <Sparkles size={14} className="text-accent shrink-0" />
         <span className="text-xs font-medium text-accent flex-1">AI Summary</span>
         {summary && (
-          <span
+          <Tooltip content="Refresh summary"><span
             role="button"
             tabIndex={0}
             onClick={(e) => { e.stopPropagation(); handleRefresh(); }}
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); e.preventDefault(); handleRefresh(); } }}
             className="p-0.5 text-text-tertiary hover:text-accent transition-colors cursor-pointer"
-            title="Refresh summary"
+
           >
             <RefreshCw size={12} className={loading ? "animate-spin" : ""} />
-          </span>
+          </span></Tooltip>
         )}
         {collapsed ? <ChevronDown size={14} className="text-text-tertiary" /> : <ChevronUp size={14} className="text-text-tertiary" />}
       </button>

@@ -33,6 +33,7 @@ import { readFileAsBase64 } from "@/utils/fileUtils";
 import { interpolateVariables } from "@/utils/templateVariables";
 import { sanitizeHtml } from "@/utils/sanitize";
 
+import { Tooltip } from "@/components/ui/Tooltip";
 export function Composer() {
   // Individual selectors — only re-render when each specific value changes
   const isOpen = useComposerStore((s) => s.isOpen);
@@ -539,20 +540,20 @@ export function Composer() {
             {modeLabel}
           </span>
           <div className="flex items-center gap-1">
-            <button
+            <Tooltip content={isFullpage ? "Collapse" : "Expand"}><button
               onClick={() => setViewMode(isFullpage ? "modal" : "fullpage")}
               className="text-text-tertiary hover:text-text-primary p-1 rounded transition-colors"
-              title={isFullpage ? "Collapse" : "Expand"}
+
             >
               {isFullpage ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
-            </button>
-            <button
+            </button></Tooltip>
+            <Tooltip content="Open in new window"><button
               onClick={handlePopOutComposer}
               className="text-text-tertiary hover:text-text-primary p-1 rounded transition-colors"
-              title="Open in new window"
+
             >
               <ExternalLink size={14} />
-            </button>
+            </button></Tooltip>
             <button
               onClick={closeComposer}
               className="text-text-tertiary hover:text-text-primary text-lg leading-none p-1"
@@ -650,21 +651,19 @@ export function Composer() {
             )}
             <SignatureSelector />
             <TemplatePicker editor={editor} />
-            <button
+            <Tooltip content={requestReadReceipt
+                  ? "Read receipt will be requested"
+                  : "Request read receipt"}><button
               onClick={() => setRequestReadReceipt(!requestReadReceipt)}
               className={`p-1 rounded transition-colors ${
                 requestReadReceipt
                   ? "text-accent hover:text-accent-hover"
                   : "text-text-tertiary hover:text-text-primary"
               }`}
-              title={
-                requestReadReceipt
-                  ? "Read receipt will be requested"
-                  : "Request read receipt"
-              }
+
             >
               <CheckCheck size={14} />
-            </button>
+            </button></Tooltip>
           </div>
           <div className="flex items-center gap-2">
             <Button
@@ -681,14 +680,14 @@ export function Composer() {
               >
                 Send
               </button>
-              <button
+              <Tooltip content="Schedule send"><button
                 onClick={() => setShowSchedule(true)}
                 disabled={to.length === 0}
                 className="px-2 py-1.5 text-white bg-accent hover:bg-accent-hover border-l border-white/20 rounded-r-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Schedule send"
+
               >
                 <Clock size={12} />
-              </button>
+              </button></Tooltip>
             </div>
           </div>
         </div>

@@ -10,6 +10,7 @@ import { MessageItem } from "./MessageItem";
 import { ChatThread } from "./ChatThread";
 import type { ThreadViewMode } from "@/stores/uiStore";
 
+import { Tooltip } from "@/components/ui/Tooltip";
 /** Threads fetched per page — a click loads the next batch. */
 const PAGE_SIZE = 10;
 
@@ -181,7 +182,7 @@ export function PastConversations({
 
                 {/* Open it properly — a folded history is for scanning, but
                     replying needs the real thread with its action bar */}
-                <button
+                <Tooltip content="Open this conversation to reply"><button
                   onClick={async () => {
                     try {
                       const labelIds = await getThreadLabelIds(accountId, thread.id);
@@ -208,16 +209,16 @@ export function PastConversations({
                       console.error("Failed to open conversation:", err);
                     }
                   }}
-                  title="Open this conversation to reply"
+
                   className="absolute right-9 top-1.5 p-1 rounded text-text-tertiary hover:text-accent hover:bg-bg-hover opacity-0 group-hover/conv:opacity-100 transition-opacity"
                 >
                   <ExternalLink size={12} />
-                </button>
+                </button></Tooltip>
 
                 {/* Merge from where the split is actually visible. Unlike the
                     list, this anchors on the thread being read rather than the
                     oldest — the open conversation is the one with context. */}
-                <button
+                <Tooltip content="Merge this into the conversation above"><button
                   onClick={async () => {
                     try {
                       await mergeThreads(accountId, currentThreadId, [thread.id]);
@@ -226,11 +227,11 @@ export function PastConversations({
                       console.error("Failed to merge conversation:", err);
                     }
                   }}
-                  title="Merge this into the conversation above"
+
                   className="absolute right-2 top-1.5 p-1 rounded text-text-tertiary hover:text-accent hover:bg-bg-hover opacity-0 group-hover/conv:opacity-100 transition-opacity"
                 >
                   <Merge size={12} />
-                </button>
+                </button></Tooltip>
 
                 {!hidden && (
                   viewMode === "chat" ? (

@@ -200,7 +200,7 @@ function createActionAnchor(doc: Document, action: EmailDataAction, text: string
   anchor.dataset.sndmailValue = action.value;
   if (action.startTime) anchor.dataset.sndmailStart = action.startTime;
   if (action.endTime) anchor.dataset.sndmailEnd = action.endTime;
-  anchor.title = action.kind === "date" ? "Create calendar event" : `Actions for ${action.label}`;
+  anchor.dataset.sndmailTooltip = action.kind === "date" ? "Create calendar event" : `Actions for ${action.label}`;
   return anchor;
 }
 

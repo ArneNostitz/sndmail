@@ -25,6 +25,7 @@ import { quickLookAttachments } from "@/services/attachments/attachmentActions";
 import type { DbAttachment } from "@/services/db/attachments";
 import { useTimeFormat } from "@/hooks/useTimeFormat";
 
+import { Tooltip } from "@/components/ui/Tooltip";
 export function DetailsPlaceholder({ onClose }: { onClose: () => void }) {
   return (
     <aside className="flex h-full w-full flex-col bg-bg-primary">
@@ -242,24 +243,24 @@ export function ContactSidebar({ email, name, accountId, threadId, ownAddresses,
         {/* Pin state + close */}
         <div className="flex items-center justify-between gap-2 -mt-1 -mr-1 mb-1 min-h-[1.5rem]">
           {isPinned ? (
-            <button
+            <Tooltip content="Stop following this contact and go back to the open message's sender"><button
               onClick={() => clearPinnedContact()}
-              title="Stop following this contact and go back to the open message's sender"
+
               className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[0.625rem] text-accent bg-accent/10 hover:bg-accent/20 transition-colors"
             >
               <Pin size={10} />
               Pinned
-            </button>
+            </button></Tooltip>
           ) : (
             <span />
           )}
-          <button
+          <Tooltip content="Close contact sidebar"><button
             onClick={onClose}
-            title="Close contact sidebar"
+
             className="p-1 text-text-tertiary hover:text-text-primary hover:bg-bg-hover rounded transition-colors"
           >
             <X size={14} />
-          </button>
+          </button></Tooltip>
         </div>
 
         {/* Avatar */}
@@ -290,13 +291,13 @@ export function ContactSidebar({ email, name, accountId, threadId, ownAddresses,
                 autoFocus
                 className="w-36 text-sm text-center bg-bg-primary border border-border-primary rounded px-1.5 py-0.5 text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
               />
-              <button
+              <Tooltip content="Save name"><button
                 onClick={handleSaveEditName}
-                title="Save name"
+
                 className="p-0.5 text-success hover:text-success/80 transition-colors"
               >
                 <Check size={14} />
-              </button>
+              </button></Tooltip>
             </div>
           ) : (
             <div className="flex items-center gap-1 text-sm font-medium text-text-primary">
@@ -312,23 +313,23 @@ export function ContactSidebar({ email, name, accountId, threadId, ownAddresses,
 
         {/* Quick Actions Row */}
         <div className="flex items-center justify-center gap-3 mb-4">
-          <button
+          <Tooltip content="Send email"><button
             onClick={handleCompose}
-            title="Send email"
+
             className="p-2 text-text-secondary hover:text-accent hover:bg-bg-hover rounded-lg transition-colors"
           >
             <Send size={16} />
-          </button>
-          <button
+          </button></Tooltip>
+          <Tooltip content={copyFeedback ? "Copied!" : "Copy email"}><button
             onClick={handleCopyEmail}
-            title={copyFeedback ? "Copied!" : "Copy email"}
+
             className="p-2 text-text-secondary hover:text-accent hover:bg-bg-hover rounded-lg transition-colors"
           >
             {copyFeedback ? <Check size={16} className="text-success" /> : <Copy size={16} />}
-          </button>
-          <button
+          </button></Tooltip>
+          <Tooltip content={isVip ? "Remove VIP" : "Mark as VIP"}><button
             onClick={handleToggleVip}
-            title={isVip ? "Remove VIP" : "Mark as VIP"}
+
             className={`p-2 rounded-lg transition-colors ${
               isVip
                 ? "text-warning hover:text-warning/80 hover:bg-bg-hover"
@@ -336,7 +337,7 @@ export function ContactSidebar({ email, name, accountId, threadId, ownAddresses,
             }`}
           >
             <Star size={16} fill={isVip ? "currentColor" : "none"} />
-          </button>
+          </button></Tooltip>
         </div>
 
         {/* Add / Edit Contact */}
@@ -430,7 +431,7 @@ export function ContactSidebar({ email, name, accountId, threadId, ownAddresses,
                     key={att.id}
                     className="flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-bg-hover transition-colors group"
                   >
-                    <button
+                    <Tooltip content={att.gmail_attachment_id ? "Preview" : "File content not available"}><button
                       onClick={async () => {
                         const idx = openableFiles.findIndex((f) => f.id === att.id);
                         if (idx < 0) return;
@@ -451,7 +452,7 @@ export function ContactSidebar({ email, name, accountId, threadId, ownAddresses,
                         setFilePreviewIndex(idx);
                       }}
                       disabled={!att.gmail_attachment_id}
-                      title={att.gmail_attachment_id ? "Preview" : "File content not available"}
+
                       className="flex items-center gap-2 min-w-0 flex-1 text-left disabled:cursor-default"
                     >
                       <span className="shrink-0">{getFileIcon(att.mime_type)}</span>
@@ -463,16 +464,16 @@ export function ContactSidebar({ email, name, accountId, threadId, ownAddresses,
                           {formatRelativeDate(att.date)}
                         </div>
                       </div>
-                    </button>
+                    </button></Tooltip>
                     {/* A file is only ever half the story — the mail it came
                         in usually says why it was sent */}
-                    <button
+                    <Tooltip content="Open the email this file came in"><button
                       onClick={() => handleThreadClick(att.thread_id)}
-                      title="Open the email this file came in"
+
                       className="p-1 text-text-tertiary hover:text-accent opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-colors"
                     >
                       <Mail size={12} />
-                    </button>
+                    </button></Tooltip>
                     <AttachmentSaveButton
                       accountId={att.account_id}
                       attachment={dbAtt}

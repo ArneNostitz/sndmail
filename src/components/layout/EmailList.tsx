@@ -34,6 +34,7 @@ import {
 } from "../ui/illustrations";
 import { getListSearchTerms } from "@/utils/searchHighlight";
 
+import { Tooltip } from "@/components/ui/Tooltip";
 const PAGE_SIZE = 50;
 
 // Map sidebar labels to Gmail label IDs. An array is one list drawn from
@@ -778,16 +779,14 @@ export function EmailList({ width, listRef }: { width?: number; listRef?: React.
           </span>
         </div>
         <div className="flex items-center gap-1.5">
-          <button
-            onClick={handleShowAllFromSender}
-            disabled={!selectedThread?.fromAddress}
-            title={
-              selectedThread?.fromAddress && searchQuery === `from:${selectedThread.fromAddress}`
+          <Tooltip content={selectedThread?.fromAddress && searchQuery === `from:${selectedThread.fromAddress}`
                 ? "Clear this search and go back to the mailbox"
                 : selectedThread?.fromAddress
                   ? `Show all messages from ${selectedThread.fromAddress}`
-                  : "Select a thread to search by its sender"
-            }
+                  : "Select a thread to search by its sender"}><button
+            onClick={handleShowAllFromSender}
+            disabled={!selectedThread?.fromAddress}
+
             className={`rounded-lg p-1.5 transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
               selectedThread?.fromAddress && searchQuery === `from:${selectedThread.fromAddress}`
                 ? "bg-bg-tertiary text-text-primary hover:bg-bg-hover"
@@ -795,12 +794,8 @@ export function EmailList({ width, listRef }: { width?: number; listRef?: React.
             }`}
           >
             <UserSearch size={15} />
-          </button>
-          <button
-            onClick={handleQuickUnsubscribe}
-            disabled={!selectedThread}
-            title={
-              unsubStatus === "done"
+          </button></Tooltip>
+          <Tooltip content={unsubStatus === "done"
                 ? "Unsubscribed"
                 : unsubStatus === "none"
                   ? "No unsubscribe link in this thread"
@@ -808,8 +803,10 @@ export function EmailList({ width, listRef }: { width?: number; listRef?: React.
                     ? "Unsubscribe failed — click to retry"
                     : selectedThread
                       ? "Unsubscribe from this sender"
-                      : "Select a thread to unsubscribe"
-            }
+                      : "Select a thread to unsubscribe"}><button
+            onClick={handleQuickUnsubscribe}
+            disabled={!selectedThread}
+
             className={`rounded-lg p-1.5 transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
               unsubStatus === "done"
                 ? "text-success"
@@ -825,7 +822,7 @@ export function EmailList({ width, listRef }: { width?: number; listRef?: React.
             ) : (
               <MailMinus size={15} className={unsubStatus === "loading" ? "animate-pulse" : ""} />
             )}
-          </button>
+          </button></Tooltip>
           {activeLabel === "inbox" && searchThreadIds === null ? (
           <div className="flex items-center rounded-full bg-bg-tertiary/80 p-1 shadow-[inset_0_1px_1px_rgba(80,66,50,0.06)]">
             <button
@@ -887,43 +884,43 @@ export function EmailList({ width, listRef }: { width?: number; listRef?: React.
             )}
           </div>
           <div className="flex items-center gap-1">
-            <button
+            <Tooltip content="Archive selected"><button
               onClick={handleBulkArchive}
-              title="Archive selected"
+
               className="p-1.5 text-text-secondary hover:text-text-primary hover:bg-bg-hover rounded transition-colors"
             >
               <Archive size={14} />
-            </button>
-            <button
+            </button></Tooltip>
+            <Tooltip content="Delete selected"><button
               onClick={handleBulkDelete}
-              title="Delete selected"
+
               className="p-1.5 text-text-secondary hover:text-error hover:bg-bg-hover rounded transition-colors"
             >
               <Trash2 size={14} />
-            </button>
+            </button></Tooltip>
             {mergeableAccountId && (
-              <button
+              <Tooltip content="Merge into one conversation"><button
                 onClick={handleMerge}
-                title="Merge into one conversation"
+
                 className="p-1.5 text-text-secondary hover:text-text-primary hover:bg-bg-hover rounded transition-colors"
               >
                 <Merge size={14} />
-              </button>
+              </button></Tooltip>
             )}
-            <button
+            <Tooltip content={activeLabel === "spam" ? "Not spam" : "Report spam"}><button
               onClick={handleBulkSpam}
-              title={activeLabel === "spam" ? "Not spam" : "Report spam"}
+
               className="p-1.5 text-text-secondary hover:text-text-primary hover:bg-bg-hover rounded transition-colors"
             >
               <Ban size={14} />
-            </button>
-            <button
+            </button></Tooltip>
+            <Tooltip content="Clear selection"><button
               onClick={clearMultiSelect}
-              title="Clear selection"
+
               className="p-1.5 text-text-secondary hover:text-text-primary hover:bg-bg-hover rounded transition-colors"
             >
               <X size={14} />
-            </button>
+            </button></Tooltip>
           </div>
         </div>
       </CSSTransition>

@@ -10,6 +10,7 @@ import {
 } from "@/services/db/smartFolders";
 import { useSmartFolderStore } from "@/stores/smartFolderStore";
 
+import { Tooltip } from "@/components/ui/Tooltip";
 export function SmartFolderEditor() {
   const activeAccountId = useAccountStore((s) => s.activeAccountId);
   const reloadStore = useSmartFolderStore((s) => s.loadFolders);
@@ -104,21 +105,21 @@ export function SmartFolderEditor() {
             </div>
           </div>
           <div className="flex items-center gap-1">
-            <button
+            <Tooltip content="Edit"><button
               onClick={() => handleEdit(folder)}
               className="p-1 text-text-tertiary hover:text-text-primary"
-              title="Edit"
+
             >
               <Pencil size={13} />
-            </button>
+            </button></Tooltip>
             {folder.is_default !== 1 && (
-              <button
+              <Tooltip content="Delete"><button
                 onClick={() => handleDelete(folder.id)}
                 className="p-1 text-text-tertiary hover:text-danger"
-                title="Delete"
+
               >
                 <Trash2 size={13} />
-              </button>
+              </button></Tooltip>
             )}
           </div>
         </div>

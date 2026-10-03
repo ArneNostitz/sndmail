@@ -16,6 +16,7 @@ import { TaskItem } from "./TaskItem";
 import { TaskQuickAdd } from "./TaskQuickAdd";
 import { navigateToLabel } from "@/router/navigate";
 
+import { Tooltip } from "@/components/ui/Tooltip";
 interface TaskSidebarProps {
   accountId: string;
   threadId: string;
@@ -113,13 +114,13 @@ export function TaskSidebar({ accountId, threadId }: TaskSidebarProps) {
           </p>
         </div>
         <div className="flex items-center gap-1">
-          <button
+          <Tooltip content="Open tasks page"><button
             onClick={() => navigateToLabel("tasks")}
-            title="Open tasks page"
+
             className="rounded-lg p-2 text-text-tertiary hover:bg-bg-hover hover:text-text-primary transition-colors"
           >
             <ExternalLink size={13} />
-          </button>
+          </button></Tooltip>
           <button
             onClick={toggleTaskSidebar}
             className="rounded-lg p-2 text-text-tertiary hover:bg-bg-hover hover:text-text-primary transition-colors"

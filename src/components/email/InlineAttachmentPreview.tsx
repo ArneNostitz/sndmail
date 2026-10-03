@@ -4,6 +4,7 @@ import { getEmailProvider } from "@/services/email/providerFactory";
 import { FileText } from "lucide-react";
 import { formatFileSize, isImage, isPdf } from "@/utils/fileTypeHelpers";
 
+import { Tooltip } from "@/components/ui/Tooltip";
 /** Dedup attachments by filename+size (content-based) */
 function dedup(attachments: DbAttachment[]): DbAttachment[] {
   const seen = new Set<string>();
@@ -160,10 +161,10 @@ function ImageThumbnail({
 
   return (
     <div ref={observerRef}>
-      <button
+      <Tooltip content={attachment.filename ?? "Image"}><button
         onClick={onClick}
         className="block rounded-md overflow-hidden border border-border-secondary hover:border-accent transition-colors"
-        title={attachment.filename ?? "Image"}
+
       >
         {loading && (
           <div className="w-[200px] h-[120px] bg-bg-tertiary animate-pulse flex items-center justify-center">
@@ -182,7 +183,7 @@ function ImageThumbnail({
             <span className="text-xs text-text-tertiary">Image</span>
           </div>
         )}
-      </button>
+      </button></Tooltip>
     </div>
   );
 }

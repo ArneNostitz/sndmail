@@ -13,6 +13,7 @@ import {
 import type { FilterCriteria } from "@/services/db/filters";
 import { backfillSmartLabels } from "@/services/smartLabels/backfillService";
 
+import { Tooltip } from "@/components/ui/Tooltip";
 export function SmartLabelEditor() {
   const activeAccountId = useAccountStore((s) => s.activeAccountId);
   const [rules, setRules] = useState<DbSmartLabelRule[]>([]);
@@ -179,19 +180,19 @@ export function SmartLabelEditor() {
             </div>
           </div>
           <div className="flex items-center gap-1">
-            <button
+            <Tooltip content={rule.is_enabled === 1 ? "Disable" : "Enable"}><button
               onClick={() => handleToggleEnabled(rule)}
               className={`w-8 h-4 rounded-full transition-colors relative ${
                 rule.is_enabled === 1 ? "bg-accent" : "bg-bg-tertiary"
               }`}
-              title={rule.is_enabled === 1 ? "Disable" : "Enable"}
+
             >
               <span
                 className={`absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full transition-transform shadow ${
                   rule.is_enabled === 1 ? "translate-x-4" : ""
                 }`}
               />
-            </button>
+            </button></Tooltip>
             <button
               onClick={() => handleEdit(rule)}
               className="p-1 text-text-tertiary hover:text-text-primary"

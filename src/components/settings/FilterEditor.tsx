@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { Trash2, Pencil } from "lucide-react";
 import { TextField } from "@/components/ui/TextField";
+import { Tooltip } from "@/components/ui/Tooltip";
 import { useAccountStore } from "@/stores/accountStore";
 import { getLabelsForAccount, type DbLabel } from "@/services/db/labels";
 import {
-import { Tooltip } from "@/components/ui/Tooltip";
   getFiltersForAccount,
   insertFilter,
   updateFilter,

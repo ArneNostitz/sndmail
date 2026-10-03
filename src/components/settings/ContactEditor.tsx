@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { Search, Pencil, Trash2, Check, X } from "lucide-react";
-import {
 import { Tooltip } from "@/components/ui/Tooltip";
+import {
   getAllContacts,
   updateContact,
   deleteContact,

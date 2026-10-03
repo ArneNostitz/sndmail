@@ -6,9 +6,9 @@ import Image from "@tiptap/extension-image";
 import { Trash2, Pencil, Code } from "lucide-react";
 import { TextField } from "@/components/ui/TextField";
 import { EditorToolbar } from "@/components/composer/EditorToolbar";
+import { Tooltip } from "@/components/ui/Tooltip";
 import { useAccountStore } from "@/stores/accountStore";
 import {
-import { Tooltip } from "@/components/ui/Tooltip";
   getSignaturesForAccount,
   insertSignature,
   updateSignature,

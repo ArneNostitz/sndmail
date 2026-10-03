@@ -1,6 +1,6 @@
 %global app_name sndmail
 # x-release-please-start-version
-%global app_version 0.4.21
+%global app_version 0.5.0
 # x-release-please-end
 %global app_release 1
 

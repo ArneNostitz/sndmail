@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { X } from "lucide-react";
 import { useLabelStore, type Label } from "@/stores/labelStore";
 
+import { Tooltip } from "@/components/ui/Tooltip";
 // Gmail's predefined label colors (background, text)
 export const GMAIL_LABEL_COLORS: { bg: string; fg: string }[] = [
   { bg: "#000000", fg: "#ffffff" },
@@ -120,19 +121,19 @@ export function LabelForm({ accountId, label, onDone, variant = "settings" }: La
       {/* Color picker */}
       <div>
         <div className={`flex flex-wrap gap-1 ${isSidebar ? "gap-1" : "gap-1.5"}`}>
-          <button
+          <Tooltip content="No color"><button
             onClick={() => setSelectedColor(null)}
             className={`${isSidebar ? "w-4 h-4" : "w-5 h-5"} rounded-full border-2 transition-colors ${
               selectedColor === null
                 ? "border-accent ring-1 ring-accent"
                 : "border-border-primary hover:border-text-tertiary"
             }`}
-            title="No color"
+
           >
             <X size={isSidebar ? 8 : 10} className="mx-auto text-text-tertiary" />
-          </button>
+          </button></Tooltip>
           {GMAIL_LABEL_COLORS.map((color) => (
-            <button
+            <Tooltip content={color.bg}><button
               key={color.bg}
               onClick={() => setSelectedColor(color)}
               className={`${isSidebar ? "w-4 h-4" : "w-5 h-5"} rounded-full border-2 transition-colors ${
@@ -141,8 +142,8 @@ export function LabelForm({ accountId, label, onDone, variant = "settings" }: La
                   : "border-transparent hover:border-text-tertiary"
               }`}
               style={{ backgroundColor: color.bg }}
-              title={color.bg}
-            />
+
+            /></Tooltip>
           ))}
         </div>
       </div>

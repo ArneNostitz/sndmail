@@ -2,6 +2,7 @@ import { CheckCheck, Hourglass } from "lucide-react";
 import { formatFullDate } from "@/utils/date";
 import type { DbMessage } from "@/services/db/messages";
 
+import { Tooltip } from "@/components/ui/Tooltip";
 interface ReadReceiptBadgeProps {
   message: DbMessage;
   /** Only the user's own mail can be waiting on, or have received, a receipt. */
@@ -22,15 +23,15 @@ export function ReadReceiptBadge({ message, isOwnMessage }: ReadReceiptBadgeProp
   const count = message.read_receipt_count ?? 0;
   if (count > 0) {
     return (
-      <span
-        className="inline-flex items-center gap-0.5 text-[0.625rem] px-1.5 py-px rounded-full bg-success/15 text-success shrink-0"
-        title={`Read receipt received${
+      <Tooltip content={`Read receipt received${
           message.read_receipt_last_at ? ` — last ${formatFullDate(message.read_receipt_last_at)}` : ""
-        }`}
+        }`}><span
+        className="inline-flex items-center gap-0.5 text-[0.625rem] px-1.5 py-px rounded-full bg-success/15 text-success shrink-0"
+
       >
         <CheckCheck size={10} />
         {count > 1 ? `Opened ${count}×` : "Opened"}
-      </span>
+      </span></Tooltip>
     );
   }
 
@@ -38,12 +39,12 @@ export function ReadReceiptBadge({ message, isOwnMessage }: ReadReceiptBadgeProp
   if (!requested) return null;
 
   return (
-    <span
+    <Tooltip content="A read receipt was requested — nothing back yet. Many clients never answer."><span
       className="inline-flex items-center gap-0.5 text-[0.625rem] px-1.5 py-px rounded-full bg-bg-tertiary text-text-tertiary shrink-0"
-      title="A read receipt was requested — nothing back yet. Many clients never answer."
+
     >
       <Hourglass size={10} />
       Awaiting
-    </span>
+    </span></Tooltip>
   );
 }

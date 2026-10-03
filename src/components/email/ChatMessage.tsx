@@ -13,6 +13,7 @@ import { OneTimeCodeBanner } from "./OneTimeCodeBanner";
 import type { DbMessage } from "@/services/db/messages";
 import type { DbAttachment } from "@/services/db/attachments";
 
+import { Tooltip } from "@/components/ui/Tooltip";
 interface ChatMessageProps {
   message: DbMessage;
   /** Written by the user — accent rule on the left, gutter on that side. */
@@ -193,23 +194,23 @@ export const ChatMessage = memo(function ChatMessage({
       {/* Controls sit under the message so they never crowd the text */}
       {!collapsed && (
         <div className={`flex items-center gap-2 mt-2 ${isMine ? "flex-row-reverse" : ""}`}>
-          <button
+          <Tooltip content="Collapse this message"><button
             onClick={onToggleCollapse}
             className="flex items-center gap-0.5 text-[0.625rem] text-text-tertiary hover:text-text-secondary transition-colors"
-            title="Collapse this message"
+
           >
             <ChevronDown size={11} />
             Collapse
-          </button>
+          </button></Tooltip>
           {(trimmed.trimmed || showFull) && (
-            <button
+            <Tooltip content={showFull ? "Hide quotes and signature again" : "Show the original mail with quotes and signature"}><button
               onClick={() => setShowFull((v) => !v)}
               className="flex items-center gap-0.5 text-[0.625rem] text-accent hover:underline"
-              title={showFull ? "Hide quotes and signature again" : "Show the original mail with quotes and signature"}
+
             >
               {showFull ? <Minimize2 size={11} /> : <Maximize2 size={11} />}
               {showFull ? "View trimmed" : "View full"}
-            </button>
+            </button></Tooltip>
           )}
         </div>
       )}

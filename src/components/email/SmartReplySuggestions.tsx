@@ -8,6 +8,7 @@ import { useComposerStore } from "@/stores/composerStore";
 import { recipientHeadersFromMessages } from "@/utils/resolveFromAddress";
 import type { DbMessage } from "@/services/db/messages";
 
+import { Tooltip } from "@/components/ui/Tooltip";
 interface SmartReplySuggestionsProps {
   threadId: string;
   accountId: string;
@@ -93,13 +94,13 @@ export function SmartReplySuggestions({ threadId, accountId, messages, noReply }
       <div className="flex items-center gap-2 mb-2">
         <Sparkles size={14} className="text-accent shrink-0" />
         <span className="text-xs font-medium text-accent flex-1">Quick Replies</span>
-        <button
+        <Tooltip content="Refresh suggestions"><button
           onClick={handleRefresh}
           className="p-0.5 text-text-tertiary hover:text-accent transition-colors"
-          title="Refresh suggestions"
+
         >
           <RefreshCw size={12} className={loading ? "animate-spin" : ""} />
-        </button>
+        </button></Tooltip>
       </div>
       {loading && !replies && (
         <div className="flex items-center gap-2 text-text-tertiary">
@@ -113,14 +114,14 @@ export function SmartReplySuggestions({ threadId, accountId, messages, noReply }
       {replies && (
         <div className="flex flex-wrap gap-2">
           {replies.map((reply, i) => (
-            <button
+            <Tooltip content={reply}><button
               key={i}
               onClick={() => handleReplyClick(reply)}
               className="px-3 py-1.5 text-xs text-text-primary bg-bg-primary border border-border-primary rounded-full hover:bg-bg-hover hover:border-accent/40 transition-colors max-w-[280px] truncate"
-              title={reply}
+
             >
               {reply}
-            </button>
+            </button></Tooltip>
           ))}
         </div>
       )}

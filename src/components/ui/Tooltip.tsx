@@ -88,11 +88,36 @@ export function Tooltip({
     const vw = window.innerWidth;
     const vh = window.innerHeight;
 
-    let side = placement;
-    if (side === "top" && a.top - b.height - GAP < 0) side = "bottom";
-    else if (side === "bottom" && a.bottom + b.height + GAP > vh) side = "top";
-    else if (side === "left" && a.left - b.width - GAP < 0) side = "right";
-    else if (side === "right" && a.right + b.width + GAP > vw) side = "left";
+    // Prefer the requested side, then its opposite, then whichever
+    // perpendicular side has more room. The portal lets the bubble cross
+    // card, sidebar, and scroll-container edges; only the app viewport bounds
+    // constrain it.
+    const available: Record<TooltipPlacement, number> = {
+      top: a.top - GAP,
+      bottom: vh - a.bottom - GAP,
+      left: a.left - GAP,
+      right: vw - a.right - GAP,
+    };
+    const needed: Record<TooltipPlacement, number> = {
+      top: b.height,
+      bottom: b.height,
+      left: b.width,
+      right: b.width,
+    };
+    const opposite: Record<TooltipPlacement, TooltipPlacement> = {
+      top: "bottom",
+      bottom: "top",
+      left: "right",
+      right: "left",
+    };
+    const perpendicular = placement === "top" || placement === "bottom"
+      ? ["right", "left"] as const
+      : ["bottom", "top"] as const;
+    const candidates: TooltipPlacement[] = [placement, opposite[placement], ...perpendicular];
+    const side = candidates.find((candidate) => available[candidate] >= needed[candidate])
+      ?? candidates.reduce((best, candidate) =>
+        available[candidate] > available[best] ? candidate : best,
+      );
 
     let top: number;
     let left: number;
@@ -141,7 +166,7 @@ export function Tooltip({
   }, [open, hide]);
 
   if (!isValidElement(children)) return children;
-  if (!enabled) return children;
+  if (!enabled || content == null || content === "") return children;
 
   const child = children as ReactElement<Record<string, unknown>>;
   const childProps = child.props;
@@ -173,6 +198,7 @@ export function Tooltip({
             style={{
               top: position?.top ?? -9999,
               left: position?.left ?? -9999,
+              maxWidth: "calc(100vw - 16px)",
               // Measured first, then placed — never paint it in the corner
               visibility: position ? "visible" : "hidden",
             }}

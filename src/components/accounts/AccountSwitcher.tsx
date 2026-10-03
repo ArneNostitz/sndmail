@@ -9,6 +9,7 @@ import { getAliasesForAccount, mapDbAlias, type SendAsAlias } from "@/services/d
 import { refreshMail } from "@/services/refreshMail";
 import { AtSign } from "lucide-react";
 
+import { Tooltip } from "@/components/ui/Tooltip";
 interface AccountSwitcherProps {
   collapsed: boolean;
   onAddAccount: () => void;
@@ -345,10 +346,10 @@ export function AccountSwitcher({
                 account.id === activeAccountId &&
                 activeAliasEmail === alias.email;
               return (
-                <button
+                <Tooltip content={`Send as ${alias.email} using ${account.email}`}><button
                   key={`${account.id}:${alias.id}`}
                   onClick={() => handleIdentity(account.id, alias.email)}
-                  title={`Send as ${alias.email} using ${account.email}`}
+
                   className={`flex items-center gap-2.5 w-full pl-8 pr-3 py-1.5 text-left transition-colors ${
                     isActiveIdentity
                       ? "bg-accent/8 text-accent"
@@ -362,7 +363,7 @@ export function AccountSwitcher({
                   {isActiveIdentity && (
                     <Check size={13} className="shrink-0 text-accent" />
                   )}
-                </button>
+                </button></Tooltip>
               );
             });
           })}

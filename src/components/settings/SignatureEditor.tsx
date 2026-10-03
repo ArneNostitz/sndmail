@@ -8,6 +8,7 @@ import { TextField } from "@/components/ui/TextField";
 import { EditorToolbar } from "@/components/composer/EditorToolbar";
 import { useAccountStore } from "@/stores/accountStore";
 import {
+import { Tooltip } from "@/components/ui/Tooltip";
   getSignaturesForAccount,
   insertSignature,
   updateSignature,
@@ -155,14 +156,14 @@ export function SignatureEditor() {
               ) : (
                 <EditorToolbar editor={editor} />
               )}
-              <button
+              <Tooltip content={isHtmlMode ? "Switch to visual editor" : "Edit HTML source"}><button
                 type="button"
                 onClick={toggleHtmlMode}
                 className={`p-1.5 mr-1 rounded transition-colors ${isHtmlMode ? "text-accent bg-accent/10" : "text-text-tertiary hover:text-text-primary"}`}
-                title={isHtmlMode ? "Switch to visual editor" : "Edit HTML source"}
+
               >
                 <Code size={14} />
-              </button>
+              </button></Tooltip>
             </div>
             {isHtmlMode ? (
               <textarea

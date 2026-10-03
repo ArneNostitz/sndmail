@@ -10,6 +10,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Download, Eye, Check, ChevronLeft, ChevronRight } from "lucide-react";
 import { formatFileSize, isImage, isPdf, isText, canPreview, getFileIcon } from "@/utils/fileTypeHelpers";
 
+import { Tooltip } from "@/components/ui/Tooltip";
 export function attachmentRef(accountId: string, att: DbAttachment): AttachmentRef {
   return {
     accountId,
@@ -53,10 +54,10 @@ export function AttachmentSaveButton({
   };
 
   return (
-    <button
+    <Tooltip content="Save to Downloads — ⌘-click to choose a folder"><button
       onClick={handleSave}
       disabled={!attachment.gmail_attachment_id}
-      title="Save to Downloads — ⌘-click to choose a folder"
+
       className={`shrink-0 transition-colors disabled:opacity-40 ${
         state === "saved"
           ? "text-success"
@@ -70,7 +71,7 @@ export function AttachmentSaveButton({
       ) : (
         <Download size={size} className={state === "saving" ? "animate-pulse" : ""} />
       )}
-    </button>
+    </button></Tooltip>
   );
 }
 
@@ -165,9 +166,9 @@ export function AttachmentList({ accountId, attachments, referencedCids, onOpenA
               key={att.id}
               className="flex items-center text-xs rounded-md border border-border-primary overflow-hidden"
             >
-              <button
+              <Tooltip content="Preview"><button
                 onClick={() => handleOpen(att)}
-                title="Preview"
+
                 className="flex items-center gap-2 px-3 py-1.5 hover:bg-bg-hover transition-colors"
               >
                 <span className="text-text-tertiary">{getFileIcon(att.mime_type)}</span>
@@ -179,7 +180,7 @@ export function AttachmentList({ accountId, attachments, referencedCids, onOpenA
                     {formatFileSize(att.size)}
                   </span>
                 )}
-              </button>
+              </button></Tooltip>
               <AttachmentSaveButton
                 accountId={accountId}
                 attachment={att}
@@ -269,36 +270,36 @@ export function AttachmentPreview({
       <div className="flex items-center gap-2 shrink-0 ml-4">
         {attachments.length > 1 && (
           <div className="flex items-center gap-1 mr-1">
-            <button
+            <Tooltip content="Previous attachment (←)"><button
               onClick={() => goTo(-1)}
               disabled={index === 0}
-              title="Previous attachment (←)"
+
               className="p-1 rounded text-text-tertiary hover:text-text-primary hover:bg-bg-hover transition-colors disabled:opacity-30"
             >
               <ChevronLeft size={16} />
-            </button>
+            </button></Tooltip>
             <span className="text-xs text-text-tertiary whitespace-nowrap tabular-nums">
               {index + 1} / {attachments.length}
             </span>
-            <button
+            <Tooltip content="Next attachment (→)"><button
               onClick={() => goTo(1)}
               disabled={index === attachments.length - 1}
-              title="Next attachment (→)"
+
               className="p-1 rounded text-text-tertiary hover:text-text-primary hover:bg-bg-hover transition-colors disabled:opacity-30"
             >
               <ChevronRight size={16} />
-            </button>
+            </button></Tooltip>
           </div>
         )}
-        <button
+        <Tooltip content="Save to Downloads — ⌘-click to choose a folder"><button
           onClick={handleDownload}
           disabled={saving}
-          title="Save to Downloads — ⌘-click to choose a folder"
+
           className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-accent hover:bg-accent-hover rounded-md transition-colors disabled:opacity-50"
         >
           <Download size={13} />
           {saving ? "Saving..." : "Download"}
-        </button>
+        </button></Tooltip>
         <button
           onClick={onClose}
           className="text-text-tertiary hover:text-text-primary text-lg leading-none"

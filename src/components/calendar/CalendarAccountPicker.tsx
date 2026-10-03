@@ -5,6 +5,7 @@ import { useUIStore } from "@/stores/uiStore";
 import { useClickOutside } from "@/hooks/useClickOutside";
 import { accountColor } from "@/constants/accountColors";
 
+import { Tooltip } from "@/components/ui/Tooltip";
 interface CalendarAccountPickerProps {
   /** Accounts that actually have a calendar — Google, CalDAV, or IMAP+CalDAV */
   accounts: Account[];
@@ -54,10 +55,10 @@ export function CalendarAccountPicker({
 
   return (
     <div className="relative" ref={ref}>
-      <button
+      <Tooltip content="Choose which account's calendar to show"><button
         onClick={() => setOpen((v) => !v)}
         className="flex items-center gap-2 px-2.5 py-1.5 rounded-md text-sm text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors max-w-[16rem]"
-        title="Choose which account's calendar to show"
+
       >
         <CalendarDays size={15} className="shrink-0" />
         <span className="truncate">
@@ -67,7 +68,7 @@ export function CalendarAccountPicker({
           size={13}
           className={`shrink-0 text-text-tertiary transition-transform ${open ? "rotate-180" : ""}`}
         />
-      </button>
+      </button></Tooltip>
 
       {open && (
         <div className="absolute z-50 mt-1 left-0 min-w-[16rem] py-1 rounded-lg border border-border-primary bg-bg-primary shadow-lg glass-panel">

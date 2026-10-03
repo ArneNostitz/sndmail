@@ -585,14 +585,14 @@ export function SettingsPage() {
         <kbd className="text-[0.625rem] text-text-tertiary bg-bg-tertiary px-1.5 py-0.5 rounded font-mono">
           {keyMap["app.settings"] ?? "Ctrl+,"}
         </kbd>
-        <button
+        <Tooltip content="Close settings (Esc)"><button
           onClick={closeSettings}
           className="ml-auto p-1.5 -mr-1 rounded-md text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors"
-          title="Close settings (Esc)"
+
           aria-label="Close settings"
         >
           <X size={18} />
-        </button>
+        </button></Tooltip>
       </div>
 
       {/* Body: sidebar nav + content */}
@@ -708,10 +708,10 @@ export function SettingsPage() {
                         {COLOR_THEMES.map((t) => {
                           const isSelected = colorTheme === t.id;
                           return (
-                            <button
+                            <Tooltip content={t.name}><button
                               key={t.id}
                               onClick={() => setColorTheme(t.id)}
-                              title={t.name}
+
                               className={`relative w-7 h-7 rounded-full transition-all ${
                                 isSelected
                                   ? "ring-2 ring-offset-2 ring-offset-bg-primary scale-110"
@@ -727,7 +727,7 @@ export function SettingsPage() {
                               {isSelected && (
                                 <Check size={14} className="absolute inset-0 m-auto text-white drop-shadow-sm" />
                               )}
-                            </button>
+                            </button></Tooltip>
                           );
                         })}
                       </div>
@@ -2066,17 +2066,17 @@ function AccountColorPicker({
       {ACCOUNT_COLORS.map((color) => {
         const isSelected = color.id === selectedId;
         return (
-          <button
+          <Tooltip content={color.label}><button
             key={color.id}
             onClick={() => pick(color.id)}
-            title={color.label}
+
             aria-label={`Use ${color.label} for this account`}
             aria-pressed={isSelected}
             className={`w-4 h-4 rounded-full transition-transform hover:scale-110 ${
               isSelected ? "ring-2 ring-offset-2 ring-offset-bg-secondary ring-text-tertiary" : ""
             }`}
             style={{ backgroundColor: color.hex }}
-          />
+          /></Tooltip>
         );
       })}
     </div>
@@ -2536,13 +2536,13 @@ function ShortcutsTab() {
                       {isRecording ? "Press key..." : currentKey}
                     </button>
                     {!isDefault && (
-                      <button
+                      <Tooltip content={`Reset to ${defaults[item.id]}`}><button
                         onClick={() => resetKey(item.id)}
                         className="text-xs text-text-tertiary hover:text-text-primary"
-                        title={`Reset to ${defaults[item.id]}`}
+
                       >
                         ×
-                      </button>
+                      </button></Tooltip>
                     )}
                   </div>
                 </div>
@@ -2654,25 +2654,25 @@ function SidebarNavEditor() {
                 item.visible ? "text-text-primary" : "text-text-tertiary"
               }`}
             >
-              <button
+              <Tooltip content="Move up"><button
                 onClick={() => moveItem(index, -1)}
                 disabled={index === 0}
                 className="p-0.5 rounded text-text-tertiary hover:text-text-primary disabled:opacity-25 disabled:cursor-not-allowed transition-colors"
-                title="Move up"
+
               >
                 <ChevronUp size={14} />
-              </button>
-              <button
+              </button></Tooltip>
+              <Tooltip content="Move down"><button
                 onClick={() => moveItem(index, 1)}
                 disabled={index === items.length - 1}
                 className="p-0.5 rounded text-text-tertiary hover:text-text-primary disabled:opacity-25 disabled:cursor-not-allowed transition-colors"
-                title="Move down"
+
               >
                 <ChevronDown size={14} />
-              </button>
+              </button></Tooltip>
               <Icon size={16} className="shrink-0 ml-1" />
               <span className="flex-1 truncate">{nav.label}</span>
-              <button
+              <Tooltip content={isInbox ? "Inbox is always visible" : item.visible ? "Hide" : "Show"}><button
                 onClick={() => toggleItem(index)}
                 disabled={isInbox}
                 className={`relative w-10 h-5 rounded-full transition-colors shrink-0 ${
@@ -2682,14 +2682,14 @@ function SidebarNavEditor() {
                       ? "bg-accent cursor-pointer"
                       : "bg-bg-tertiary cursor-pointer"
                 }`}
-                title={isInbox ? "Inbox is always visible" : item.visible ? "Hide" : "Show"}
+
               >
                 <span
                   className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${
                     item.visible ? "translate-x-5" : ""
                   }`}
                 />
-              </button>
+              </button></Tooltip>
             </div>
           );
         })}

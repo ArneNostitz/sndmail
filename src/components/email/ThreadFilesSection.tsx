@@ -9,6 +9,7 @@ import {
 import { formatFileSize, getFileIcon } from "@/utils/fileTypeHelpers";
 import { AttachmentPreview, AttachmentSaveButton, attachmentRef } from "./AttachmentList";
 
+import { Tooltip } from "@/components/ui/Tooltip";
 interface ThreadFilesSectionProps {
   accountId: string;
   threadId: string;
@@ -112,11 +113,11 @@ export function ThreadFilesSection({ accountId, threadId }: ThreadFilesSectionPr
           <Paperclip size={11} />
           Files in this thread
         </h4>
-        <button
+        <Tooltip content="Save all files to a folder"><button
           onClick={handleSaveAll}
           disabled={saveState.phase === "saving"}
           className="flex items-center gap-1 text-[0.625rem] text-accent hover:text-accent-hover transition-colors disabled:opacity-60"
-          title="Save all files to a folder"
+
         >
           <Download size={10} />
           {saveState.phase === "saving"
@@ -126,7 +127,7 @@ export function ThreadFilesSection({ accountId, threadId }: ThreadFilesSectionPr
               : saveState.phase === "failed"
                 ? "Failed — retry"
                 : "Save all"}
-        </button>
+        </button></Tooltip>
       </div>
       <div className="space-y-1">
         {files.map((att) => (
@@ -134,9 +135,9 @@ export function ThreadFilesSection({ accountId, threadId }: ThreadFilesSectionPr
             key={att.id}
             className="flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-bg-hover transition-colors group"
           >
-            <button
+            <Tooltip content="Preview"><button
               onClick={() => handleOpen(att)}
-              title="Preview"
+
               className="flex items-center gap-2 min-w-0 flex-1 text-left"
             >
               <span className="shrink-0">{getFileIcon(att.mime_type)}</span>
@@ -146,7 +147,7 @@ export function ThreadFilesSection({ accountId, threadId }: ThreadFilesSectionPr
                   <div className="text-text-tertiary text-[0.625rem]">{formatFileSize(att.size)}</div>
                 )}
               </div>
-            </button>
+            </button></Tooltip>
             <AttachmentSaveButton
               accountId={accountId}
               attachment={att}

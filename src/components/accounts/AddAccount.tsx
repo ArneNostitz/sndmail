@@ -10,6 +10,7 @@ import { AddImapAccount, type ImapPreset } from "./AddImapAccount";
 import { AddCalDavAccount } from "./AddCalDavAccount";
 import { getCurrentUnixTimestamp } from "@/utils/timestamp";
 
+import { Tooltip } from "@/components/ui/Tooltip";
 interface AddAccountProps {
   onClose: () => void;
   onSuccess: () => void;
@@ -219,13 +220,13 @@ export function AddAccount({ onClose, onSuccess, zIndex }: AddAccountProps) {
 
         <div className="grid grid-cols-4 gap-2">
           {IMAP_PRESETS.map((preset) => (
-            <button
+            <Tooltip content={`Set up ${preset.name}`}><button
               key={preset.id}
               onClick={() =>
                 openImap({ id: preset.id, name: preset.name, domain: preset.domain })
               }
               className="flex flex-col items-center gap-1.5 px-1 py-3 rounded-lg border border-border-primary bg-bg-secondary hover:bg-bg-hover hover:border-accent transition-colors"
-              title={`Set up ${preset.name}`}
+
             >
               <span
                 className={`w-7 h-7 rounded-md bg-bg-tertiary flex items-center justify-center text-sm font-semibold ${preset.tint}`}
@@ -235,7 +236,7 @@ export function AddAccount({ onClose, onSuccess, zIndex }: AddAccountProps) {
               <span className="text-[0.6875rem] text-text-secondary truncate max-w-full">
                 {preset.name}
               </span>
-            </button>
+            </button></Tooltip>
           ))}
         </div>
 

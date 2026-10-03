@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { Search, Pencil, Trash2, Check, X } from "lucide-react";
 import {
+import { Tooltip } from "@/components/ui/Tooltip";
   getAllContacts,
   updateContact,
   deleteContact,
@@ -120,20 +121,20 @@ export function ContactEditor() {
                     <span className="text-xs text-text-tertiary mr-2">
                       {contact.frequency}x
                     </span>
-                    <button
+                    <Tooltip content="Edit name"><button
                       onClick={() => handleEdit(contact)}
                       className="p-1 text-text-tertiary hover:text-text-primary opacity-0 group-hover:opacity-100 transition-opacity"
-                      title="Edit name"
+
                     >
                       <Pencil size={13} />
-                    </button>
-                    <button
+                    </button></Tooltip>
+                    <Tooltip content="Delete contact"><button
                       onClick={() => handleDelete(contact.id)}
                       className="p-1 text-text-tertiary hover:text-danger opacity-0 group-hover:opacity-100 transition-opacity"
-                      title="Delete contact"
+
                     >
                       <Trash2 size={13} />
-                    </button>
+                    </button></Tooltip>
                   </div>
                 </>
               )}

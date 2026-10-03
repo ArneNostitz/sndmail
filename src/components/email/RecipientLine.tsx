@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { extractEmailAddresses } from "@/utils/emailUtils";
 
+import { Tooltip } from "@/components/ui/Tooltip";
 /** Recipients shown before the line folds into "+N more". */
 const PREVIEW_COUNT = 3;
 
@@ -42,30 +43,30 @@ export function RecipientLine({ toAddresses, ccAddresses }: RecipientLineProps) 
     const shown = to.length > 0 ? to.slice(0, PREVIEW_COUNT) : cc.slice(0, PREVIEW_COUNT);
     const hidden = total - shown.length;
     return (
-      <button
+      <Tooltip content="Show every recipient"><button
         onClick={(e) => { e.stopPropagation(); setExpanded(true); }}
         className="mt-1 flex items-start gap-1 text-xs text-text-tertiary hover:text-text-secondary transition-colors text-left w-full"
-        title="Show every recipient"
+
       >
         <ChevronRight size={11} className="shrink-0 mt-0.5" />
         <span className="truncate">
           To: {shown.join(", ")}
           <span className="text-text-tertiary"> +{hidden} more</span>
         </span>
-      </button>
+      </button></Tooltip>
     );
   }
 
   return (
     <div className="mt-1 text-xs text-text-tertiary">
-      <button
+      <Tooltip content="Hide the recipient list"><button
         onClick={(e) => { e.stopPropagation(); setExpanded(false); }}
         className="flex items-center gap-1 hover:text-text-secondary transition-colors"
-        title="Hide the recipient list"
+
       >
         <ChevronDown size={11} className="shrink-0" />
         {total} recipient{total === 1 ? "" : "s"}
-      </button>
+      </button></Tooltip>
       {/* Capped and scrollable: a few hundred addresses must not push the
           message itself off the screen */}
       <div onClick={(e) => e.stopPropagation()} className="mt-1 pl-4 max-h-40 overflow-y-auto break-words select-text">

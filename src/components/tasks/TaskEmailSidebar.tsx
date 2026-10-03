@@ -8,6 +8,7 @@ import { formatFullDate } from "@/utils/date";
 import { useTimeFormat } from "@/hooks/useTimeFormat";
 import { EmailRenderer } from "@/components/email/EmailRenderer";
 
+import { Tooltip } from "@/components/ui/Tooltip";
 interface TaskEmailSidebarProps {
   accountId: string;
   threadId: string;
@@ -82,13 +83,13 @@ export function TaskEmailSidebar({ accountId, threadId, onClose }: TaskEmailSide
           Linked email
         </h3>
         <div className="flex items-center gap-1">
-          <button
+          <Tooltip content="Open in inbox"><button
             onClick={handleOpenInInbox}
-            title="Open in inbox"
+
             className="p-1 text-text-tertiary hover:text-text-primary transition-colors"
           >
             <ExternalLink size={13} />
-          </button>
+          </button></Tooltip>
           <button
             onClick={onClose}
             className="p-1 text-text-tertiary hover:text-text-primary transition-colors"

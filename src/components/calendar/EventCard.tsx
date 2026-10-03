@@ -2,6 +2,7 @@ import { hourCycleOption } from "@/utils/date";
 import type { DbCalendarEvent } from "@/services/db/calendarEvents";
 import { useTimeFormat } from "@/hooks/useTimeFormat";
 
+import { Tooltip } from "@/components/ui/Tooltip";
 interface EventCardProps {
   event: DbCalendarEvent;
   compact?: boolean;
@@ -18,13 +19,13 @@ export function EventCard({ event, compact, onClick }: EventCardProps) {
 
   if (compact) {
     return (
-      <button
+      <Tooltip content={event.summary ?? "Event"}><button
         onClick={onClick}
         className="w-full text-left text-[0.625rem] px-1 py-0.5 rounded bg-accent/10 text-accent truncate hover:bg-accent/20 transition-colors"
-        title={event.summary ?? "Event"}
+
       >
         {event.summary ?? "Event"}
-      </button>
+      </button></Tooltip>
     );
   }
 

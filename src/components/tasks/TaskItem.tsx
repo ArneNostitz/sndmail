@@ -13,6 +13,7 @@ import {
 import type { DbTask, TaskPriority } from "@/services/db/tasks";
 import { DateTimePickerDialog } from "@/components/ui/DateTimePickerDialog";
 
+import { Tooltip } from "@/components/ui/Tooltip";
 const PRIORITY_COLORS: Record<TaskPriority, string> = {
   none: "text-text-tertiary",
   low: "text-blue-400",
@@ -137,24 +138,24 @@ export function TaskItem({
           {!compact && (
             <div className="flex items-center gap-2 mt-1 flex-wrap">
               {task.due_date ? (
-                <button
+                <Tooltip content={onSetDueDate ? "Change when this is due" : undefined}><button
                   onClick={(e) => { e.stopPropagation(); if (onSetDueDate) setPickingDue(true); }}
                   disabled={!onSetDueDate}
-                  title={onSetDueDate ? "Change when this is due" : undefined}
+
                   className={`inline-flex items-center gap-1 text-[0.6875rem] px-1.5 py-0.5 rounded-full ${getDueDateColor(task.due_date)} ${onSetDueDate ? "hover:brightness-95" : "cursor-default"}`}
                 >
                   <Calendar size={10} />
                   {formatDueDate(task.due_date)}
-                </button>
+                </button></Tooltip>
               ) : onSetDueDate ? (
-                <button
+                <Tooltip content="Set a due date"><button
                   onClick={(e) => { e.stopPropagation(); setPickingDue(true); }}
-                  title="Set a due date"
+
                   className="inline-flex items-center gap-1 text-[0.6875rem] px-1.5 py-0.5 rounded-full text-text-tertiary hover:text-accent hover:bg-bg-hover transition-colors opacity-0 group-hover:opacity-100"
                 >
                   <Calendar size={10} />
                   Due
-                </button>
+                </button></Tooltip>
               ) : null}
               {hasRecurrence && (
                 <span className="inline-flex items-center gap-0.5 text-[0.6875rem] text-text-tertiary">

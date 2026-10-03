@@ -11,6 +11,7 @@ import { useLabelStore } from "@/stores/labelStore";
 import { parseSearchQuery } from "@/services/search/searchParser";
 import { resolveQueryTokens } from "@/services/search/smartFolderQuery";
 
+import { Tooltip } from "@/components/ui/Tooltip";
 const folderIds: Record<string, string[]> = {
   inbox: ["INBOX"],
   conversations: ["INBOX", "SENT"],
@@ -219,13 +220,13 @@ export function SearchBar() {
         {searchQuery && (
           <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
             {searchQuery.trim().length >= 2 && (
-              <button
+              <Tooltip content="Save as Smart Folder"><button
                 onClick={handleSaveAsSmartFolder}
                 className="text-text-tertiary hover:text-accent transition-colors"
-                title="Save as Smart Folder"
+
               >
                 <FolderPlus size={14} />
-              </button>
+              </button></Tooltip>
             )}
             <button
               onClick={handleClear}

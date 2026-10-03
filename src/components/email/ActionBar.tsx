@@ -18,6 +18,7 @@ import { insertFollowUpReminder, getFollowUpForThread, cancelFollowUpForThread }
 import { Button } from "@/components/ui/Button";
 import { useClickOutside } from "@/hooks/useClickOutside";
 
+import { Tooltip } from "@/components/ui/Tooltip";
 interface ActionBarProps {
   thread: Thread;
   messages?: DbMessage[];
@@ -278,44 +279,44 @@ export function ActionBar({ thread, messages, noReply, defaultReplyMode = "reply
         {/* One common reply action stays visible; other response options live in More. */}
         {hasLastMessage && (
           <>
-            <Button
+            <Tooltip content={noReply ? "This sender does not accept replies" : defaultReplyMode === "replyAll" ? "Reply all (r)" : "Reply (r)"}><Button
               variant="secondary"
               iconOnly
               icon={defaultReplyMode === "replyAll" ? <ReplyAll size={15} /> : <Reply size={15} />}
               onClick={defaultReplyMode === "replyAll" ? onReplyAll : onReply}
               disabled={noReply}
-              title={noReply ? "This sender does not accept replies" : defaultReplyMode === "replyAll" ? "Reply all (r)" : "Reply (r)"}
+
               className="disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-text-secondary"
-            />
+            /></Tooltip>
             <Separator />
           </>
         )}
 
         {/* Keep the most common thread actions in the toolbar. */}
-        <Button variant="secondary" iconOnly icon={<Archive size={15} />} onClick={handleArchive} title="Archive (e)" />
-        <Button variant="secondary" iconOnly icon={<Trash2 size={15} />} onClick={handleDelete} title="Delete (#)" />
-        <Button
+        <Tooltip content="Archive (e)"><Button variant="secondary" iconOnly icon={<Archive size={15} />} onClick={handleArchive}  /></Tooltip>
+        <Tooltip content="Delete (#)"><Button variant="secondary" iconOnly icon={<Trash2 size={15} />} onClick={handleDelete}  /></Tooltip>
+        <Tooltip content={thread.isStarred ? "Unstar (s)" : "Star (s)"}><Button
           variant="secondary"
           iconOnly
           icon={<Star size={15} className={thread.isStarred ? "fill-current" : ""} />}
           onClick={handleToggleStar}
-          title={thread.isStarred ? "Unstar (s)" : "Star (s)"}
+
           className={thread.isStarred ? "text-text-secondary" : ""}
-        />
+        /></Tooltip>
         <Separator />
         <div ref={moreActionsRef} className="relative ml-auto shrink-0">
-          <button
+          <Tooltip content="More actions"><button
             ref={moreActionsButtonRef}
             type="button"
             className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
             onClick={() => setShowMoreActions((open) => !open)}
-            title="More actions"
+
             aria-label="More actions"
             aria-haspopup="menu"
             aria-expanded={showMoreActions}
           >
             <MoreHorizontal size={17} />
-          </button>
+          </button></Tooltip>
           {showMoreActions && (
             <div
               ref={moreActionsMenuRef}

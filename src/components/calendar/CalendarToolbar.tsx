@@ -1,5 +1,6 @@
 import { ChevronLeft, ChevronRight, Plus, CalendarDays } from "lucide-react";
 
+import { Tooltip } from "@/components/ui/Tooltip";
 export type CalendarView = "day" | "week" | "month";
 
 interface CalendarToolbarProps {
@@ -55,13 +56,13 @@ export function CalendarToolbar({
 
       <div className="flex items-center gap-2">
         {showCalendarListButton && onToggleCalendarList && (
-          <button
+          <Tooltip content="Toggle calendar list"><button
             onClick={onToggleCalendarList}
             className="p-1.5 text-text-secondary hover:text-text-primary hover:bg-bg-hover rounded transition-colors"
-            title="Toggle calendar list"
+
           >
             <CalendarDays size={16} />
-          </button>
+          </button></Tooltip>
         )}
         <div className="flex bg-bg-tertiary rounded-md p-0.5">
           {(["day", "week", "month"] as CalendarView[]).map((v) => (

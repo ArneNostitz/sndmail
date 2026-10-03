@@ -3,6 +3,7 @@ import { Modal } from "@/components/ui/Modal";
 import { getEmailProvider } from "@/services/email/providerFactory";
 import { Copy, Check } from "lucide-react";
 
+import { Tooltip } from "@/components/ui/Tooltip";
 interface RawMessageModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -78,14 +79,14 @@ export function RawMessageModal({
           </h3>
           <div className="flex items-center gap-2">
             {raw && (
-              <button
+              <Tooltip content="Copy to clipboard"><button
                 onClick={handleCopy}
                 className="flex items-center gap-1 text-xs text-text-secondary hover:text-text-primary px-2 py-1 rounded hover:bg-bg-hover transition-colors"
-                title="Copy to clipboard"
+
               >
                 {copied ? <Check size={14} /> : <Copy size={14} />}
                 {copied ? "Copied" : "Copy"}
-              </button>
+              </button></Tooltip>
             )}
             <button
               onClick={onClose}

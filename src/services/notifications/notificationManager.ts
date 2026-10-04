@@ -67,13 +67,13 @@ export const NOTIFICATION_CATEGORIES: NativeCategory[] = [
   },
   {
     id: "otp-link",
-    actions: [{ id: "open-link", title: "Open sign-in link", foreground: true }],
+    actions: [{ id: "open-link", title: "Follow link", foreground: true }],
   },
   {
     id: "otp-both",
     actions: [
       { id: "copy-code", title: "Copy code" },
-      { id: "open-link", title: "Open link", foreground: true },
+      { id: "open-link", title: "Follow link", foreground: true },
     ],
   },
 ];

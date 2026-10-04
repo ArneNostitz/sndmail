@@ -1231,9 +1231,10 @@ async fn store_gmail_thread(
                 let from = gmail_header(message, "From");
                 if split_address(from).1.is_some_and(|address| address.eq_ignore_ascii_case(account_email)) { continue; }
                 let date = message["internalDate"].as_str().and_then(|v| v.parse::<i64>().ok()).unwrap_or(0);
-                let body = message_bodies.get(message_id)
-                    .and_then(|(html, text)| text.as_ref().or(html.as_ref()));
-                otp::maybe_notify(db, account, id, message_id, gmail_header(message, "Subject"), body.map(String::as_str), date, gmail_header(message, "From")).await?;
+                let bodies = message_bodies.get(message_id);
+                let body = bodies.and_then(|(html, text)| text.as_ref().or(html.as_ref()));
+                let body_html = bodies.and_then(|(html, _)| html.as_deref());
+                otp::maybe_notify(db, account, id, message_id, gmail_header(message, "Subject"), body.map(String::as_str), body_html, date, gmail_header(message, "From")).await?;
                 otp::maybe_notify_mail(db, account, id, message_id, gmail_header(message, "Subject"), body.map(String::as_str), date,
                     split_address(gmail_header(message, "From")).1).await?;
             }
@@ -1593,6 +1594,7 @@ async fn sync_imap(db: &mut SqliteConnection, http: &reqwest::Client, account: &
                 let id = format!("imap-{}-{}-{}", account.id, message.folder, message.uid);
                 otp::maybe_notify(db, &account.id, &thread, &id, message.subject.as_deref(),
                     message.body_text.as_deref().or(message.body_html.as_deref()),
+                    message.body_html.as_deref(),
                     message.date * 1000, message.from_name.as_deref().or(message.from_address.as_deref())).await?;
                 otp::maybe_notify_mail(db, &account.id, &thread, &id, message.subject.as_deref(),
                     message.body_text.as_deref().or(message.body_html.as_deref()), message.date * 1000,

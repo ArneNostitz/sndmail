@@ -89,9 +89,9 @@ export async function processIncomingCodes(
 
     handled.add(message.id);
     const sender = message.fromName ?? message.fromAddress ?? "";
-    // Never replace clipboard contents on arrival. Copy remains an explicit
-    // action on the notification, toast, or opened message.
-    const copied = false;
+    // Login codes are time-sensitive: copy as soon as they arrive, while
+    // keeping the notification action available for copying again.
+    const copied = match ? await writeClipboard(match.code) : false;
 
     try {
       notifyOneTimeCode({

@@ -39,21 +39,21 @@ describe("processIncomingCodes", () => {
     resetHandledCodes();
   });
 
-  it("announces the code without copying until the user chooses Copy", async () => {
+  it("copies the code immediately and announces it", async () => {
     const out = await processIncomingCodes([codeMail()], NOW);
-    expect(out).toEqual([{ code: "493028", linkUrl: null, copied: false }]);
-    expect(mockWriteText).not.toHaveBeenCalled();
+    expect(out).toEqual([{ code: "493028", linkUrl: null, copied: true }]);
+    expect(mockWriteText).toHaveBeenCalledWith("493028");
     expect(mockNotify).toHaveBeenCalledWith(
-      expect.objectContaining({ code: "493028", copied: false }),
+      expect.objectContaining({ code: "493028", copied: true }),
     );
   });
 
   it("ignores the legacy auto-copy setting", async () => {
     settings.set("otp_auto_copy", "true");
     const out = await processIncomingCodes([codeMail()], NOW);
-    expect(mockWriteText).not.toHaveBeenCalled();
-    expect(out[0]!.copied).toBe(false);
-    expect(mockNotify).toHaveBeenCalledWith(expect.objectContaining({ code: "493028", copied: false }));
+    expect(mockWriteText).toHaveBeenCalledWith("493028");
+    expect(out[0]!.copied).toBe(true);
+    expect(mockNotify).toHaveBeenCalledWith(expect.objectContaining({ code: "493028", copied: true }));
   });
 
   it("does nothing when detection is switched off", async () => {
@@ -84,7 +84,7 @@ describe("processIncomingCodes", () => {
         bodyHtml: '<a href="https://app.example.com/login?t=9">Anmelden</a><p>Oder dieser Code</p><p>271260</p>',
       }),
     ], NOW);
-    expect(out).toEqual([{ code: "271260", linkUrl: "https://app.example.com/login?t=9", copied: false }]);
+    expect(out).toEqual([{ code: "271260", linkUrl: "https://app.example.com/login?t=9", copied: true }]);
     expect(mockNotify).toHaveBeenCalledWith(
       expect.objectContaining({ code: "271260", linkUrl: "https://app.example.com/login?t=9" }),
     );
@@ -101,7 +101,7 @@ describe("processIncomingCodes", () => {
       }),
     ], NOW);
     const toast = useToastStore.getState().toasts[0];
-    expect(toast?.title).toBe("Code: 271260");
+    expect(toast?.title).toBe("Code copied: 271260");
     expect(toast?.ttlMs).toBeNull();
     expect(toast?.actions?.map((a) => a.label)).toEqual(["Copy code", "Open sign-in link"]);
   });

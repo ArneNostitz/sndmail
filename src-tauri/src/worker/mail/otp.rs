@@ -1,5 +1,5 @@
 //! One-time code detection and durable notification dedup for the headless
-//! worker. Clipboard changes only when the user presses Copy in the OS banner.
+//! worker. Fresh codes are copied immediately and remain available in the OS banner.
 
 use regex::Regex;
 use sqlx::{Connection, Row, SqliteConnection, sqlite::SqliteConnectOptions};
@@ -15,6 +15,7 @@ pub(super) async fn maybe_notify(
     message: &str,
     subject: Option<&str>,
     body: Option<&str>,
+    body_html: Option<&str>,
     date_ms: i64,
     sender: Option<&str>,
 ) -> Result<(), String> {
@@ -27,11 +28,10 @@ pub(super) async fn maybe_notify(
     if enabled.as_deref() == Some("false") { return Ok(()); }
     let notifications_enabled: Option<String> = sqlx::query_scalar("SELECT value FROM settings WHERE key = 'notifications_enabled'")
         .fetch_optional(&mut *db).await.map_err(|e| format!("OTP setting: {e}"))?;
-    if notifications_enabled.as_deref() == Some("false") { return Ok(()); }
-    let notify_accounts: Option<String> = sqlx::query_scalar("SELECT value FROM settings WHERE key = 'notify_accounts'")
-        .fetch_optional(&mut *db).await.map_err(|e| format!("OTP setting: {e}"))?;
-    if notify_accounts.as_deref().is_some_and(|v| !v.split(',').any(|item| item.trim() == account)) { return Ok(()); }
-    let Some(code) = subject.and_then(detect).or_else(|| body.and_then(detect)) else { return Ok(()); };
+    let notifications_enabled = notifications_enabled.as_deref() != Some("false");
+    let code = subject.and_then(detect).or_else(|| body.and_then(detect));
+    let sign_in_link = body_html.and_then(detect_sign_in_link);
+    if code.is_none() && sign_in_link.is_none() { return Ok(()); }
     sqlx::query("INSERT OR IGNORE INTO worker_otp_notifications (account_id, message_id) VALUES (?, ?)")
         .bind(account).bind(message).execute(&mut *db).await.map_err(|e| format!("OTP dedup: {e}"))?;
     let delivered: i64 = sqlx::query("SELECT delivered FROM worker_otp_notifications WHERE account_id = ? AND message_id = ?")
@@ -41,7 +41,7 @@ pub(super) async fn maybe_notify(
     let mut url = reqwest::Url::parse("sndmail://open").expect("fixed mail link base");
     url.query_pairs_mut().append_pair("account", account).append_pair("thread", thread).append_pair("message", message);
     dispatch(db, NotificationJob::Code {
-        code,
+        code, sign_in_link, notifications_enabled,
         sender: sender.unwrap_or("Your mail").to_owned(),
         account: account.to_owned(), message: message.to_owned(), link: url.to_string(),
     }).await?;
@@ -100,7 +100,7 @@ pub(super) async fn maybe_notify_mail(
 }
 
 enum NotificationJob {
-    Code { code: String, sender: String, account: String, message: String, link: String },
+    Code { code: Option<String>, sign_in_link: Option<String>, notifications_enabled: bool, sender: String, account: String, message: String, link: String },
     Mail { sender: String, subject: String, account: String, message: String, link: String },
 }
 
@@ -124,12 +124,13 @@ pub(super) async fn retry_pending(db: &mut SqliteConnection) -> Result<(), Strin
             let message: String = row.get("message_id");
             let thread: String = row.get("thread_id");
             let subject: Option<String> = row.get("subject");
-            let body: Option<String> = row.get::<Option<String>, _>("body_text")
-                .or_else(|| row.get("body_html"));
+            let body_text: Option<String> = row.get("body_text");
+            let body_html: Option<String> = row.get("body_html");
+            let body = body_text.as_deref().or(body_html.as_deref());
             let date: i64 = row.get("date");
             let from: Option<String> = row.get("from_address");
             if table == "worker_otp_notifications" {
-                maybe_notify(db, &account, &thread, &message, subject.as_deref(), body.as_deref(), date, from.as_deref()).await?;
+                maybe_notify(db, &account, &thread, &message, subject.as_deref(), body, body_html.as_deref(), date, from.as_deref()).await?;
             } else {
                 maybe_notify_mail(db, &account, &thread, &message, subject.as_deref(), body.as_deref(), date, from.as_deref()).await?;
             }
@@ -174,8 +175,14 @@ fn delivery_queue() -> Result<&'static DeliveryQueue, String> {
             let identity = job.identity();
             runtime.block_on(async {
                 let shown = match &job {
-                    NotificationJob::Code { code, sender, account, message, link } =>
-                        native::show(code, sender, account, message, link).await,
+                    NotificationJob::Code { code, sign_in_link, notifications_enabled, sender, account, message, link } => {
+                        if let Some(code) = code { native::copy_code(code); }
+                        if *notifications_enabled {
+                            native::show(code.as_deref(), sign_in_link.as_deref(), sender, account, message, link).await
+                        } else {
+                            Ok(())
+                        }
+                    },
                     NotificationJob::Mail { sender, subject, account, message, link } =>
                         native::show_mail(sender, subject, account, message, link).await,
                 };
@@ -243,6 +250,23 @@ fn detect(text: &str) -> Option<String> {
     None
 }
 
+fn detect_sign_in_link(html: &str) -> Option<String> {
+    static ANCHOR: OnceLock<Regex> = OnceLock::new();
+    static TAG: OnceLock<Regex> = OnceLock::new();
+    let anchor = ANCHOR.get_or_init(|| Regex::new(r#"(?is)<a\b[^>]*?href\s*=\s*[\"']([^\"']+)[\"'][^>]*>(.*?)</a\s*>"#).expect("fixed anchor regex"));
+    let tags = TAG.get_or_init(|| Regex::new(r"(?is)<[^>]+>").expect("fixed html tag regex"));
+    const KEYWORDS: &[&str] = &["sign in", "sign-in", "signin", "log in", "log-in", "login", "verify", "confirm", "activate", "magic link", "continue to", "complete your", "authenticate", "anmelden", "einloggen", "bestätigen", "bestaetigen", "verifizieren"];
+    for capture in anchor.captures_iter(html) {
+        let url = capture.get(1)?.as_str().trim();
+        let label = tags.replace_all(capture.get(2)?.as_str(), " ");
+        let haystack = format!("{label} {url}").to_lowercase();
+        if !(url.starts_with("https://") || url.starts_with("http://")) { continue; }
+        if haystack.contains("unsubscribe") || haystack.contains("preferences") || haystack.contains("privacy") || haystack.contains("terms") || haystack.contains("imprint") { continue; }
+        if KEYWORDS.iter().any(|keyword| haystack.contains(keyword)) { return Some(url.replace("&amp;", "&")); }
+    }
+    None
+}
+
 #[cfg(target_os = "macos")]
 mod native {
     use block2::RcBlock;
@@ -262,9 +286,22 @@ mod native {
     use std::sync::{Mutex, OnceLock};
 
     const CATEGORY: &str = "sndmail-worker-otp";
+    const LINK_CATEGORY: &str = "sndmail-worker-otp-link";
+    const LINK_ONLY_CATEGORY: &str = "sndmail-worker-link-only";
     const COPY: &str = "copy-code";
+    const FOLLOW: &str = "follow-link";
     const CONTEXT: &str = "sndmail-worker-code";
     const LINK: &str = "sndmail-worker-link";
+    const SIGN_IN_LINK: &str = "sndmail-worker-sign-in-link";
+
+    pub(super) fn copy_code(code: &str) {
+        if let Ok(mut child) = std::process::Command::new("/usr/bin/pbcopy")
+            .stdin(std::process::Stdio::piped()).spawn()
+        {
+            if let Some(mut input) = child.stdin.take() { let _ = input.write_all(code.as_bytes()); }
+            let _ = child.wait();
+        }
+    }
 
     struct Ivars;
     define_class!(
@@ -306,6 +343,12 @@ mod native {
                             let _ = child.wait();
                         }
                     }
+                } else if action == FOLLOW {
+                    let info = response.notification().request().content().userInfo();
+                    let key = NSString::from_str(SIGN_IN_LINK);
+                    let key: &AnyObject = &key;
+                    let link = info.objectForKey(key).and_then(|v| v.downcast_ref::<NSString>().map(ToString::to_string));
+                    if let Some(link) = link { let _ = std::process::Command::new("/usr/bin/open").arg(link).spawn(); }
                 } else if unsafe { &*response.actionIdentifier() == UNNotificationDefaultActionIdentifier } {
                     let info = response.notification().request().content().userInfo();
                     let key = NSString::from_str(LINK);
@@ -365,16 +408,32 @@ mod native {
             let action = UNNotificationAction::actionWithIdentifier_title_options(
                 &NSString::from_str(COPY), &NSString::from_str("Copy code"), UNNotificationActionOptions::empty(),
             );
+            let follow = UNNotificationAction::actionWithIdentifier_title_options(
+                &NSString::from_str(FOLLOW), &NSString::from_str("Follow link"), UNNotificationActionOptions::empty(),
+            );
             let category = UNNotificationCategory::categoryWithIdentifier_actions_intentIdentifiers_options(
-                &NSString::from_str(CATEGORY), &NSArray::from_retained_slice(&[action]),
+                &NSString::from_str(CATEGORY), &NSArray::from_retained_slice(&[action.clone()]),
+                &NSArray::<NSString>::new(), UNNotificationCategoryOptions::empty(),
+            );
+            let link_category = UNNotificationCategory::categoryWithIdentifier_actions_intentIdentifiers_options(
+                &NSString::from_str(LINK_CATEGORY), &NSArray::from_retained_slice(&[action.clone(), follow.clone()]),
+                &NSArray::<NSString>::new(), UNNotificationCategoryOptions::empty(),
+            );
+            let link_only_category = UNNotificationCategory::categoryWithIdentifier_actions_intentIdentifiers_options(
+                &NSString::from_str(LINK_ONLY_CATEGORY), &NSArray::from_retained_slice(&[follow.clone()]),
                 &NSArray::<NSString>::new(), UNNotificationCategoryOptions::empty(),
             );
             let mut categories: Vec<Retained<UNNotificationCategory>> = unsafe { existing.as_ref() }
                 .allObjects().iter()
-                .filter(|item| item.identifier().to_string() != CATEGORY)
+                .filter(|item| {
+                    let identifier = item.identifier().to_string();
+                    identifier != CATEGORY && identifier != LINK_CATEGORY && identifier != LINK_ONLY_CATEGORY
+                })
                 .map(|item| item.to_owned())
                 .collect();
             categories.push(category);
+            categories.push(link_category);
+            categories.push(link_only_category);
             UNUserNotificationCenter::currentNotificationCenter()
                 .setNotificationCategories(&NSSet::from_retained_slice(&categories));
             if let Some(tx) = tx.lock().ok().and_then(|mut slot| slot.take()) { let _ = tx.send(()); }
@@ -402,18 +461,27 @@ mod native {
         rx.await.map_err(|_| "notification permission did not answer".to_string())
     }
 
-    pub(super) async fn show(code: &str, sender: &str, account: &str, message: &str, link: &str) -> Result<(), String> {
+    pub(super) async fn show(code: Option<&str>, sign_in_link: Option<&str>, sender: &str, account: &str, message: &str, link: &str) -> Result<(), String> {
         initialize().await?;
         if !tokio::time::timeout(std::time::Duration::from_secs(10), permission()).await
             .map_err(|_| "notification permission timed out".to_string())?? { return Err("notification permission denied".into()); }
         let content = UNMutableNotificationContent::new();
-        content.setTitle(&NSString::from_str("One-time code"));
-        content.setBody(&NSString::from_str(&format!("{sender}: {code}")));
-        content.setCategoryIdentifier(&NSString::from_str(CATEGORY));
+        content.setTitle(&NSString::from_str(if code.is_some() { "One-time code" } else { "Sign-in link" }));
+        content.setBody(&NSString::from_str(&match code {
+            Some(code) => format!("{sender}: {code}"),
+            None => format!("Sign-in link from {sender}"),
+        }));
+        let category = match (code.is_some(), sign_in_link.is_some()) {
+            (true, true) => LINK_CATEGORY,
+            (true, false) => CATEGORY,
+            (false, true) => LINK_ONLY_CATEGORY,
+            (false, false) => return Err("empty OTP notification".into()),
+        };
+        content.setCategoryIdentifier(&NSString::from_str(category));
         content.setSound(Some(&UNNotificationSound::defaultSound()));
         let info = NSDictionary::from_slices::<NSString>(
-            &[&*NSString::from_str(CONTEXT), &*NSString::from_str(LINK)],
-            &[&*NSString::from_str(code), &*NSString::from_str(link)],
+            &[&*NSString::from_str(CONTEXT), &*NSString::from_str(LINK), &*NSString::from_str(SIGN_IN_LINK)],
+            &[&*NSString::from_str(code.unwrap_or("")), &*NSString::from_str(link), &*NSString::from_str(sign_in_link.unwrap_or(""))],
         );
         unsafe { content.setUserInfo(&Retained::cast_unchecked::<NSDictionary>(info)) };
         let id = format!("sndmail-worker-otp-{:x}", md5::compute(format!("{account}:{message}")));
@@ -462,7 +530,8 @@ mod native {
 #[cfg(not(target_os = "macos"))]
 mod native {
     pub(super) async fn authorization_status() -> &'static str { "not_determined" }
-    pub(super) async fn show(_code: &str, _sender: &str, _account: &str, _message: &str, _link: &str) -> Result<(), String> {
+    pub(super) fn copy_code(_code: &str) {}
+    pub(super) async fn show(_code: Option<&str>, _sign_in_link: Option<&str>, _sender: &str, _account: &str, _message: &str, _link: &str) -> Result<(), String> {
         Err("native OTP actions require macOS".into())
     }
     pub(super) async fn show_mail(_sender: &str, _subject: &str, _account: &str, _message: &str, _link: &str) -> Result<(), String> {

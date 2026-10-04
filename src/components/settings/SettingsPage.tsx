@@ -991,7 +991,7 @@ export function SettingsPage() {
                     </p>
                     <ToggleRow
                       label="Detect login codes"
-                      description="Spot a verification code in arriving mail. Copy it from the notification or message when you need it"
+                      description="Spot verification codes in arriving mail and copy them to the clipboard immediately"
                       checked={otpDetection}
                       onToggle={async () => {
                         const next = !otpDetection;

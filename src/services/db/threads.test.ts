@@ -142,6 +142,21 @@ describe("threads service - unified inbox queries", () => {
     expect(sql).toContain("spam.label_id = 'SPAM'");
   });
 
+  it("orders inbox threads by the latest message from someone else", async () => {
+    await getThreadsForAccounts(["a"], "INBOX", 50, 0, ["me@x.com"]);
+    const { sql, params } = lastSelect();
+    expect(sql).toContain("COALESCE(");
+    expect(sql).toContain("MAX(received.date)");
+    expect(sql).toContain("LOWER(COALESCE(received.from_address, '')) NOT IN ($3)");
+    expect(sql).toContain("t.last_message_at\n  ) DESC");
+    expect(params).toEqual(["a", "INBOX", "me@x.com", 50, 0]);
+  });
+
+  it("keeps the legacy order when own addresses are unavailable", async () => {
+    await getThreadsForAccounts(["a"], "INBOX", 50, 0, []);
+    expect(lastSelect().sql).toContain("ORDER BY t.is_pinned DESC, t.last_message_at DESC");
+  });
+
   it("does not exclude spam threads from the spam folder", async () => {
     await getThreadsForAccounts(["a"], "SPAM", 50, 0);
     const { sql } = lastSelect();
@@ -163,6 +178,14 @@ describe("threads service - unified inbox queries", () => {
     expect(sql).toContain("LIMIT $3 OFFSET $4");
     expect(params).toEqual(["a", "b", 50, 0]);
     expect(sql).toContain("spam.label_id = 'SPAM'");
+  });
+
+  it("uses received-message time for categorized inbox ordering", async () => {
+    await getThreadsForCategoryAcrossAccounts(["a"], "Primary", 50, 0, ["me@x.com"]);
+    const { sql, params } = lastSelect();
+    expect(sql).toContain("MAX(received.date)");
+    expect(sql).toContain("NOT IN ($2)");
+    expect(params).toEqual(["a", "me@x.com", 50, 0]);
   });
 
   it("binds the category after the accounts for other categories", async () => {

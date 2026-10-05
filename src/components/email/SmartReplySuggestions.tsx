@@ -6,6 +6,8 @@ import { isTemporaryAiUnavailableError } from "@/services/ai/errors";
 import { deleteAiCache } from "@/services/db/aiCache";
 import { useComposerStore } from "@/stores/composerStore";
 import { recipientHeadersFromMessages } from "@/utils/resolveFromAddress";
+import { latestIncomingMessage, resolveReplyRecipients } from "@/utils/replyRecipients";
+import { useOwnAddresses } from "@/hooks/useOwnAddresses";
 import type { DbMessage } from "@/services/db/messages";
 
 import { Tooltip } from "@/components/ui/Tooltip";
@@ -17,6 +19,7 @@ interface SmartReplySuggestionsProps {
 }
 
 export function SmartReplySuggestions({ threadId, accountId, messages, noReply }: SmartReplySuggestionsProps) {
+  const ownAddresses = useOwnAddresses([accountId]);
   const [replies, setReplies] = useState<string[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [available, setAvailable] = useState(false);
@@ -71,21 +74,20 @@ export function SmartReplySuggestions({ threadId, accountId, messages, noReply }
   }, [threadId, accountId, messages]);
 
   const handleReplyClick = useCallback((replyText: string) => {
-    const lastMessage = messages[messages.length - 1];
-    if (!lastMessage) return;
-
-    const replyTo = lastMessage.reply_to ?? lastMessage.from_address;
+    const targetMessage = latestIncomingMessage(messages, ownAddresses) ?? messages[messages.length - 1];
+    if (!targetMessage) return;
+    const { to } = resolveReplyRecipients(targetMessage, "reply", ownAddresses);
     openComposer({
       mode: "reply",
-      to: replyTo ? [replyTo] : [],
-      subject: `Re: ${lastMessage.subject ?? ""}`,
+      to,
+      subject: `Re: ${targetMessage.subject ?? ""}`,
       bodyHtml: `<p>${replyText}</p>`,
-      threadId: lastMessage.thread_id,
-      inReplyToMessageId: lastMessage.id,
+      threadId: targetMessage.thread_id,
+      inReplyToMessageId: targetMessage.id,
       originalRecipients: recipientHeadersFromMessages(messages),
       accountId,
     });
-  }, [messages, accountId, openComposer]);
+  }, [messages, accountId, openComposer, ownAddresses]);
 
   if (!available || messages.length === 0 || noReply) return null;
 

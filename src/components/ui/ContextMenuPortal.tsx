@@ -12,7 +12,6 @@ import { archiveThread, trashThread, permanentDeleteThread, markThreadRead, star
 import { deleteThread as deleteThreadFromDb, pinThread as pinThreadDb, unpinThread as unpinThreadDb, muteThread as muteThreadDb, unmuteThread as unmuteThreadDb } from "@/services/db/threads";
 import { deleteDraftsForThread } from "@/services/gmail/draftDeletion";
 import { getGmailClient } from "@/services/gmail/tokenManager";
-import { getMessagesForThread } from "@/services/db/messages";
 import { snoozeThread } from "@/services/snooze/snoozeManager";
 import { getEnabledQuickStepsForAccount, type DbQuickStep } from "@/services/db/quickSteps";
 import { executeQuickStep } from "@/services/quickSteps/executor";
@@ -48,6 +47,9 @@ import { useUIStore } from "@/stores/uiStore";
 import { setThreadCategory, ALL_CATEGORIES } from "@/services/db/threadCategories";
 import { formatDateTime } from "@/utils/date";
 import { recipientHeadersFromMessages } from "@/utils/resolveFromAddress";
+import { latestIncomingMessage, resolveReplyRecipients } from "@/utils/replyRecipients";
+import { collectOwnAddresses } from "@/services/accounts/ownAddresses";
+import { getMessagesForThread } from "@/services/db/messages";
 import { confirmDelete } from "@/utils/confirmDelete";
 import { createMailLink } from "@/utils/mailLink";
 import { notify, reportError } from "@/stores/toastStore";
@@ -300,14 +302,16 @@ function ThreadMenu({
     const messages = await getMessagesForThread(threadAccountId, thread.id);
     const lastMessage = messages[messages.length - 1];
     if (!lastMessage) return;
-    const replyTo = lastMessage.reply_to ?? lastMessage.from_address;
+    const own = await collectOwnAddresses(useAccountStore.getState().accounts, [threadAccountId]);
+    const target = latestIncomingMessage(messages, own) ?? lastMessage;
+    const { to } = resolveReplyRecipients(target, "reply", own);
     openComposer({
       mode: "reply",
-      to: replyTo ? [replyTo] : [],
-      subject: `Re: ${lastMessage.subject ?? ""}`,
-      bodyHtml: buildQuote(lastMessage),
-      threadId: lastMessage.thread_id,
-      inReplyToMessageId: lastMessage.id,
+      to,
+      subject: `Re: ${target.subject ?? ""}`,
+      bodyHtml: buildQuote(target),
+      threadId: target.thread_id,
+      inReplyToMessageId: target.id,
       originalRecipients: recipientHeadersFromMessages(messages),
       accountId: threadAccountId,
     });
@@ -317,24 +321,17 @@ function ThreadMenu({
     const messages = await getMessagesForThread(threadAccountId, thread.id);
     const lastMessage = messages[messages.length - 1];
     if (!lastMessage) return;
-    const replyTo = lastMessage.reply_to ?? lastMessage.from_address;
-    const allRecipients = new Set<string>();
-    if (replyTo) allRecipients.add(replyTo);
-    if (lastMessage.to_addresses) {
-      lastMessage.to_addresses.split(",").forEach((a) => allRecipients.add(a.trim()));
-    }
-    const ccList: string[] = [];
-    if (lastMessage.cc_addresses) {
-      lastMessage.cc_addresses.split(",").forEach((a) => ccList.push(a.trim()));
-    }
+    const own = await collectOwnAddresses(useAccountStore.getState().accounts, [threadAccountId]);
+    const target = latestIncomingMessage(messages, own) ?? lastMessage;
+    const { to, cc } = resolveReplyRecipients(target, "replyAll", own);
     openComposer({
       mode: "replyAll",
-      to: Array.from(allRecipients),
-      cc: ccList,
-      subject: `Re: ${lastMessage.subject ?? ""}`,
-      bodyHtml: buildQuote(lastMessage),
-      threadId: lastMessage.thread_id,
-      inReplyToMessageId: lastMessage.id,
+      to,
+      cc,
+      subject: `Re: ${target.subject ?? ""}`,
+      bodyHtml: buildQuote(target),
+      threadId: target.thread_id,
+      inReplyToMessageId: target.id,
       originalRecipients: recipientHeadersFromMessages(messages),
       accountId: threadAccountId,
     });
@@ -697,39 +694,52 @@ function MessageMenu({
 
   const msg = { from_name: fromName, from_address: fromAddress, date, body_html: bodyHtml, body_text: bodyText, subject, to_addresses: toAddresses };
 
-  const handleReply = () => {
-    const replyAddr = replyTo ?? fromAddress;
+  const handleReply = async () => {
+    const own = accountId
+      ? await collectOwnAddresses(useAccountStore.getState().accounts, [accountId])
+      : [];
+    const selectedIsOwn = fromAddress
+      ? own.some((address) => address.toLowerCase() === fromAddress.toLowerCase())
+      : false;
+    const messages = selectedIsOwn && accountId ? await getMessagesForThread(accountId, threadId) : [];
+    const incomingTarget = selectedIsOwn ? latestIncomingMessage(messages, own) : undefined;
+    const target = incomingTarget ?? { from_address: fromAddress, reply_to: replyTo };
+    if (!target.from_address && !target.reply_to) return;
+    const { to } = resolveReplyRecipients(target, "reply", own);
+    const targetMessage = incomingTarget;
     openComposer({
       mode: "reply",
-      to: replyAddr ? [replyAddr] : [],
-      subject: `Re: ${subject ?? ""}`,
-      bodyHtml: buildQuote(msg),
+      to,
+      subject: `Re: ${targetMessage?.subject ?? subject ?? ""}`,
+      bodyHtml: buildQuote(targetMessage ?? msg),
       threadId,
-      inReplyToMessageId: messageId,
+      inReplyToMessageId: targetMessage?.id ?? messageId,
       originalRecipients: [toAddresses, ccAddresses].filter((h): h is string => !!h),
       accountId,
     });
   };
 
-  const handleReplyAll = () => {
-    const replyAddr = replyTo ?? fromAddress;
-    const allRecipients = new Set<string>();
-    if (replyAddr) allRecipients.add(replyAddr);
-    if (toAddresses) {
-      toAddresses.split(",").forEach((a) => allRecipients.add(a.trim()));
-    }
-    const ccList: string[] = [];
-    if (ccAddresses) {
-      ccAddresses.split(",").forEach((a) => ccList.push(a.trim()));
-    }
+  const handleReplyAll = async () => {
+    const own = accountId
+      ? await collectOwnAddresses(useAccountStore.getState().accounts, [accountId])
+      : [];
+    const selectedIsOwn = fromAddress
+      ? own.some((address) => address.toLowerCase() === fromAddress.toLowerCase())
+      : false;
+    const messages = selectedIsOwn && accountId ? await getMessagesForThread(accountId, threadId) : [];
+    const incomingTarget = selectedIsOwn ? latestIncomingMessage(messages, own) : undefined;
+    const target = incomingTarget ?? { from_address: fromAddress, reply_to: replyTo, to_addresses: toAddresses, cc_addresses: ccAddresses };
+    if (!target.from_address && !target.reply_to) return;
+    const { to, cc } = resolveReplyRecipients(target, "replyAll", own);
+    const targetMessage = incomingTarget;
     openComposer({
       mode: "replyAll",
-      to: Array.from(allRecipients),
-      cc: ccList,
-      subject: `Re: ${subject ?? ""}`,
-      bodyHtml: buildQuote(msg),
+      to,
+      cc,
+      subject: `Re: ${targetMessage?.subject ?? subject ?? ""}`,
+      bodyHtml: buildQuote(targetMessage ?? msg),
       threadId,
-      inReplyToMessageId: messageId,
+      inReplyToMessageId: targetMessage?.id ?? messageId,
       originalRecipients: [toAddresses, ccAddresses].filter((h): h is string => !!h),
       accountId,
     });

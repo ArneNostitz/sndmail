@@ -129,6 +129,18 @@ function peerJoin(
   };
 }
 
+/** Inbox ordering follows the newest message from someone else when known. */
+function inboxOrder(ownAddresses: string[], startIndex: number): string {
+  if (ownAddresses.length === 0) return "t.last_message_at";
+  const placeholders = ownAddresses.map((_, i) => `$${startIndex + i}`).join(", ");
+  return `COALESCE(
+    (SELECT MAX(received.date) FROM messages received
+     WHERE received.account_id = t.account_id AND received.thread_id = t.id
+       AND LOWER(COALESCE(received.from_address, '')) NOT IN (${placeholders})),
+    t.last_message_at
+  )`;
+}
+
 /**
  * Threads across several accounts, newest first — the unified inbox.
  *
@@ -153,6 +165,9 @@ export async function getThreadsForAccounts(
   if (labelIds.length > 0) {
     const labels = inClause(labelIds.length, nextIndex);
     const peer = peerJoin(ownAddresses, labels.nextIndex);
+    const orderDate = labelIds.includes("INBOX") && !labelIds.includes("SENT")
+      ? inboxOrder(ownAddresses, labels.nextIndex)
+      : "t.last_message_at";
     // A Gmail thread can contain messages with different system labels. Our
     // thread-level union may therefore contain both INBOX and SPAM; Spam wins
     // so a dangerous-looking red thread is never served in the Inbox.
@@ -174,7 +189,7 @@ export async function getThreadsForAccounts(
          ${excludeSpam}
          AND ${HAS_REAL_MESSAGE} AND ${NOT_MERGED_AWAY}
        GROUP BY t.account_id, t.id
-       ORDER BY t.is_pinned DESC, t.last_message_at DESC
+       ORDER BY t.is_pinned DESC, ${orderDate} DESC
        LIMIT $${peer.nextIndex} OFFSET $${peer.nextIndex + 1}`,
       [...accountIds, ...labelIds, ...peer.params, limit, offset],
     );
@@ -234,6 +249,7 @@ export async function getThreadsForCategoryAcrossAccounts(
   if (category === "Primary") {
     // Primary includes threads with NULL category (uncategorized)
     const peerPrimary = peerJoin(ownAddresses, nextIndex);
+    const orderDate = inboxOrder(ownAddresses, nextIndex);
     return db.select<DbThread[]>(
       `SELECT t.*, m.from_name, m.from_address${peerPrimary.select} FROM threads t
        INNER JOIN thread_labels tl ON tl.account_id = t.account_id AND tl.thread_id = t.id
@@ -251,13 +267,14 @@ export async function getThreadsForCategoryAcrossAccounts(
          AND (tc.category IS NULL OR tc.category = 'Primary')
          AND ${HAS_REAL_MESSAGE} AND ${NOT_MERGED_AWAY}
        GROUP BY t.account_id, t.id
-       ORDER BY t.is_pinned DESC, t.last_message_at DESC
+       ORDER BY t.is_pinned DESC, ${orderDate} DESC
        LIMIT $${peerPrimary.nextIndex} OFFSET $${peerPrimary.nextIndex + 1}`,
       [...accountIds, ...peerPrimary.params, limit, offset],
     );
   }
 
   const peer = peerJoin(ownAddresses, nextIndex + 1);
+  const orderDate = inboxOrder(ownAddresses, nextIndex + 1);
   return db.select<DbThread[]>(
     `SELECT t.*, m.from_name, m.from_address${peer.select} FROM threads t
      INNER JOIN thread_labels tl ON tl.account_id = t.account_id AND tl.thread_id = t.id
@@ -274,7 +291,7 @@ export async function getThreadsForCategoryAcrossAccounts(
        )
        AND ${HAS_REAL_MESSAGE} AND ${NOT_MERGED_AWAY}
      GROUP BY t.account_id, t.id
-     ORDER BY t.is_pinned DESC, t.last_message_at DESC
+     ORDER BY t.is_pinned DESC, ${orderDate} DESC
      LIMIT $${peer.nextIndex} OFFSET $${peer.nextIndex + 1}`,
     [...accountIds, category, ...peer.params, limit, offset],
   );

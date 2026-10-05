@@ -33,6 +33,20 @@ describe("SearchBar", () => {
     expect(screen.getByRole("button", { name: "Has attachments" })).toBeInTheDocument();
   });
 
+  it("shows the anchored search options on hover and while the field is focused", () => {
+    render(<SearchBar />);
+    const input = screen.getByRole("textbox");
+    const searchArea = input.parentElement!.parentElement!;
+
+    fireEvent.mouseEnter(searchArea);
+    expect(screen.getByRole("group", { name: "Search filters" })).toBeInTheDocument();
+    fireEvent.mouseLeave(searchArea);
+    expect(screen.queryByRole("group", { name: "Search filters" })).toBeNull();
+
+    fireEvent.focus(input);
+    expect(screen.getByRole("group", { name: "Search filters" })).toBeInTheDocument();
+  });
+
   it("adds and removes preset operators without discarding the typed search", () => {
     render(<SearchBar />);
     fireEvent.change(screen.getByRole("textbox"), {

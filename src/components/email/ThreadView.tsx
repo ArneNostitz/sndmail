@@ -21,6 +21,7 @@ import { ThreadSummary } from "./ThreadSummary";
 import { ChatThread } from "./ChatThread";
 import { PastConversations } from "./PastConversations";
 import { useOwnAddresses } from "@/hooks/useOwnAddresses";
+import { latestIncomingMessage, resolveReplyRecipients } from "@/utils/replyRecipients";
 import { SmartReplySuggestions } from "./SmartReplySuggestions";
 import { InlineReply } from "./InlineReply";
 import { ContactSidebar, DetailsPlaceholder } from "./ContactSidebar";
@@ -251,46 +252,38 @@ export function ThreadView({ thread }: ThreadViewProps) {
   const openMenu = useContextMenuStore((s) => s.openMenu);
   const defaultReplyMode = useUIStore((s) => s.defaultReplyMode);
   const lastMessage = messages[messages.length - 1];
+  const replyTarget = latestIncomingMessage(messages, ownAddresses) ?? lastMessage;
 
   const handleReply = useCallback(() => {
-    if (!lastMessage) return;
-    const replyTo = lastMessage.reply_to ?? lastMessage.from_address;
+    if (!replyTarget) return;
+    const { to } = resolveReplyRecipients(replyTarget, "reply", ownAddresses);
     openComposer({
       mode: "reply",
-      to: replyTo ? [replyTo] : [],
-      subject: `Re: ${lastMessage.subject ?? ""}`,
-      bodyHtml: buildQuote(lastMessage),
-      threadId: lastMessage.thread_id,
-      inReplyToMessageId: lastMessage.id,
+      to,
+      subject: `Re: ${replyTarget.subject ?? ""}`,
+      bodyHtml: buildQuote(replyTarget),
+      threadId: replyTarget.thread_id,
+      inReplyToMessageId: replyTarget.id,
       originalRecipients: recipientHeadersFromMessages(messages),
       accountId: threadAccountId,
     });
-  }, [lastMessage, messages, threadAccountId, openComposer]);
+  }, [replyTarget, messages, threadAccountId, openComposer, ownAddresses]);
 
   const handleReplyAll = useCallback(() => {
-    if (!lastMessage) return;
-    const replyTo = lastMessage.reply_to ?? lastMessage.from_address;
-    const allRecipients = new Set<string>();
-    if (replyTo) allRecipients.add(replyTo);
-    if (lastMessage.to_addresses) {
-      lastMessage.to_addresses.split(",").forEach((a) => allRecipients.add(a.trim()));
-    }
-    const ccList: string[] = [];
-    if (lastMessage.cc_addresses) {
-      lastMessage.cc_addresses.split(",").forEach((a) => ccList.push(a.trim()));
-    }
+    if (!replyTarget) return;
+    const { to, cc } = resolveReplyRecipients(replyTarget, "replyAll", ownAddresses);
     openComposer({
       mode: "replyAll",
-      to: Array.from(allRecipients),
-      cc: ccList,
-      subject: `Re: ${lastMessage.subject ?? ""}`,
-      bodyHtml: buildQuote(lastMessage),
-      threadId: lastMessage.thread_id,
-      inReplyToMessageId: lastMessage.id,
+      to,
+      cc,
+      subject: `Re: ${replyTarget.subject ?? ""}`,
+      bodyHtml: buildQuote(replyTarget),
+      threadId: replyTarget.thread_id,
+      inReplyToMessageId: replyTarget.id,
       originalRecipients: recipientHeadersFromMessages(messages),
       accountId: threadAccountId,
     });
-  }, [lastMessage, messages, threadAccountId, openComposer]);
+  }, [replyTarget, messages, threadAccountId, openComposer, ownAddresses]);
 
   const handleForward = useCallback(() => {
     if (!lastMessage) return;

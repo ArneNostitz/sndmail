@@ -14,7 +14,8 @@ import { getSetting } from "@/services/db/settings";
 import { getDefaultSignature } from "@/services/db/signatures";
 import { getAliasesForAccount, mapDbAlias, type SendAsAlias } from "@/services/db/sendAsAliases";
 import { resolveFromAddress, recipientHeadersFromMessages } from "@/utils/resolveFromAddress";
-import { extractEmailAddresses, normalizeEmail } from "@/utils/emailUtils";
+import { normalizeEmail } from "@/utils/emailUtils";
+import { latestIncomingMessage, resolveReplyRecipients } from "@/utils/replyRecipients";
 import {
   isAutoDraftEnabled,
   generateAutoDraft,
@@ -52,6 +53,10 @@ export function InlineReply({ thread, messages, accountId, noReply, onSent }: In
   const messagesRef = useRef(messages);
 
   const lastMessage = messages[messages.length - 1];
+  const replyTarget = latestIncomingMessage(messages, [
+    ...(activeAccount?.email ? [activeAccount.email] : []),
+    ...aliases.map((alias) => alias.email),
+  ]) ?? lastMessage;
 
   const editor = useEditor({
     extensions: [
@@ -139,14 +144,14 @@ export function InlineReply({ thread, messages, accountId, noReply, onSent }: In
   // Listen for inline reply events from keyboard shortcuts
   useEffect(() => {
     const handler = (e: Event) => {
-      const detail = (e as CustomEvent).detail as { mode: ReplyMode } | undefined;
-      if (detail?.mode) {
+      const detail = (e as CustomEvent).detail as { mode: ReplyMode; threadId?: string; accountId?: string } | undefined;
+      if (detail?.mode && (!detail.threadId || detail.threadId === thread.id) && (!detail.accountId || detail.accountId === accountId)) {
         activateMode(detail.mode);
       }
     };
     window.addEventListener("sndmail-inline-reply", handler);
     return () => window.removeEventListener("sndmail-inline-reply", handler);
-  }, [activateMode]);
+  }, [activateMode, thread.id, accountId]);
 
   // Scroll into view when activated
   useEffect(() => {
@@ -156,44 +161,17 @@ export function InlineReply({ thread, messages, accountId, noReply, onSent }: In
   }, [mode]);
 
   const getRecipients = useCallback((): { to: string[]; cc: string[] } => {
-    if (!lastMessage) return { to: [], cc: [] };
+    if (!replyTarget) return { to: [], cc: [] };
 
     if (mode === "forward") return { to: [], cc: [] };
-
-    const replyTo = lastMessage.reply_to ?? lastMessage.from_address;
-
-    if (mode === "reply") {
-      return { to: replyTo ? [replyTo] : [], cc: [] };
-    }
-
-    // replyAll
-    const allTo = new Set<string>();
-    if (replyTo) allTo.add(replyTo);
-    if (lastMessage.to_addresses) {
-      lastMessage.to_addresses.split(",").forEach((a) => allTo.add(a.trim()));
-    }
     // Remove self from recipients — the account address and every send-as
     // alias, so a reply-all sent from an alias does not loop back to it.
     const own = new Set<string>();
     if (activeAccount?.email) own.add(normalizeEmail(activeAccount.email));
     for (const alias of aliases) own.add(normalizeEmail(alias.email));
-    const isOwn = (address: string) =>
-      extractEmailAddresses(address).some((a) => own.has(a));
 
-    for (const address of [...allTo]) {
-      if (isOwn(address)) allTo.delete(address);
-    }
-
-    const ccList: string[] = [];
-    if (lastMessage.cc_addresses) {
-      lastMessage.cc_addresses.split(",").forEach((a) => {
-        const trimmed = a.trim();
-        if (trimmed && !isOwn(trimmed)) ccList.push(trimmed);
-      });
-    }
-
-    return { to: Array.from(allTo), cc: ccList };
-  }, [lastMessage, mode, activeAccount?.email, aliases]);
+    return resolveReplyRecipients(replyTarget, mode === "replyAll" ? "replyAll" : "reply", own);
+  }, [replyTarget, mode, activeAccount?.email, aliases]);
 
   const getSubject = useCallback((): string => {
     const sub = lastMessage?.subject ?? "";

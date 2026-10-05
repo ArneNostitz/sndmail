@@ -21,7 +21,8 @@ import { FIX_NUMBER } from "@/constants/build";
 import { UPDATE_SOURCE_CONFIGURED } from "@/services/updateManager";
 import { deleteAccount, updateAccountColor } from "@/services/db/accounts";
 import { ACCOUNT_COLORS, accountColor } from "@/constants/accountColors";
-import { removeClient, reauthorizeAccount } from "@/services/gmail/tokenManager";
+import { removeClient, reauthorizeAccount, getGmailClient } from "@/services/gmail/tokenManager";
+import { fetchSendAsAliases } from "@/services/gmail/sendAs";
 import { validateClientId, validateClientSecret } from "@/services/gmail/clientCredentials";
 import { triggerSync, forceFullSync, resyncAccount } from "@/services/gmail/syncManager";
 import { backgroundWorkerOwnsSync, reconfigureBackgroundWorkerRelay, requestWorkerResync, wakeBackgroundWorkerAndWait } from "@/services/worker/workerClient";
@@ -2083,22 +2084,49 @@ function AccountColorPicker({
   );
 }
 
-function SendAsAliasesSection() {
+export function SendAsAliasesSection() {
   const accounts = useAccountStore((s) => s.accounts);
   const [aliases, setAliases] = useState<SendAsAlias[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const reloadAliases = useCallback(async (accountId: string) => {
+    const dbAliases = await getAliasesForAccount(accountId);
+    setAliases(dbAliases.map(mapDbAlias));
+  }, []);
 
   useEffect(() => {
     const activeAccount = accounts.find((a) => a.isActive);
-    if (!activeAccount) return;
+    if (!activeAccount || activeAccount.provider !== "gmail_api") {
+      setAliases([]);
+      return;
+    }
     let cancelled = false;
     getAliasesForAccount(activeAccount.id).then((dbAliases) => {
       if (cancelled) return;
       setAliases(dbAliases.map(mapDbAlias));
     });
     return () => { cancelled = true; };
-  }, [accounts]);
+  }, [accounts, reloadAliases]);
 
   const activeAccount = accounts.find((a) => a.isActive);
+
+  const handleRefresh = async () => {
+    if (!activeAccount || activeAccount.provider !== "gmail_api") return;
+    setRefreshing(true);
+    setLoadError(null);
+    try {
+      const client = await getGmailClient(activeAccount.id);
+      await fetchSendAsAliases(client, activeAccount.id);
+      await reloadAliases(activeAccount.id);
+      notify("success", "Aliases refreshed");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setLoadError(message);
+      reportError("Could not refresh Gmail aliases", error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const handleSetDefault = async (alias: SendAsAlias) => {
     if (!activeAccount) return;
@@ -2113,12 +2141,32 @@ function SendAsAliasesSection() {
 
   return (
     <Section title="Send-As Aliases">
-      <p className="text-xs text-text-tertiary mb-3">
-        These aliases are synced from your Gmail settings. You can select which alias to use as the default sender.
-      </p>
+      {activeAccount?.provider === "gmail_api" ? (
+        <>
+          <p className="text-xs text-text-tertiary mb-3">
+            Add an address in Google Admin as an alternate email address, or in Gmail under Settings → Accounts → Send mail as. Complete Gmail’s verification, then refresh here. Only verified aliases are available to send from.
+          </p>
+          <button
+            type="button"
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="mb-3 flex items-center gap-1.5 text-xs text-accent hover:text-accent-hover disabled:opacity-50"
+          >
+            <RefreshCw size={13} className={refreshing ? "animate-spin" : ""} />
+            {refreshing ? "Refreshing…" : "Refresh aliases"}
+          </button>
+          {loadError && (loadError.includes("403") || loadError.toLowerCase().includes("reauthorize")) && (
+            <p role="alert" className="text-xs text-warning mb-3">
+              Gmail denied access to send-as settings. Re-authorize this Gmail account in Settings → Accounts, then try again. ({loadError})
+            </p>
+          )}
+        </>
+      ) : (
+        <p className="text-xs text-text-tertiary mb-3">Send-as aliases are available for Gmail accounts.</p>
+      )}
       {aliases.length === 0 ? (
         <p className="text-sm text-text-tertiary">
-          No aliases found. Aliases are fetched from Gmail on startup.
+          No aliases found. Add and verify an address with Google, then refresh aliases.
         </p>
       ) : (
         <div className="space-y-2">

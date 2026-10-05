@@ -52,7 +52,7 @@ describe("trimHtmlBody", () => {
   });
 
   it("treats a bare forward as empty rather than keeping the quoted mail", () => {
-    // The shape Velo's own forward produces: no note, attribution, then quote
+    // The shape snd's own forward produces: no note, attribution, then quote
     const html =
       '<html><body><br> <br><div class="gmail_signature"></div>'
       + '<p class="gmail_quote">On 8. May 2026 at 15:21:52, Rainer Newald wrote:</p>'

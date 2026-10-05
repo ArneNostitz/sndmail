@@ -34,7 +34,7 @@ describe("email navigation", () => {
     const second = handler();
     const offFirst = registerEmailNavigationHandler("first", first);
     const offSecond = registerEmailNavigationHandler("second", second);
-    dispatchEmailNavigation("tauri://localhost/__velo_email_action__/second/4");
+    dispatchEmailNavigation("tauri://localhost/__snd_email_action__/second/4");
     expect(first.run).not.toHaveBeenCalled();
     expect(second.run).toHaveBeenCalledWith("4");
     offFirst();
@@ -75,8 +75,8 @@ describe("email navigation", () => {
     const target = handler();
     const off = registerEmailNavigationHandler("target", target);
     const unlisten = await startEmailNavigationListener();
-    window.dispatchEvent(new CustomEvent("velo-email-navigation", {
-      detail: "tauri://localhost/__velo_email_action__/target/9",
+    window.dispatchEvent(new CustomEvent("snd-email-navigation", {
+      detail: "tauri://localhost/__snd_email_action__/target/9",
     }));
     expect(target.run).toHaveBeenCalledWith("9");
     unlisten();
@@ -84,7 +84,7 @@ describe("email navigation", () => {
   });
 
   it("fails loudly when an action is stale", () => {
-    dispatchEmailNavigation("tauri://localhost/__velo_email_action__/missing/1");
+    dispatchEmailNavigation("tauri://localhost/__snd_email_action__/missing/1");
     expect(reportError).toHaveBeenCalledWith(
       "Could not open email action",
       "The message action is no longer available.",
@@ -92,7 +92,7 @@ describe("email navigation", () => {
   });
 
   it("does not mistake an external website path for a private action", () => {
-    const url = "https://example.com/__velo_email_action__/missing/1";
+    const url = "https://example.com/__snd_email_action__/missing/1";
     dispatchEmailNavigation(url);
     expect(openUrl).toHaveBeenCalledWith(url);
     expect(reportError).not.toHaveBeenCalled();

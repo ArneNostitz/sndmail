@@ -7,7 +7,7 @@
 | Latest release | Yes |
 | Older releases | No |
 
-We only provide security fixes for the latest release. Please keep Velo up to date.
+We only provide security fixes for the latest release. Please keep snd up to date.
 
 ## Reporting a Vulnerability
 
@@ -28,14 +28,14 @@ You should receive an acknowledgment within **48 hours**. We will work with you 
 
 ### Local-First Architecture
 
-Velo is a desktop application. Your emails, tokens, and settings are stored locally in a SQLite database on your machine. There are no Velo-operated backend servers.
+snd is a desktop application. Your emails, tokens, and settings are stored locally in a SQLite database on your machine. There are no snd-operated backend servers.
 
 ### Authentication & Credentials
 
 - **Gmail**: OAuth 2.0 with PKCE -- no client secret stored. Tokens are encrypted with AES-256-GCM before being saved to the local database.
 - **IMAP/SMTP**: Passwords and app passwords are encrypted with AES-256-GCM in the local SQLite database.
-- **Encryption key**: The AES-256-GCM key lives in the OS credential store (macOS Keychain, Windows Credential Manager, Linux Secret Service) -- not on disk beside the database it protects. Installs from before v0.5 migrate their `velo.key` file into the credential store on first launch and the file is deleted. If no credential store is reachable (e.g. headless Linux with no Secret Service provider), Velo falls back to the on-disk key file and logs a warning; in that configuration the encryption is obfuscation only.
-- **AI API keys**: Stored in the local SQLite settings table. Keys are sent directly to the respective provider (Anthropic, OpenAI, Google) over HTTPS -- never to any Velo server.
+- **Encryption key**: The AES-256-GCM key lives in the OS credential store (macOS Keychain, Windows Credential Manager, Linux Secret Service) -- not on disk beside the database it protects. Installs from before v0.5 migrate their `velo.key` file into the credential store on first launch and the file is deleted. If no credential store is reachable (e.g. headless Linux with no Secret Service provider), snd falls back to the on-disk key file and logs a warning; in that configuration the encryption is obfuscation only.
+- **AI API keys**: Stored in the local SQLite settings table. Keys are sent directly to the respective provider (Anthropic, OpenAI, Google) over HTTPS -- never to any snd server.
 
 ### Email Rendering
 
@@ -73,7 +73,7 @@ The following are **out of scope**:
 
 - Vulnerabilities requiring physical access to the user's machine (local SQLite is not encrypted at rest by design -- the OS protects user files)
 - Denial of service against the local application
-- Issues in third-party dependencies with no demonstrated impact on Velo
+- Issues in third-party dependencies with no demonstrated impact on snd
 - Social engineering attacks
 
 ## Disclosure Policy

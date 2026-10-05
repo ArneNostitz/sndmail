@@ -388,8 +388,8 @@ export function ThreadView({ thread }: ThreadViewProps) {
   // this thread contains
   useEffect(() => {
     const handler = () => { reloadMessages().catch(console.error); };
-    window.addEventListener("velo-threads-merged", handler);
-    return () => window.removeEventListener("velo-threads-merged", handler);
+    window.addEventListener("snd-threads-merged", handler);
+    return () => window.removeEventListener("snd-threads-merged", handler);
   }, [reloadMessages]);
 
   // Listen for "View Source" event from context menu
@@ -401,8 +401,8 @@ export function ThreadView({ thread }: ThreadViewProps) {
       };
       setRawMessageTarget(detail);
     };
-    window.addEventListener("velo-view-raw-message", handler);
-    return () => window.removeEventListener("velo-view-raw-message", handler);
+    window.addEventListener("snd-view-raw-message", handler);
+    return () => window.removeEventListener("snd-view-raw-message", handler);
   }, []);
 
   // Listen for extract-task event from keyboard shortcut
@@ -413,8 +413,8 @@ export function ThreadView({ thread }: ThreadViewProps) {
         setShowTaskExtract(true);
       }
     };
-    window.addEventListener("velo-extract-task", handler);
-    return () => window.removeEventListener("velo-extract-task", handler);
+    window.addEventListener("snd-extract-task", handler);
+    return () => window.removeEventListener("snd-extract-task", handler);
   }, [thread.id]);
 
   const handleMessageContextMenu = useCallback((e: React.MouseEvent, msg: DbMessage) => {
@@ -526,7 +526,7 @@ export function ThreadView({ thread }: ThreadViewProps) {
 
   return (
     <div className="flex h-full @container relative">
-      <div className="flex flex-col flex-1 min-w-0 pr-16">
+      <div className="flex flex-col flex-1 min-w-0 pr-[51px]">
         {/* Unified action bar */}
         <ActionBar
           thread={thread}
@@ -555,7 +555,7 @@ export function ThreadView({ thread }: ThreadViewProps) {
 
         {/* Merged conversations — say so, and offer the way out */}
         {mergedIds.length > 0 && threadAccountId && (
-          <div className="flex items-center gap-2 px-6 py-2 bg-accent/5 border-b border-border-secondary text-xs text-text-secondary">
+          <div className="flex items-center gap-2 px-[18px] py-2 bg-accent/5 border-b border-border-secondary text-xs text-text-secondary">
             <Merge size={13} className="shrink-0 text-accent" />
             <span className="flex-1">
               {mergedIds.length} other conversation{mergedIds.length === 1 ? "" : "s"} merged into this one
@@ -566,7 +566,7 @@ export function ThreadView({ thread }: ThreadViewProps) {
                   await unmergeThread(threadAccountId, id).catch(console.error);
                 }
                 await reloadMessages().catch(console.error);
-                window.dispatchEvent(new CustomEvent("velo-threads-merged"));
+                window.dispatchEvent(new CustomEvent("snd-threads-merged"));
               }}
               className="text-accent hover:underline shrink-0"
             >
@@ -576,7 +576,7 @@ export function ThreadView({ thread }: ThreadViewProps) {
         )}
 
         {/* Thread subject */}
-        <div className="px-10 py-8 bg-gradient-to-br from-white/55 to-transparent dark:from-white/[0.02]">
+        <div className="px-[18px] py-8 bg-gradient-to-br from-white/55 to-transparent dark:from-white/[0.02]">
           <h1 className="font-serif text-3xl font-semibold tracking-[-0.025em] text-text-primary flex items-center gap-2">
             {thread.subject ?? "(No subject)"}
             {thread.isMuted && (

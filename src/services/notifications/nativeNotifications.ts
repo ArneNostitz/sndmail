@@ -10,12 +10,12 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
  * what the tests exercise.
  */
 
-export const NATIVE_ACTION_EVENT = "velo-notification-action";
+export const NATIVE_ACTION_EVENT = "snd-notification-action";
 
 export interface NativeAction {
   id: string;
   title: string;
-  /** Bring Velo to the front when pressed (reply, open a link). */
+  /** Bring snd to the front when pressed (reply, open a link). */
   foreground?: boolean;
   /** Drawn in red. */
   destructive?: boolean;
@@ -68,7 +68,7 @@ export function showNativeNotification(request: NativeNotificationRequest): Prom
 
 /**
  * Hear every press. Listens first and only then tells Rust the webview is
- * ready: a press that arrived before that — the click that *launched* Velo —
+ * ready: a press that arrived before that — the click that *launched* snd —
  * is queued in Rust and comes back from the ready call, so nothing is lost
  * and nothing is heard twice.
  */

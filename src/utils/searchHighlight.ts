@@ -94,7 +94,7 @@ export function highlightSearchTerms(
     for (const segment of segments) {
       if (segment.matched) {
         const mark = root.ownerDocument.createElement("mark");
-        mark.dataset.veloSearchMatch = "true";
+        mark.dataset.sndSearchMatch = "true";
         mark.textContent = segment.text;
         fragment.append(mark);
         count++;

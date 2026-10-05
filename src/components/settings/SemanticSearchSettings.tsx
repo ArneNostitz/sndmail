@@ -173,7 +173,7 @@ export function SemanticSearchSettings() {
         <div>
           <span id={`${id}-label`} className="text-sm text-text-secondary">Enable local search</span>
           <p id={`${id}-description`} className="mt-0.5 text-xs text-text-tertiary">
-            Private, on-device search of your Velo mail. The local server and model run as part of Velo.
+            Private, on-device search of your snd mail. The local server and model run as part of snd.
           </p>
         </div>
         <button
@@ -191,7 +191,7 @@ export function SemanticSearchSettings() {
       </div>
       <p id={`${id}-enable-help`} className="text-xs text-text-tertiary">
         Download the model before enabling. Turning this off stops the server and indexer, retaining the model and index.
-        Quitting Velo stops them; hiding or closing the window keeps them running.
+        Quitting snd stops them; hiding or closing the window keeps them running.
       </p>
 
       <div className="space-y-3 rounded-lg border border-border-primary bg-bg-secondary p-4">
@@ -291,7 +291,7 @@ export function SemanticSearchSettings() {
         actual use depends on your mailbox and may be higher. Mail stays on your device; internet access is needed to download the model.
       </p>
       <p className="text-xs text-text-tertiary">
-        This runtime powers Raycast for now. Search inside Velo continues to use its existing full-text search.
+        This runtime powers Raycast for now. Search inside snd continues to use its existing full-text search.
       </p>
       {status ? (
         <details className="text-xs text-text-tertiary">

@@ -196,10 +196,10 @@ function createActionAnchor(doc: Document, action: EmailDataAction, text: string
   const anchor = doc.createElement("a");
   anchor.textContent = text;
   anchor.href = action.href ?? "#";
-  anchor.dataset.veloKind = action.kind;
-  anchor.dataset.veloValue = action.value;
-  if (action.startTime) anchor.dataset.veloStart = action.startTime;
-  if (action.endTime) anchor.dataset.veloEnd = action.endTime;
+  anchor.dataset.sndKind = action.kind;
+  anchor.dataset.sndValue = action.value;
+  if (action.startTime) anchor.dataset.sndStart = action.startTime;
+  if (action.endTime) anchor.dataset.sndEnd = action.endTime;
   anchor.title = action.kind === "date" ? "Create calendar event" : `Actions for ${action.label}`;
   return anchor;
 }
@@ -263,16 +263,16 @@ export function instrumentEmailActions(
   const actions = new Map<string, InstrumentedEmailAction>();
   let index = 0;
   for (const anchor of doc.querySelectorAll<HTMLAnchorElement>("a")) {
-    if (anchor.dataset.veloActionId) continue;
+    if (anchor.dataset.sndActionId) continue;
     const action = actionForAnchor(anchor);
     if (!action) continue;
     const actionId = String(index++);
     const rawHref = anchor.getAttribute("href")?.trim() ?? action.href ?? action.value;
     const resolvedHref = action.href ?? anchor.href;
     actions.set(actionId, { action, rawHref, resolvedHref, anchor });
-    anchor.dataset.veloActionId = actionId;
+    anchor.dataset.sndActionId = actionId;
     if (action.kind === "date" || action.kind === "address") {
-      anchor.href = `/__velo_email_action__/${encodeURIComponent(rendererId)}/${encodeURIComponent(actionId)}`;
+      anchor.href = `/__snd_email_action__/${encodeURIComponent(rendererId)}/${encodeURIComponent(actionId)}`;
       anchor.target = "_self";
     } else {
       // frame-src 'self' intentionally forbids websites inside the message.
@@ -286,15 +286,15 @@ export function instrumentEmailActions(
 
 /** Classify both sender-provided anchors and anchors created by decorateEmailData. */
 export function actionForAnchor(anchor: HTMLAnchorElement): EmailDataAction | null {
-  const kind = anchor.dataset.veloKind as EmailDataKind | undefined;
+  const kind = anchor.dataset.sndKind as EmailDataKind | undefined;
   if (kind) {
     return {
       kind,
-      value: anchor.dataset.veloValue ?? anchor.textContent?.trim() ?? "",
-      label: kind === "address" ? anchor.dataset.veloValue ?? "" : anchor.textContent?.trim() || anchor.dataset.veloValue || "",
+      value: anchor.dataset.sndValue ?? anchor.textContent?.trim() ?? "",
+      label: kind === "address" ? anchor.dataset.sndValue ?? "" : anchor.textContent?.trim() || anchor.dataset.sndValue || "",
       href: anchor.getAttribute("href") ?? undefined,
-      startTime: anchor.dataset.veloStart,
-      endTime: anchor.dataset.veloEnd,
+      startTime: anchor.dataset.sndStart,
+      endTime: anchor.dataset.sndEnd,
     };
   }
 

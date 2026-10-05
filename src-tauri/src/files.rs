@@ -98,7 +98,7 @@ pub fn quicklook_attachment(files: Vec<QuicklookFile>) -> Result<(), String> {
         if files.is_empty() {
             return Err("No files to preview".to_string());
         }
-        let dir = std::env::temp_dir().join("velo-quicklook");
+        let dir = std::env::temp_dir().join("snd-quicklook");
         std::fs::create_dir_all(&dir).map_err(|e| format!("Cannot create temp folder: {e}"))?;
         // Overwriting between invocations is fine — previewing the same file
         // twice should not pile up copies. Within one batch names must stay
@@ -152,7 +152,7 @@ mod tests {
 
     #[test]
     fn unique_path_appends_counter() {
-        let dir = std::env::temp_dir().join(format!("velo-test-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("snd-test-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("a.txt"), b"x").unwrap();
         assert_eq!(unique_path(&dir, "a.txt"), dir.join("a (1).txt"));

@@ -124,6 +124,9 @@ body {
 .canvas-shell {
   background: color-mix(in srgb, #343c47 82%, var(--color-accent));
   box-shadow: none;
+  border-bottom-left-radius: 1.75rem;
+  border-bottom-right-radius: 1.75rem;
+  overflow: hidden;
 }
 
 .canvas-nav {
@@ -142,7 +145,10 @@ body {
 
 .app-workspace {
   background: color-mix(in srgb, #343c47 82%, var(--color-accent));
-  box-shadow: 0 20px 60px rgba(9, 13, 18, 0.28);
+  box-shadow: none;
+  border-radius: 1.75rem;
+  clip-path: inset(0 round 1.75rem);
+  isolation: isolate;
 }
 
 .workspace-toolbar {
@@ -261,6 +267,20 @@ body {
 .reference-sidebar nav > div > button:where(.bg-accent\/10),
 .reference-sidebar nav > button:where(.bg-accent\/10) {
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-accent) 9%, transparent);
+}
+
+/* The compact rail is a square icon grid, not a narrow version of the text
+   navigation. Its footprint stays deliberately small beside the mailbox. */
+.reference-sidebar[data-collapsed="true"] nav {
+  padding-inline: 0.5rem;
+}
+
+.reference-sidebar[data-collapsed="true"] nav > div > button,
+.reference-sidebar[data-collapsed="true"] nav > button {
+  width: 2.5rem;
+  height: 2.5rem;
+  padding: 0;
+  margin-bottom: 0.25rem;
 }
 
 .dark .workspace-panel {

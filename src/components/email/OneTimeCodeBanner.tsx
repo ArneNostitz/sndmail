@@ -37,7 +37,7 @@ export function OneTimeCodeBanner({ message }: { message: DbMessage }) {
 
   const open = () => {
     if (!found.link) return;
-    window.dispatchEvent(new CustomEvent("velo-open-signin-link", {
+    window.dispatchEvent(new CustomEvent("snd-open-signin-link", {
       detail: { url: found.link, threadId: message.thread_id, accountId: message.account_id },
     }));
   };

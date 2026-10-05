@@ -133,7 +133,7 @@ function extractInlineImages(html: string): { html: string; images: InlineImage[
 function generateMessageId(from: string): string {
   const timestamp = Date.now();
   const random = Math.random().toString(36).slice(2, 10);
-  const domain = from.includes("@") ? from.split("@")[1] : "velomail.local";
+  const domain = from.includes("@") ? from.split("@")[1] : "sndmail.local";
   return `<${timestamp}.${random}@${domain}>`;
 }
 

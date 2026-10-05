@@ -57,12 +57,12 @@ export const PROVIDER_MODELS: Record<Exclude<AiProvider, "ollama">, ModelOption[
 /**
  * Model ids that the provider has shut down, mapped to the replacement Google
  * names in its deprecation table. A stored setting can outlive the model it
- * names — Velo shipped the 2.5 preview ids for months after both were turned
+ * names — snd shipped the 2.5 preview ids for months after both were turned
  * off, so every Gemini call failed with a 404 until the user re-picked a model.
  * Applied wherever a stored model id is read, so the retired id is never sent.
  */
 export const RETIRED_MODELS: Record<string, string> = {
-  // Shut down 2025-11-18 / 2026-02-17; Google recommends 3.6 Flash, Velo's default is newer
+  // Shut down 2025-11-18 / 2026-02-17; Google recommends 3.6 Flash, snd's default is newer
   "gemini-2.5-flash-preview-05-20": "gemini-3.8-flash",
   "gemini-2.5-flash-preview-09-25": "gemini-3.8-flash",
   // Shut down 2025-12-02

@@ -58,5 +58,5 @@ export async function createCalendarEvent(
   };
   const created = await provider.createEvent(target?.remote_id ?? "primary", input);
   await saveProviderCalendarEvent(accountId, target?.id ?? null, created);
-  window.dispatchEvent(new CustomEvent("velo-calendar-sync-done"));
+  window.dispatchEvent(new CustomEvent("snd-calendar-sync-done"));
 }

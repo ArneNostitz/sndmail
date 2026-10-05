@@ -291,9 +291,9 @@ export function Sidebar({ collapsed }: SidebarProps) {
         useUIStore.getState().setSyncingFolder(null);
       }, 500);
     };
-    window.addEventListener("velo-sync-done", handler);
+    window.addEventListener("snd-sync-done", handler);
     return () => {
-      window.removeEventListener("velo-sync-done", handler);
+      window.removeEventListener("snd-sync-done", handler);
       if (timer) clearTimeout(timer);
     };
   }, [activeAccountId, loadLabels, refreshSmartFolderCounts]);
@@ -307,8 +307,8 @@ export function Sidebar({ collapsed }: SidebarProps) {
       loadLabels(activeAccountId);
       refreshSmartFolderCounts(activeAccountId);
     };
-    window.addEventListener("velo-sync-progress", handler);
-    return () => window.removeEventListener("velo-sync-progress", handler);
+    window.addEventListener("snd-sync-progress", handler);
+    return () => window.removeEventListener("snd-sync-progress", handler);
   }, [activeAccountId, loadLabels, refreshSmartFolderCounts]);
 
   const handleDeleteLabel = useCallback(async (labelId: string) => {
@@ -368,8 +368,9 @@ export function Sidebar({ collapsed }: SidebarProps) {
 
   return (
     <aside
+      data-collapsed={collapsed}
       className={`reference-sidebar no-select flex flex-col bg-transparent text-sidebar-text transition-all duration-300 ${
-        collapsed ? "w-[4.75rem]" : "w-60"
+        collapsed ? "w-14" : "w-60"
       }`}
     >
       <div className={`flex h-12 items-center ${collapsed ? "justify-center" : "px-4"}`}>

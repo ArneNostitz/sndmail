@@ -704,9 +704,9 @@ export function EmailList({ width, listRef }: { width?: number; listRef?: React.
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => loadThreads(), 500);
     };
-    window.addEventListener("velo-sync-done", handler);
+    window.addEventListener("snd-sync-done", handler);
     return () => {
-      window.removeEventListener("velo-sync-done", handler);
+      window.removeEventListener("snd-sync-done", handler);
       if (timer) clearTimeout(timer);
     };
   }, [loadThreads, accountScopeKey, activeLabel]);
@@ -714,8 +714,8 @@ export function EmailList({ width, listRef }: { width?: number; listRef?: React.
   // A merge removes a row from every list it appeared in
   useEffect(() => {
     const handler = () => { loadThreads(); };
-    window.addEventListener("velo-threads-merged", handler);
-    return () => window.removeEventListener("velo-threads-merged", handler);
+    window.addEventListener("snd-threads-merged", handler);
+    return () => window.removeEventListener("snd-threads-merged", handler);
   }, [loadThreads]);
 
   // A long initial sync stores threads as it goes; surface them while it runs
@@ -726,8 +726,8 @@ export function EmailList({ width, listRef }: { width?: number; listRef?: React.
       if (useThreadStore.getState().searchThreadIds !== null) return;
       loadThreads();
     };
-    window.addEventListener("velo-sync-progress", handler);
-    return () => window.removeEventListener("velo-sync-progress", handler);
+    window.addEventListener("snd-sync-progress", handler);
+    return () => window.removeEventListener("snd-sync-progress", handler);
   }, [loadThreads]);
 
   // Infinite scroll: load more when near bottom

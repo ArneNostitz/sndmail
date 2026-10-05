@@ -597,7 +597,7 @@ function ThreadMenu({
       icon: FolderInput,
       shortcutId: "action.moveToFolder",
       action: () => {
-        window.dispatchEvent(new CustomEvent("velo-move-to-folder", { detail: { threadIds: [...targetIds] } }));
+        window.dispatchEvent(new CustomEvent("snd-move-to-folder", { detail: { threadIds: [...targetIds] } }));
       },
     },
     {
@@ -611,7 +611,7 @@ function ThreadMenu({
           for (const id of targetIds) {
             await setThreadCategory(accountFor(id), id, cat, true);
           }
-          window.dispatchEvent(new Event("velo-sync-done"));
+          window.dispatchEvent(new Event("snd-sync-done"));
         },
       })),
     },
@@ -819,7 +819,7 @@ function MessageMenu({
             icon: Code,
             action: () => {
               window.dispatchEvent(
-                new CustomEvent("velo-view-raw-message", {
+                new CustomEvent("snd-view-raw-message", {
                   detail: { messageId, accountId },
                 }),
               );

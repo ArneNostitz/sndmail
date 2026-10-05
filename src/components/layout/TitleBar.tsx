@@ -42,7 +42,7 @@ export function WindowControls() {
         {maximized ? <Copy size={8} /> : <Square size={8} />}
       </button>
       {!isMac && (
-        <span className="ml-1 text-[0.625rem] font-medium text-text-tertiary">Velo</span>
+        <span className="ml-1 text-[0.625rem] font-medium text-text-tertiary">snd</span>
       )}
       <div className="sr-only">
         <button onClick={back} disabled={!canGoBack}>Back</button>

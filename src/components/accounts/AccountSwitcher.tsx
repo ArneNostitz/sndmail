@@ -334,7 +334,7 @@ export function AccountSwitcher({
           })}
 
           {/* Send-as addresses, offered as identities to send from. These come
-              from the account's Gmail settings — Velo cannot invent them. */}
+              from the account's Gmail settings — snd cannot invent them. */}
           {mailAccounts(accounts).flatMap((account) => {
             const extras = (aliasesByAccount[account.id] ?? []).filter(
               (alias) => alias.email !== account.email,

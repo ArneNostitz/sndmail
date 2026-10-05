@@ -122,7 +122,7 @@ export async function processIncomingCodes(
       actions.push({
         label: "Open sign-in link",
         run: () => {
-          window.dispatchEvent(new CustomEvent("velo-open-signin-link", {
+          window.dispatchEvent(new CustomEvent("snd-open-signin-link", {
             detail: { url: link.url, threadId: message.threadId, accountId: message.accountId },
           }));
         },

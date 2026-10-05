@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * The Developer ID identity Velo is signed with, made without Xcode.
+ * The Developer ID identity snd is signed with, made without Xcode.
  *
  * A Mac app distributed outside the App Store needs a *Developer ID
  * Application* certificate — it is the only kind Gatekeeper accepts from a
@@ -25,7 +25,7 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 
 const CERT_TYPE = 'DEVELOPER_ID_APPLICATION'
-const SUBJECT = '/CN=Velo Pro Developer ID/O=anydaysomething/C=AT'
+const SUBJECT = '/CN=snd Developer ID/O=anydaysomething/C=AT'
 
 const DIR = join(homedir(), '.config/velo/signing')
 const KEY = join(DIR, 'developer-id.key')
@@ -153,7 +153,7 @@ sh('openssl', ['x509', '-inform', 'DER', '-in', CER, '-out', PEM])
 // refuses to read ("MAC verification failed"). The old algorithms are what the
 // keychain understands, and the file lives for exactly one import.
 sh('openssl', ['pkcs12', '-export', '-inkey', KEY, '-in', PEM, '-out', P12,
-  '-passout', `pass:${KEYCHAIN_PASSWORD}`, '-name', 'Velo Developer ID',
+  '-passout', `pass:${KEYCHAIN_PASSWORD}`, '-name', 'snd Developer ID',
   '-keypbe', 'PBE-SHA1-3DES', '-certpbe', 'PBE-SHA1-3DES', '-macalg', 'sha1'])
 
 if (!existsSync(KEYCHAIN)) {

@@ -192,9 +192,9 @@ export default function App() {
       const detail = (e as CustomEvent<{ threadIds: string[] }>).detail;
       setMoveToFolderState({ open: true, threadIds: detail.threadIds });
     };
-    window.addEventListener("velo-toggle-command-palette", togglePalette);
-    window.addEventListener("velo-toggle-shortcuts-help", toggleHelp);
-    window.addEventListener("velo-toggle-ask-inbox", toggleAskInbox);
+    window.addEventListener("snd-toggle-command-palette", togglePalette);
+    window.addEventListener("snd-toggle-shortcuts-help", toggleHelp);
+    window.addEventListener("snd-toggle-ask-inbox", toggleAskInbox);
     // A sign-in link opened from a notification goes past the phishing check
     // rather than straight to the browser — a link in mail is the vector
     const handleSignInLink = async (e: Event) => {
@@ -215,7 +215,7 @@ export default function App() {
         .then(({ syncAccount }) => syncAccount(detail.accountId!))
         .catch((err) => console.error("Sync after IDLE failed:", err));
     };
-    window.addEventListener("velo-idle-sync", handleIdleSync);
+    window.addEventListener("snd-idle-sync", handleIdleSync);
 
     // Anything nobody caught. Not a substitute for catching things — the
     // message is whatever the browser gives us — but it means an error can no
@@ -229,18 +229,18 @@ export default function App() {
     window.addEventListener("error", handleUncaught);
     window.addEventListener("unhandledrejection", handleRejection);
 
-    window.addEventListener("velo-open-signin-link", handleSignInLink);
+    window.addEventListener("snd-open-signin-link", handleSignInLink);
 
-    window.addEventListener("velo-move-to-folder", handleMoveToFolder);
+    window.addEventListener("snd-move-to-folder", handleMoveToFolder);
     return () => {
-      window.removeEventListener("velo-toggle-command-palette", togglePalette);
-      window.removeEventListener("velo-toggle-shortcuts-help", toggleHelp);
-      window.removeEventListener("velo-toggle-ask-inbox", toggleAskInbox);
-      window.removeEventListener("velo-idle-sync", handleIdleSync);
+      window.removeEventListener("snd-toggle-command-palette", togglePalette);
+      window.removeEventListener("snd-toggle-shortcuts-help", toggleHelp);
+      window.removeEventListener("snd-toggle-ask-inbox", toggleAskInbox);
+      window.removeEventListener("snd-idle-sync", handleIdleSync);
       window.removeEventListener("error", handleUncaught);
       window.removeEventListener("unhandledrejection", handleRejection);
-      window.removeEventListener("velo-open-signin-link", handleSignInLink);
-      window.removeEventListener("velo-move-to-folder", handleMoveToFolder);
+      window.removeEventListener("snd-open-signin-link", handleSignInLink);
+      window.removeEventListener("snd-move-to-folder", handleMoveToFolder);
     };
   }, []);
 
@@ -516,12 +516,12 @@ export default function App() {
             );
             // Threads are written to the DB as they arrive, so show them as they
             // land instead of leaving the list empty until the whole sync ends.
-            // A separate event from velo-sync-done: this one must not disturb an
+            // A separate event from snd-sync-done: this one must not disturb an
             // active search or a scrolled-in page.
             const now = Date.now();
             if (now - lastIncrementalRefreshRef.current > INCREMENTAL_REFRESH_MS) {
               lastIncrementalRefreshRef.current = now;
-              window.dispatchEvent(new Event("velo-sync-progress"));
+              window.dispatchEvent(new Event("snd-sync-progress"));
             }
           } else if (progress.phase === "labels") {
             setSyncStatus("Syncing labels...");
@@ -545,7 +545,7 @@ export default function App() {
         setTimeout(() => setSyncStatus(null), 2_000);
       }
       // One store/list refresh for the whole mailbox batch, never one per account.
-      window.dispatchEvent(new Event("velo-sync-done"));
+      window.dispatchEvent(new Event("snd-sync-done"));
       void updateBadgeCount();
 
       // Keep post-sync categorization out of the per-mailbox loop and start it
@@ -657,7 +657,7 @@ export default function App() {
   }
 
   return (
-    <div className="app-workspace relative m-3 flex h-[calc(100vh-1.5rem)] flex-col overflow-hidden rounded-[1.75rem] text-text-primary">
+    <div className="app-workspace relative flex h-screen flex-col overflow-hidden rounded-[1.75rem] text-text-primary">
       <OfflineBanner />
       <ToastHost />
       <DndProvider>

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { lstat, mkdir, readFile, rmdir, unlink, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { createTypesenseConnection, type TypesenseConnection } from "./shared";
-import { collectVeloDocuments } from "./providers/velo";
+import { collectSndDocuments } from "./providers/snd";
 import { beginSemanticSource, ensureCollection, ensureSemanticCollections, failSemanticSource,
   finishSemanticSource, indexSemanticBatch, type SemanticSourceState } from "./typesense";
 import { indexingCpuBudgetPercent } from "./indexing-budget";
@@ -134,7 +134,7 @@ async function awaitNativeOwnership(configPath: string, ownerToken: string): Pro
   while (performance.now() < deadline) {
     workerSignal.throwIfAborted();
     if (supervisorPid <= 1 || process.ppid !== supervisorPid) {
-      throw new WorkerError("owner_handshake_failed", "The Velo worker supervisor exited before ownership was recorded.");
+      throw new WorkerError("owner_handshake_failed", "The snd worker supervisor exited before ownership was recorded.");
     }
     try {
       const file = await lstat(path);
@@ -158,7 +158,7 @@ async function awaitNativeOwnership(configPath: string, ownerToken: string): Pro
         (owner as { groupId: number }).groupId === supervisorPid) {
         workerSignal.throwIfAborted();
         if (process.ppid !== supervisorPid) {
-          throw new WorkerError("owner_handshake_failed", "The Velo worker supervisor exited before lock acquisition.");
+          throw new WorkerError("owner_handshake_failed", "The snd worker supervisor exited before lock acquisition.");
         }
         return;
       }
@@ -169,7 +169,7 @@ async function awaitNativeOwnership(configPath: string, ownerToken: string): Pro
     }
     await waitForNextWork(50);
   }
-  throw new WorkerError("owner_handshake_timeout", "Velo did not confirm worker ownership before the startup deadline.");
+  throw new WorkerError("owner_handshake_timeout", "snd did not confirm worker ownership before the startup deadline.");
 }
 
 function scanIntervalMs(): number {
@@ -193,7 +193,7 @@ async function scan(connection: TypesenseConnection, config: WorkerConfig): Prom
     try {
       state = await beginSemanticSource(connection, source);
       const active = state;
-      await collectVeloDocuments(undefined, config.veloDatabasePath, async (documents) => {
+      await collectSndDocuments(undefined, config.veloDatabasePath, async (documents) => {
         workerSignal.throwIfAborted();
         let batchEmbedded = 0;
         let batchReused = 0;
@@ -231,7 +231,7 @@ async function run(): Promise<void> {
     throw new WorkerError("invalid_arguments", "Usage: indexer.cjs <private-config-file>");
   }
   const parentPid = process.ppid;
-  if (parentPid <= 1) throw new WorkerError("parent_required", "The semantic worker must be started by its Velo parent process.");
+  if (parentPid <= 1) throw new WorkerError("parent_required", "The semantic worker must be started by its snd parent process.");
   process.on("SIGTERM", stopWorker);
   process.on("SIGINT", stopWorker);
   process.stdout.on("error", stopWorker);

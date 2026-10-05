@@ -1,0 +1,28 @@
+<svg width="480" height="116" viewBox="0 0 480 116" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <title>snd envelope concept with d as the right edge</title>
+  <path
+    d="M22 88 V20 L178 58 L334 20 V88 H434"
+    stroke="#111827"
+    stroke-width="8"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <path
+    d="M434 88 L402 71 L410 88 L402 105 Z"
+    fill="#111827"
+    stroke="#111827"
+    stroke-width="2"
+    stroke-linejoin="round"
+  />
+  <text
+    x="47"
+    y="84"
+    fill="#111827"
+    font-family="Georgia, 'Times New Roman', serif"
+    font-size="72"
+    font-weight="700"
+    letter-spacing="-6"
+    textLength="287"
+    lengthAdjust="spacingAndGlyphs"
+  >snd</text>
+</svg>

@@ -20,7 +20,7 @@ if [ -n "$identity" ]; then
     --timestamp=none \
     "$binary"
 else
-  echo "warning: no Apple Development identity found; Velo Pro will use an ad-hoc signature" >&2
+  echo "warning: no Apple Development identity found; snd will use an ad-hoc signature" >&2
   echo "warning: Little Snitch may ask you to accept the modified app after rebuilds" >&2
 fi
 

@@ -1,0 +1,32 @@
+<svg width="1100" height="720" viewBox="0 0 1100 720" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <title>snd envelope logo</title>
+  <desc>A lowercase snd wordmark framed by a folded envelope line with a directional arrow.</desc>
+
+  <path
+    d="M145 590V138L550 300L955 138V590"
+    stroke="#080808"
+    stroke-width="70"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+
+  <path
+    d="M145 590H875C899 590 918 594 940 603L1035 640L940 677C918 686 899 690 875 690H145"
+    fill="#080808"
+    stroke="#080808"
+    stroke-width="2"
+    stroke-linejoin="round"
+  />
+
+  <text
+    x="191"
+    y="550"
+    fill="#080808"
+    font-family="Bodoni 72, Didot, Bodoni MT, Georgia, 'Times New Roman', serif"
+    font-size="270"
+    font-weight="700"
+    letter-spacing="-18"
+    textLength="755"
+    lengthAdjust="spacingAndGlyphs"
+  >snd</text>
+</svg>

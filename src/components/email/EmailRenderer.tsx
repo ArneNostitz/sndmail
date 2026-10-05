@@ -363,7 +363,7 @@ export function EmailRenderer({
       const actions = instrumentEmailActions(activeDocument, rendererId);
       if (actions.size > 0) {
         navigationActionsRef.current = actions;
-      } else if (!activeDocument.querySelector("[data-velo-action-id]")) {
+      } else if (!activeDocument.querySelector("[data-snd-action-id]")) {
         navigationActionsRef.current.clear();
       }
       observerRef.current?.disconnect();
@@ -392,7 +392,7 @@ export function EmailRenderer({
   <style>
     body {
       margin: 0;
-      padding: 16px;
+      padding: 0;
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
       font-size: 14px;
       line-height: 1.6;
@@ -413,11 +413,11 @@ export function EmailRenderer({
     pre { overflow-x: auto; }
     table { max-width: 100%; }
     a { cursor: pointer; }
-    a[data-velo-kind="date"], a[data-velo-kind="phone"], a[data-velo-kind="address"] {
+    a[data-snd-kind="date"], a[data-snd-kind="phone"], a[data-snd-kind="address"] {
       text-decoration-style: dotted;
       text-underline-offset: 2px;
     }
-    mark[data-velo-search-match="true"] {
+    mark[data-snd-search-match="true"] {
       background: #fde68a;
       color: inherit;
       border-radius: 2px;

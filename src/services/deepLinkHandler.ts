@@ -9,7 +9,7 @@ import { openMailLink } from "./threads/openMailLink";
 import { reportError } from "../stores/toastStore";
 
 export async function handleUrl(url: string): Promise<void> {
-  if (!/^(mailto|velo):/i.test(url)) return;
+  if (!/^(mailto|snd|velo):/i.test(url)) return;
 
   // Show and focus the main window
   const mainWindow = await WebviewWindow.getByLabel("main");
@@ -18,7 +18,7 @@ export async function handleUrl(url: string): Promise<void> {
     await mainWindow.setFocus();
   }
 
-  if (/^velo:/i.test(url)) {
+  if (/^(snd|velo):/i.test(url)) {
     await openMailLink(parseMailLink(url));
     return;
   }
@@ -45,7 +45,7 @@ export async function initDeepLinkHandler(): Promise<() => void> {
   // link together. Serialize distinct opens; coalesce duplicate deliveries.
   const receive = (urls: string[]) => {
     for (const url of urls) {
-      if (!/^(mailto|velo):/i.test(url)) continue;
+      if (!/^(mailto|snd|velo):/i.test(url)) continue;
       const now = Date.now();
       for (const [key, time] of recent) if (now - time > 1500) recent.delete(key);
       if (recent.has(url)) continue;

@@ -6,6 +6,9 @@ describe("public mail links", () => {
     expect(parseMailLink(createMailLink(target))).toEqual(target);
   });
   it("allows a thread-only link", () => {
+    expect(parseMailLink("snd://open?account=a&thread=t")).toEqual({ accountId: "a", threadId: "t" });
+  });
+  it("accepts legacy Velo links", () => {
     expect(parseMailLink("velo://open?account=a&thread=t")).toEqual({ accountId: "a", threadId: "t" });
   });
   it.each([

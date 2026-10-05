@@ -70,8 +70,8 @@ export function SearchBar() {
   }, [activeLabel, accountKey]);
   useEffect(() => {
     const refresh = () => setRevision((v) => v + 1);
-    window.addEventListener("velo-sync-done", refresh);
-    return () => window.removeEventListener("velo-sync-done", refresh);
+    window.addEventListener("snd-sync-done", refresh);
+    return () => window.removeEventListener("snd-sync-done", refresh);
   }, []);
   useEffect(() => {
     let cancelled = false;
@@ -200,7 +200,7 @@ export function SearchBar() {
   };
 
   return (
-    <div>
+    <div className="relative">
       <div className="relative">
         <Search
           size={14}
@@ -238,76 +238,76 @@ export function SearchBar() {
         )}
       </div>
       {searchQuery.trim() && (
-        <div className="mt-1.5 space-y-1.5">
-          <label className="flex items-center gap-2 text-xs text-text-secondary">
-            Sort
-            <select
-              aria-label="Sort search results"
-              value={sort}
-              onChange={(event) => setSort(event.target.value as typeof sort)}
-              className="rounded border border-border-primary bg-bg-primary px-2 py-1 text-text-primary"
+        <div className="absolute left-0 right-0 top-full z-50 mt-2 rounded-xl border border-border-primary bg-bg-primary p-3 shadow-xl">
+          <div className="space-y-1.5">
+            <label className="flex items-center gap-2 text-xs text-text-secondary">
+              Sort
+              <select
+                aria-label="Sort search results"
+                value={sort}
+                onChange={(event) => setSort(event.target.value as typeof sort)}
+                className="rounded border border-border-primary bg-bg-primary px-2 py-1 text-text-primary"
+              >
+                <option value="newest">Newest first</option>
+                <option value="oldest">Oldest first</option>
+                <option value="relevance">Relevance</option>
+              </select>
+            </label>
+            <div
+              className="flex flex-wrap gap-1"
+              role="group"
+              aria-label="Search folders"
             >
-              <option value="newest">Newest first</option>
-              <option value="oldest">Oldest first</option>
-              <option value="relevance">Relevance</option>
-            </select>
-          </label>
-          <div
-            className="flex flex-wrap gap-1"
-            role="group"
-            aria-label="Search folders"
-          >
-            {[
-              ["current", currentName],
-              ["all", "All mail"],
-              ["spam", "Spam"],
-              ["trash", "Trash"],
-              ["everywhere", "All folders"],
-            ]
-              .filter(([id]) => id !== "all" || activeLabel !== "all")
-              .map(([id, name]) => (
-                <button
-                  key={id}
-                  type="button"
-                  aria-pressed={scope === id}
-                  onClick={() => setScope(id!)}
-                  className={`rounded-full px-2 py-0.5 text-xs ${scope === id ? "bg-accent text-white" : "bg-bg-tertiary text-text-secondary hover:bg-bg-hover"}`}
-                >
-                  {name}
-                </button>
-              ))}
+              {[
+                ["current", currentName],
+                ["all", "All mail"],
+                ["spam", "Spam"],
+                ["trash", "Trash"],
+                ["everywhere", "All folders"],
+              ]
+                .filter(([id]) => id !== "all" || activeLabel !== "all")
+                .map(([id, name]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    aria-pressed={scope === id}
+                    onClick={() => setScope(id!)}
+                    className={`rounded-full px-2 py-0.5 text-xs ${scope === id ? "bg-accent text-white" : "bg-bg-tertiary text-text-secondary hover:bg-bg-hover"}`}
+                  >
+                    {name}
+                  </button>
+                ))}
+            </div>
+            <div className="flex flex-wrap gap-1" role="group" aria-label="Search filters">
+              {searchPresets.map(({ label, token, needsValue }) => {
+                const active = presetIsActive(searchQuery, token);
+                return (
+                  <button
+                    key={token}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => handlePreset(token, needsValue)}
+                    className={`rounded-full border px-2 py-0.5 text-xs transition-colors ${active ? "border-accent/40 bg-accent-light text-accent" : "border-border-primary text-text-secondary hover:bg-bg-hover"}`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
-          <div className="flex flex-wrap gap-1" role="group" aria-label="Search filters">
-            {searchPresets.map(({ label, token, needsValue }) => {
-              const active = presetIsActive(searchQuery, token);
-              return (
-                <button
-                  key={token}
-                  type="button"
-                  aria-pressed={active}
-                  onClick={() => handlePreset(token, needsValue)}
-                  className={`rounded-full border px-2 py-0.5 text-xs transition-colors ${active ? "border-accent/40 bg-accent-light text-accent" : "border-border-primary text-text-secondary hover:bg-bg-hover"}`}
-                >
-                  {label}
-                </button>
-              );
-            })}
-          </div>
+          <p role="status" className="mt-2 text-xs text-text-tertiary">
+            {hasIncompleteOperator(searchQuery)
+              ? "Type a value to finish this filter"
+              : searching
+                ? "Searching…"
+                : "Searching downloaded mail • up to 500 message matches"}
+          </p>
+          {error && (
+            <p role="alert" className="mt-1 text-xs text-danger">
+              Search failed: {error}
+            </p>
+          )}
         </div>
-      )}
-      {searchQuery && (
-        <p role="status" className="text-xs text-text-tertiary mt-1">
-          {hasIncompleteOperator(searchQuery)
-            ? "Type a value to finish this filter"
-            : searching
-            ? "Searching…"
-            : "Searching downloaded mail • up to 500 message matches"}
-        </p>
-      )}
-      {error && (
-        <p role="alert" className="text-xs text-danger mt-1">
-          Search failed: {error}
-        </p>
       )}
       <InputDialog
         isOpen={showSaveModal}

@@ -40,7 +40,7 @@ const QUOTE_SELECTORS = [
   "#divRplyFwdMsg",
   "div[id^='divRplyFwdMsg']",
   "hr#stopSpelling",
-  "[data-velo-quote]",
+  "[data-snd-quote]",
 ];
 
 /** Selectors used to wrap a signature. */
@@ -49,7 +49,7 @@ const SIGNATURE_SELECTORS = [
   "[data-smartmail='gmail_signature']",
   "div.moz-signature",
   "signature",
-  "[data-velo-signature]",
+  "[data-snd-signature]",
 ];
 
 /**

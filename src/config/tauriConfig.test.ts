@@ -7,6 +7,19 @@ describe("tauri.conf.json", () => {
   const configPath = resolve(__dirname, "../../src-tauri/tauri.conf.json");
   const config = JSON.parse(readFileSync(configPath, "utf-8"));
 
+  it("enables native macOS transparency behind the rounded main window", () => {
+    const mainWindow = config.app.windows.find(
+      (w: { label: string }) => w.label === "main",
+    );
+    // Tauri ignores transparent on macOS unless this feature is compiled in.
+    expect(mainWindow.transparent).toBe(true);
+    expect(mainWindow.decorations).toBe(false);
+    expect(config.app.macOSPrivateApi).toBe(true);
+    const cargo = readFileSync(resolve(__dirname, "../../src-tauri/Cargo.toml"), "utf-8");
+    const tauriDependency = cargo.split("\n").find((line) => line.startsWith("tauri ="));
+    expect(tauriDependency).toContain('"macos-private-api"');
+  });
+
   it("should disable native drag-drop on the main window so HTML5 events reach the webview", () => {
     const mainWindow = config.app.windows.find(
       (w: { label: string }) => w.label === "main",
@@ -19,7 +32,7 @@ describe("tauri.conf.json", () => {
     // Without an identity the bundler skips codesign entirely and the app
     // ships linker-signed: its code-signing identifier is a hash, its
     // Info.plist is unbound, and UNUserNotificationCenter refuses to
-    // register it — which silently drops Velo to plain-text notifications
+    // register it — which silently drops snd to plain-text notifications
     // with no buttons and no click to hear.
     expect(config.bundle.macOS.signingIdentity).toBeTruthy();
   });
@@ -31,15 +44,15 @@ describe("tauri.conf.json", () => {
   });
 
   it("stamps the fix number onto the package version so every npm run names the build", () => {
-    // `npm run build:app` prints `velo@<version>` as its first line; with the
+    // `npm run build:app` prints `snd@<version>` as its first line; with the
     // fix number as semver build metadata that line says which build this is.
     // The release version itself stays in tauri.conf.json, unstamped.
     const pkg = JSON.parse(readFileSync(resolve(__dirname, "../../package.json"), "utf-8"));
     expect(pkg.version).toBe(`${config.version}+${FIX_NUMBER}`);
   });
 
-  it("is named and identified as Velo Pro", () => {
+  it("is named and identified as snd", () => {
     expect(config.identifier).toBe("com.anydaysomething.velopro");
-    expect(config.productName).toBe("Velo Pro");
+    expect(config.productName).toBe("snd");
   });
 });

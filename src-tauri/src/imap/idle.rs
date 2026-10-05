@@ -7,7 +7,7 @@
 //! was dialled out — nothing needs a public address.
 //!
 //! What arrives is only a doorbell. The payload is ignored and a
-//! `velo-idle-activity` event is emitted, which the app answers by running
+//! `snd-idle-activity` event is emitted, which the app answers by running
 //! the sync it would have run anyway. That keeps the Gmail API as the source
 //! of truth for accounts that use it, and only replaces the waiting.
 
@@ -68,7 +68,7 @@ struct IdleStatus {
 
 fn emit_status(app: &AppHandle, account_id: &str, state: &'static str) {
     let _ = app.emit(
-        "velo-idle-status",
+        "snd-idle-status",
         IdleStatus {
             account_id: account_id.to_string(),
             state,
@@ -162,7 +162,7 @@ async fn watch_loop(
                     log::warn!("IDLE for {account_id} dropped: {err}");
                 }
                 let _ = app.emit(
-                    "velo-idle-failed",
+                    "snd-idle-failed",
                     IdleFailure {
                         account_id: account_id.clone(),
                         error: err,
@@ -231,7 +231,7 @@ async fn idle_session(
             // parsing — the sync that follows finds out authoritatively.
             Ok(IdleResponse::NewData(_)) => {
                 let _ = app.emit(
-                    "velo-idle-activity",
+                    "snd-idle-activity",
                     IdleActivity {
                         account_id: account_id.to_string(),
                     },

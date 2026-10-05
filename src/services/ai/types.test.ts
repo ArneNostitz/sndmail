@@ -7,7 +7,7 @@ describe("resolveModelId", () => {
     expect(resolveModelId("claude-haiku-4-5-20251001")).toBe("claude-haiku-4-5-20251001");
   });
 
-  it("maps the 2.5 preview ids Velo used to ship to a live model", () => {
+  it("maps the 2.5 preview ids snd used to ship to a live model", () => {
     expect(resolveModelId("gemini-2.5-flash-preview-05-20")).toBe("gemini-3.8-flash");
     expect(resolveModelId("gemini-2.5-pro-preview-05-06")).toBe("gemini-3.1-pro-preview");
   });

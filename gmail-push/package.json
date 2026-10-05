@@ -1,5 +1,5 @@
 {
-  "name": "velo-gmail-push",
+  "name": "snd-gmail-push",
   "private": true,
   "type": "module",
   "scripts": { "start": "node server.mjs" },

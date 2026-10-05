@@ -236,7 +236,7 @@ await atomicText("runtime-manifest.json", JSON.stringify({ ready, platform: proc
   preparedAt: new Date().toISOString(), resources, status: results,
   distributionStatus: "Requires enclosing-app signing, license/source review, and release validation.",
   model: { name: "ts/multilingual-e5-small", license: "MIT", bundled: false,
-    source: "https://huggingface.co/intfloat/multilingual-e5-small", downloadOwner: "Velo Settings" },
+    source: "https://huggingface.co/intfloat/multilingual-e5-small", downloadOwner: "snd Settings" },
 }, null, 2) + "\n");
 if (!ready) {
   console.warn(supported

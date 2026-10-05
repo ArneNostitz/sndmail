@@ -141,7 +141,7 @@ export function MoveToFolderDialog({
       // Only reload when the rows stayed put — otherwise the optimistic removal
       // above already reflects the result, and reloading would reset the list.
       if (staysInView) {
-        window.dispatchEvent(new Event("velo-sync-done"));
+        window.dispatchEvent(new Event("snd-sync-done"));
       }
     },
     [activeAccountId, accounts, activeLabelId, threadIds, onClose],

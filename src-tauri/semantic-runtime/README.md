@@ -1,4 +1,4 @@
-# Velo semantic runtime resources
+# snd semantic runtime resources
 
 This directory is the native resource boundary. The source slice does not include
 downloaded binaries, a model, a signed application, or a verified release.
@@ -93,7 +93,7 @@ source author has not run provisioning or release validation.
 
 ## Worker/native protocol
 
-Spawn directly as a Velo-owned child, without a persistent shell or daemon:
+Spawn directly as a snd-owned child, without a persistent shell or daemon:
 
 ```text
 <resource-dir>/semantic-runtime/node <resource-dir>/semantic-runtime/indexer.cjs <app-data>/semantic-search/worker.json
@@ -130,7 +130,7 @@ The worker checks its original parent every second, handles SIGTERM/SIGINT, and
 cancels network calls, SQLite reads, pacing, and idle waits on shutdown. Native
 supervision must also terminate/reap the child on disable/quit. The worker itself
 does not start/stop Typesense, install a launch agent, or schedule work outside
-Velo's lifetime. It remains alive between scans, defaulting to 300 seconds with
+snd's lifetime. It remains alive between scans, defaulting to 300 seconds with
 bounded error backoff. `VELO_SEMANTIC_INTERVAL_SECONDS` is clamped to 60..3600;
 backoff is capped at one hour. The process is restricted to sourceFilter ['velo'].
 
@@ -153,7 +153,7 @@ Metadata, unchanged embeddings, and queries are not deliberately delayed.
 
 The copied pipeline preserves original IDs, lexical content, 320-byte passage
 format/version, local multilingual-e5-small model, completed-embedding reuse,
-fresh scan markers, and parent-first/orphan-passage cleanup. Velo SQLite is read
+fresh scan markers, and parent-first/orphan-passage cleanup. snd SQLite is read
 through macOS's system /usr/bin/sqlite3 in readonly mode. There is no runtime
 dependency on the standalone Raycast checkout, its node_modules, or Homebrew.
 No file/Obsidian providers are wired into this worker.

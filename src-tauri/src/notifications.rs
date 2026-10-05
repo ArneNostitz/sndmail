@@ -4,7 +4,7 @@
 //! macOS that is the legacy `NSUserNotification` path, which knows nothing of
 //! categories, so a notification can never carry a button — and the plugin's
 //! `registerActionTypes`/`onAction` are mobile-only no-ops, which is why the
-//! Reply and Archive actions Velo registered for years never appeared.
+//! Reply and Archive actions snd registered for years never appeared.
 //!
 //! Buttons on a Mac need `UNUserNotificationCenter`: a *category* names a set
 //! of buttons, a notification names its category, and a delegate hears which
@@ -28,7 +28,7 @@ use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
 
 /// Event carrying a [`NotificationResponse`] to the webview.
-pub const ACTION_EVENT: &str = "velo-notification-action";
+pub const ACTION_EVENT: &str = "snd-notification-action";
 
 /// `action_id` for a click on the notification body.
 pub const DEFAULT_ACTION: &str = "default";
@@ -114,7 +114,7 @@ pub async fn notification_native_show(request: NotificationRequest) -> Result<St
 }
 
 /// The webview is listening for [`ACTION_EVENT`]. Returns any presses that
-/// arrived before it was — a click that *launched* Velo is delivered to the
+/// arrived before it was — a click that *launched* snd is delivered to the
 /// delegate long before the frontend exists.
 #[tauri::command]
 pub fn notification_native_ready() -> Vec<NotificationResponse> {
@@ -198,7 +198,7 @@ mod imp {
     /// The one `userInfo` key: the request's context as JSON. A string is a
     /// property-list type, which is all `userInfo` admits, and it spares
     /// translating arbitrary JSON into NSDictionary and back.
-    const CONTEXT_KEY: &str = "velo";
+    const CONTEXT_KEY: &str = "snd";
 
     struct Ivars {
         app: AppHandle,
@@ -207,7 +207,7 @@ mod imp {
     define_class!(
         /// Hears what the user did with a notification and hands it on.
         #[unsafe(super(NSObject))]
-        #[name = "VeloNotificationDelegate"]
+        #[name = "SndNotificationDelegate"]
         #[ivars = Ivars]
         struct Delegate;
 
@@ -221,7 +221,7 @@ mod imp {
                 _notification: &UNNotification,
                 completion: &block2::DynBlock<dyn Fn(UNNotificationPresentationOptions)>,
             ) {
-                // Shown even while Velo is the frontmost app: a login code
+                // Shown even while snd is the frontmost app: a login code
                 // arriving while the user reads other mail is still news
                 completion.call((UNNotificationPresentationOptions::Banner
                     | UNNotificationPresentationOptions::List
@@ -384,7 +384,7 @@ mod imp {
         request: NotificationRequest,
     ) -> Result<(String, tokio::sync::oneshot::Receiver<Option<String>>), String> {
         let id = format!(
-            "velo-{}-{}",
+            "snd-{}-{}",
             std::process::id(),
             COUNTER.fetch_add(1, Ordering::Relaxed)
         );
@@ -518,12 +518,12 @@ mod tests {
 
         let response = NotificationResponse {
             action_id: DEFAULT_ACTION.into(),
-            notification_id: "velo-1-0".into(),
+            notification_id: "snd-1-0".into(),
             context: Some(serde_json::json!({ "code": "123456" })),
         };
         let json = serde_json::to_value(&response).unwrap();
         assert_eq!(json["actionId"], "default");
-        assert_eq!(json["notificationId"], "velo-1-0");
+        assert_eq!(json["notificationId"], "snd-1-0");
         assert_eq!(json["context"]["code"], "123456");
     }
 
@@ -541,7 +541,7 @@ mod tests {
         assert!(!action.destructive);
     }
 
-    /// A click that launches Velo reaches the delegate long before the
+    /// A click that launches snd reaches the delegate long before the
     /// webview listens; it must wait there rather than vanish. One test,
     /// because the inbox is process-wide state and `ready` is one-way.
     #[test]

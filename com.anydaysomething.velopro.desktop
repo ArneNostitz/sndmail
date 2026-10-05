@@ -1,9 +1,9 @@
 [Desktop Entry]
-Name=Velo
+Name=snd
 Comment=Fast, beautiful desktop email client
-Exec=velo
+Exec=snd
 Icon=com.anydaysomething.velopro
 Type=Application
 Categories=Network;Email;
-StartupWMClass=Velo
+StartupWMClass=snd
 StartupNotify=true

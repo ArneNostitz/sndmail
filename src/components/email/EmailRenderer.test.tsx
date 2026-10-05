@@ -97,7 +97,7 @@ function clickIframeLink(container: HTMLElement): void {
 function clickIframeAction(container: HTMLElement, kind: string): void {
   const iframe = container.querySelector("iframe") as HTMLIFrameElement;
   const doc = iframe.contentDocument!;
-  const anchor = doc.querySelector(`a[data-velo-kind="${kind}"]`)!;
+  const anchor = doc.querySelector(`a[data-snd-kind="${kind}"]`)!;
   act(() => {
     dispatchEmailNavigation(anchor.href);
   });
@@ -126,7 +126,7 @@ describe("EmailRenderer", () => {
     );
     const iframe = container.querySelector("iframe")!;
     const match = iframe.contentDocument!.querySelector(
-      'mark[data-velo-search-match="true"]',
+      'mark[data-snd-search-match="true"]',
     );
     expect(match?.textContent).toBe("Festival");
   });

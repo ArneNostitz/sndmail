@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Velo Pro",
+  "productName": "snd",
   "version": "0.4.21",
   "identifier": "com.anydaysomething.velopro",
   "build": {
@@ -10,10 +10,11 @@
     "beforeBuildCommand": "npm run semantic:prepare && npm run build"
   },
   "app": {
+    "macOSPrivateApi": true,
     "windows": [
       {
         "label": "main",
-        "title": "Velo Pro",
+        "title": "snd",
         "width": 1200,
         "height": 800,
         "minWidth": 800,
@@ -81,6 +82,7 @@
       "desktop": {
         "schemes": [
           "mailto",
+          "snd",
           "velo"
         ]
       }

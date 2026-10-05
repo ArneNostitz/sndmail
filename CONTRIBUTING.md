@@ -1,6 +1,6 @@
-# Contributing to Velo
+# Contributing to snd
 
-Thank you for your interest in contributing to Velo! This guide will help you get started.
+Thank you for your interest in contributing to snd! This guide will help you get started.
 
 ## Getting Started
 
@@ -97,7 +97,7 @@ Use the [bug report template](https://github.com/avihaymenahem/velo/issues/new?t
 
 - Steps to reproduce
 - Expected vs. actual behavior
-- OS and Velo version
+- OS and snd version
 - Screenshots or logs if applicable
 
 ## Feature Requests

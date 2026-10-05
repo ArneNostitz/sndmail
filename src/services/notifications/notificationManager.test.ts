@@ -8,7 +8,7 @@ let nativeGranted = true;
 let actionHandler: ((r: NativeNotificationResponse) => void | Promise<void>) | null = null;
 
 const mockRegisterCategories = vi.fn(() => Promise.resolve());
-const mockShowNative = vi.fn(() => Promise.resolve("velo-1-0"));
+const mockShowNative = vi.fn(() => Promise.resolve("snd-1-0"));
 const mockSendPlugin = vi.fn();
 const mockPluginGranted = vi.fn(() => Promise.resolve(true));
 const mockShowWindow = vi.fn(() => Promise.resolve());
@@ -73,7 +73,7 @@ import {
 
 async function press(actionId: string, context: unknown = {}): Promise<void> {
   if (!actionHandler) throw new Error("not listening");
-  await actionHandler({ actionId, notificationId: "velo-1-0", context });
+  await actionHandler({ actionId, notificationId: "snd-1-0", context });
 }
 
 /** Wait for the promise chain inside `show()` to settle. */
@@ -179,9 +179,9 @@ describe("what a press does", () => {
 
   it("opens a sign-in link through the app, never straight to the browser", async () => {
     const seen = vi.fn();
-    window.addEventListener("velo-open-signin-link", seen);
+    window.addEventListener("snd-open-signin-link", seen);
     await press("open-link", { linkUrl: "https://example.com/login?t=1", threadId: "t1" });
-    window.removeEventListener("velo-open-signin-link", seen);
+    window.removeEventListener("snd-open-signin-link", seen);
     expect(mockShowWindow).toHaveBeenCalled();
     expect(seen).toHaveBeenCalledTimes(1);
     const detail = (seen.mock.calls[0]![0] as CustomEvent).detail;
@@ -231,7 +231,7 @@ describe("what gets sent", () => {
     vi.advanceTimersByTime(2000);
     expect(mockShowNative).toHaveBeenCalledTimes(1);
     expect(mockShowNative).toHaveBeenCalledWith(
-      expect.objectContaining({ title: "Velo Pro", body: "5 new emails" }),
+      expect.objectContaining({ title: "snd", body: "5 new emails" }),
     );
   });
 
@@ -263,7 +263,7 @@ describe("what gets sent", () => {
     expect(mockShowNative).not.toHaveBeenCalled();
     expect(mockSendPlugin).toHaveBeenCalledWith({
       title: "Code: 493028",
-      body: "From Example — Sign-in link waiting in Velo",
+      body: "From Example — Sign-in link waiting in snd",
     });
   });
 

@@ -16,17 +16,17 @@ export function createMailLink(target: MailLinkTarget): string {
   }
   const query = new URLSearchParams({ account: target.accountId, thread: target.threadId });
   if (target.messageId) query.set("message", target.messageId);
-  return `velo://open?${query}`;
+  return `snd://open?${query}`;
 }
 
 export function parseMailLink(value: string): MailLinkTarget {
   if (value.length > 16000) throw new Error("Mail link is too long.");
   const url = new URL(value);
-  if (url.protocol !== "velo:" || url.hostname !== "open" || url.username || url.password || url.port ||
-    (url.pathname !== "" && url.pathname !== "/") || url.hash) throw new Error("Invalid Velo mail link.");
+  if (!(url.protocol === "snd:" || url.protocol === "velo:") || url.hostname !== "open" || url.username || url.password || url.port ||
+    (url.pathname !== "" && url.pathname !== "/") || url.hash) throw new Error("Invalid snd mail link.");
   for (const key of url.searchParams.keys()) {
     if (!["account", "thread", "message"].includes(key) || url.searchParams.getAll(key).length !== 1) {
-      throw new Error("Invalid Velo mail link parameters.");
+      throw new Error("Invalid snd mail link parameters.");
     }
   }
   const accountId = url.searchParams.get("account");

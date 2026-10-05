@@ -92,7 +92,7 @@ export function buildMdnRaw(opts: MdnOptions): string {
   const subject = `Read: ${opts.originalSubject ?? "(no subject)"}`;
   const domain = opts.fromEmail.includes("@")
     ? opts.fromEmail.split("@")[1]
-    : "velomail.local";
+    : "sndmail.local";
   const messageId = `<${Date.now()}.${Math.random().toString(36).slice(2, 10)}@${domain}>`;
   const dispositionMode = opts.automatic
     ? "automatic-action/MDN-sent-automatically"
@@ -126,7 +126,7 @@ export function buildMdnRaw(opts: MdnOptions): string {
     `--${boundary}`,
     "Content-Type: message/disposition-notification",
     "",
-    "Reporting-UA: Velo Mail",
+    "Reporting-UA: snd",
     `Final-Recipient: rfc822;${opts.fromEmail}`,
   );
   if (opts.originalMessageId) {

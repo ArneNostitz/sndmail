@@ -33,7 +33,7 @@ fn page(title: &str, message: &str) -> String {
     format!(
         r#"<!DOCTYPE html>
 <html>
-<head><title>Velo</title><meta charset="utf-8"></head>
+<head><title>snd</title><meta charset="utf-8"></head>
 <body style="font-family: -apple-system, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #0f172a; color: #e2e8f0;">
 <div style="text-align: center; max-width: 30rem; padding: 0 1.5rem;">
 <h1 style="margin-bottom: 8px;">{title}</h1>
@@ -172,7 +172,7 @@ pub async fn start_oauth_server(port: u16, state: String) -> Result<OAuthResult,
                         "400 Bad Request",
                         &page(
                             "Sign-in could not be verified",
-                            "The response did not match this sign-in attempt. Close this tab and try again from Velo.",
+                            "The response did not match this sign-in attempt. Close this tab and try again from snd.",
                         ),
                     )
                     .await;
@@ -182,7 +182,7 @@ pub async fn start_oauth_server(port: u16, state: String) -> Result<OAuthResult,
                 respond(
                     &mut stream,
                     "200 OK",
-                    &page("Account connected", "You can close this tab and return to Velo."),
+                    &page("Account connected", "You can close this tab and return to snd."),
                 )
                 .await;
 
@@ -192,14 +192,14 @@ pub async fn start_oauth_server(port: u16, state: String) -> Result<OAuthResult,
                 respond(
                     &mut stream,
                     "400 Bad Request",
-                    &page("Sign-in failed", &format!("{message}. Close this tab and try again from Velo.")),
+                    &page("Sign-in failed", &format!("{message}. Close this tab and try again from snd.")),
                 )
                 .await;
                 return Err(format!("OAuth error: {message}"));
             }
             // Preconnects, favicon probes, anything that is not the redirect.
             Callback::NotTheCallback => {
-                respond(&mut stream, "404 Not Found", &page("Waiting for sign-in", "Velo is still waiting for the provider to redirect here.")).await;
+                respond(&mut stream, "404 Not Found", &page("Waiting for sign-in", "snd is still waiting for the provider to redirect here.")).await;
                 continue;
             }
         }
@@ -443,7 +443,7 @@ mod tests {
         body
     }
 
-    /// Pick a port unlikely to collide with a real Velo instance or another test.
+    /// Pick a port unlikely to collide with a real snd instance or another test.
     fn test_port(offset: u16) -> u16 {
         18300 + offset
     }

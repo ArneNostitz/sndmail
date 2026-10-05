@@ -31,12 +31,12 @@ interface MailRow {
   labels: string;
 }
 
-// Read the live WAL through SQLite; never copy, checkpoint, or write Velo's DB.
-export async function collectVeloDocuments(_exportPath?: string, dbPathOverride?: string, onBatch?: (documents: UniversalDocument[]) => Promise<void>): Promise<UniversalDocument[]> {
+// Read the live WAL through SQLite; never copy, checkpoint, or write snd's DB.
+export async function collectSndDocuments(_exportPath?: string, dbPathOverride?: string, onBatch?: (documents: UniversalDocument[]) => Promise<void>): Promise<UniversalDocument[]> {
   const path = expandPath(dbPathOverride || process.env.VELO_DB_PATH || process.env.VELO_DATABASE_PATH ||
     join(homedir(), "Library", "Application Support", "com.anydaysomething.velopro", "velo.db"));
   try { await access(path); } catch {
-    throw new Error(`Velo database not found: ${path}. Set Velo DB Path in extension preferences.`);
+    throw new Error(`snd database not found: ${path}. Set snd DB Path in extension preferences.`);
   }
   const documents: UniversalDocument[] = [];
   let cursor = 0;
@@ -68,7 +68,7 @@ export async function collectVeloDocuments(_exportPath?: string, dbPathOverride?
         source: "velo", title: row.subject || "(No Subject)",
         subtitle: `${sender} | ${row.labels || "Mail"} | ${row.account_email}`,
         snippet, content: [sender, row.to_addresses, body].filter(Boolean).join("\n"),
-        app: "Velo", open_type: "app", open_target: "com.anydaysomething.velopro",
+        app: "snd", open_type: "app", open_target: "com.anydaysomething.velopro",
         tags: [row.account_email, ...(row.labels || "").split(", ")].filter(Boolean),
         metadata: { account: row.account_id, accountName: row.account_email, threadId: row.thread_id,
           messageId: row.id, from: sender, to: row.to_addresses, labels: row.labels || "", folder: row.labels || "Mail",
@@ -95,7 +95,7 @@ export function readableBody(plain: unknown, html: unknown): string {
 
 export interface MailContent { subject: string; body: string; from: string; to: string; date: number; truncated: boolean }
 
-export async function readVeloMessage(accountId: string, messageId: string, dbPathOverride?: string, signal?: AbortSignal): Promise<MailContent> {
+export async function readSndMessage(accountId: string, messageId: string, dbPathOverride?: string, signal?: AbortSignal): Promise<MailContent> {
   signal?.throwIfAborted();
   const path = expandPath(dbPathOverride || process.env.VELO_DB_PATH || process.env.VELO_DATABASE_PATH ||
     join(homedir(), "Library", "Application Support", "com.anydaysomething.velopro", "velo.db"));
@@ -107,10 +107,10 @@ export async function readVeloMessage(accountId: string, messageId: string, dbPa
     { timeout: 15000, maxBuffer: 24 * 1024 * 1024, signal });
   signal?.throwIfAborted();
   const row = (JSON.parse(stdout || "[]") as Array<Record<string, unknown>>)[0];
-  if (!row) throw new Error("This message is no longer in Velo's local database.");
+  if (!row) throw new Error("This message is no longer in snd's local database.");
   const plain = String(row.body_text || "");
   const html = String(row.body_html || "");
-  if (!plain && !html && !row.body_cached) throw new Error("This email's body has not been downloaded by Velo yet. Open it in Velo, then retry.");
+  if (!plain && !html && !row.body_cached) throw new Error("This email's body has not been downloaded by snd yet. Open it in snd, then retry.");
   return { subject: String(row.subject || "(No Subject)"),
     body: readableBody(plain, html), truncated: Number(row.body_length) > 1000000,
     from: [row.from_name, row.from_address].filter(Boolean).join(" "), to: String(row.to_addresses || ""), date: Number(row.date),

@@ -1,4 +1,4 @@
-%global app_name velo
+%global app_name snd
 # x-release-please-start-version
 %global app_version 0.4.21
 # x-release-please-end
@@ -30,7 +30,7 @@ Requires: libappindicator-gtk3
 Requires: hicolor-icon-theme
 
 %description
-Velo is a fast, beautiful, and open-source desktop email client built with
+snd is a fast, beautiful, and open-source desktop email client built with
 modern web technologies, using Tauri, React, and Vite.
 
 %prep
@@ -50,7 +50,7 @@ rpm2cpio %{_builddir}/%{name}-%{version}/src-tauri/target/release/bundle/rpm/*.r
 
 %files
 %{_bindir}/%{app_name}
-%{_datadir}/applications/Velo.desktop
+%{_datadir}/applications/snd.desktop
 %{_datadir}/icons/hicolor/32x32/apps/%{app_name}.png
 %{_datadir}/icons/hicolor/128x128/apps/%{app_name}.png
 %{_datadir}/icons/hicolor/256x256/apps/%{app_name}.png

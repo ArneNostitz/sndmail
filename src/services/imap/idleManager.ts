@@ -10,7 +10,7 @@ import { reportError } from "@/stores/toastStore";
  * Let the mail server say when something changed, instead of asking it.
  *
  * The Rust side holds an IMAP IDLE connection per account and emits
- * `velo-idle-activity` when the server speaks. That event is only a doorbell:
+ * `snd-idle-activity` when the server speaks. That event is only a doorbell:
  * the sync that answers it is the normal delta path, so a Gmail account keeps
  * using the Gmail API for the actual data without polling every mailbox.
  */
@@ -208,7 +208,7 @@ async function attachListeners(): Promise<void> {
   if (unlistenActivity) return;
 
   unlistenActivity = await listen<{ account_id: string }>(
-    "velo-idle-activity",
+    "snd-idle-activity",
     (event) => {
       const accountId = event.payload.account_id;
       // A single arriving message can produce several untagged responses;
@@ -218,13 +218,13 @@ async function attachListeners(): Promise<void> {
       lastFired.set(accountId, now);
 
       window.dispatchEvent(
-        new CustomEvent("velo-idle-sync", { detail: { accountId } }),
+        new CustomEvent("snd-idle-sync", { detail: { accountId } }),
       );
     },
   );
 
   unlistenFailure = await listen<{ account_id: string; error: string }>(
-    "velo-idle-failed",
+    "snd-idle-failed",
     (event) => {
       const { account_id, error } = event.payload;
       failedAccounts.add(account_id);
@@ -244,7 +244,7 @@ async function attachListeners(): Promise<void> {
   // "connecting" rather than "failed": the Rust loop is already reconnecting,
   // and only a refusal (above) means the account is stuck on the timer.
   unlistenStatus = await listen<{ account_id: string; state: "connected" | "disconnected" }>(
-    "velo-idle-status",
+    "snd-idle-status",
     (event) => {
       const { account_id, state } = event.payload;
       const store = useIdleStatusStore.getState();

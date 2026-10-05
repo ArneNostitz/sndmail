@@ -181,7 +181,7 @@ export const MessageItem = memo(forwardRef<HTMLDivElement, MessageItemProps>(fun
             handleToggle();
           }
         }}
-        className="w-full text-left px-4 py-3 cursor-pointer hover:bg-bg-hover transition-colors"
+        className="w-full text-left px-[18px] py-3 cursor-pointer hover:bg-bg-hover transition-colors"
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 min-w-0">
@@ -215,7 +215,7 @@ export const MessageItem = memo(forwardRef<HTMLDivElement, MessageItemProps>(fun
 
       {/* Body — shown when expanded and image setting resolved */}
       {expanded && (
-        <div className="px-4 pb-4">
+        <div className="px-[18px] pb-4">
           {!authBannerDismissed && (
             <AuthWarningBanner
               authResults={message.auth_results}

@@ -11,8 +11,8 @@ use tauri::{
     Runtime, Url, Webview,
 };
 
-pub const EMAIL_NAVIGATION_EVENT: &str = "velo-email-navigation";
-const EMAIL_ACTION_PREFIX: &str = "/__velo_email_action__/";
+pub const EMAIL_NAVIGATION_EVENT: &str = "snd-email-navigation";
+const EMAIL_ACTION_PREFIX: &str = "/__snd_email_action__/";
 
 fn is_external_scheme(url: &Url) -> bool {
     matches!(
@@ -100,7 +100,7 @@ mod tests {
     fn hands_mail_actions_and_external_links_to_the_app() {
         let own = u("tauri://localhost/");
         for target in [
-            "tauri://localhost/__velo_email_action__/renderer/action",
+            "tauri://localhost/__snd_email_action__/renderer/action",
             "https://example.com/a?b=c",
             "mailto:someone@example.com",
             "tel:+43123",

@@ -271,6 +271,8 @@ export default function App() {
 
   // Initialize database, load accounts, start sync
   useEffect(() => {
+    const splashStartedAt = Date.now();
+
     async function init() {
       try {
         try {
@@ -506,6 +508,10 @@ export default function App() {
         console.error("Failed to initialize:", err);
       }
       setInitialized(true);
+      const minimumSplashTimeRemaining = 2_000 - (Date.now() - splashStartedAt);
+      if (minimumSplashTimeRemaining > 0) {
+        await new Promise((resolve) => window.setTimeout(resolve, minimumSplashTimeRemaining));
+      }
       invoke("close_splashscreen").catch(() => {});
     }
 

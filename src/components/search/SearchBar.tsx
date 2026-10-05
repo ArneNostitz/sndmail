@@ -60,6 +60,9 @@ export function SearchBar() {
   const [error, setError] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
   const [revision, setRevision] = useState(0);
+  const [focused, setFocused] = useState(false);
+  const [hovered, setHovered] = useState(false);
+  const showSearchOptions = focused || hovered || Boolean(searchQuery.trim());
   const currentName =
     smartFolder?.name ??
     labels.find((l) => l.id === activeLabel)?.name ??
@@ -201,7 +204,11 @@ export function SearchBar() {
   };
 
   return (
-    <div>
+    <div
+      className="relative"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
       <div className="relative">
         <Search
           size={14}
@@ -214,6 +221,16 @@ export function SearchBar() {
           value={searchQuery}
           onChange={(e) => handleChange(e.target.value)}
           onKeyDown={handleKeyDown}
+          onFocus={() => setFocused(true)}
+          onBlur={(event) => {
+            const relatedTarget = event.relatedTarget;
+            if (
+              !(relatedTarget instanceof Node) ||
+              !event.currentTarget.parentElement?.parentElement?.contains(relatedTarget)
+            ) {
+              setFocused(false);
+            }
+          }}
           placeholder="Search... (from: to: has:attachment)"
           className="w-full bg-bg-secondary/80 text-text-primary text-sm pl-9 pr-14 py-2.5 rounded-full shadow-[inset_0_1px_1px_rgba(80,66,50,0.06)] focus:bg-white focus:ring-2 focus:ring-accent/15 focus:outline-none placeholder:text-text-tertiary"
         />
@@ -238,77 +255,75 @@ export function SearchBar() {
           </div>
         )}
       </div>
-      {searchQuery.trim() && (
-        <div className="mt-1.5 space-y-1.5">
-          <label className="flex items-center gap-2 text-xs text-text-secondary">
-            Sort
-            <select
-              aria-label="Sort search results"
-              value={sort}
-              onChange={(event) => setSort(event.target.value as typeof sort)}
-              className="rounded border border-border-primary bg-bg-primary px-2 py-1 text-text-primary"
-            >
-              <option value="newest">Newest first</option>
-              <option value="oldest">Oldest first</option>
-              <option value="relevance">Relevance</option>
-            </select>
-          </label>
-          <div
-            className="flex flex-wrap gap-1"
-            role="group"
-            aria-label="Search folders"
-          >
-            {[
-              ["current", currentName],
-              ["all", "All mail"],
-              ["spam", "Spam"],
-              ["trash", "Trash"],
-              ["everywhere", "All folders"],
-            ]
-              .filter(([id]) => id !== "all" || activeLabel !== "all")
-              .map(([id, name]) => (
-                <button
-                  key={id}
-                  type="button"
-                  aria-pressed={scope === id}
-                  onClick={() => setScope(id!)}
-                  className={`rounded-full px-2 py-0.5 text-xs ${scope === id ? "bg-accent text-white" : "bg-bg-tertiary text-text-secondary hover:bg-bg-hover"}`}
-                >
-                  {name}
-                </button>
-              ))}
-          </div>
-          <div className="flex flex-wrap gap-1" role="group" aria-label="Search filters">
-            {searchPresets.map(({ label, token, needsValue }) => {
-              const active = presetIsActive(searchQuery, token);
-              return (
-                <button
-                  key={token}
-                  type="button"
-                  aria-pressed={active}
-                  onClick={() => handlePreset(token, needsValue)}
-                  className={`rounded-full border px-2 py-0.5 text-xs transition-colors ${active ? "border-accent/40 bg-accent-light text-accent" : "border-border-primary text-text-secondary hover:bg-bg-hover"}`}
-                >
-                  {label}
-                </button>
-              );
-            })}
+      {showSearchOptions && (
+        <div className="absolute right-0 top-full z-50 mt-2 w-[min(26rem,calc(100vw-1rem))] max-w-[calc(100vw-1rem)] rounded-xl border border-border-primary bg-bg-primary p-3 shadow-xl">
+          <div className="space-y-2">
+            <label className="flex items-center gap-2 text-xs text-text-secondary">
+              Sort
+              <select
+                aria-label="Sort search results"
+                value={sort}
+                onChange={(event) => setSort(event.target.value as typeof sort)}
+                className="rounded border border-border-primary bg-bg-primary px-2 py-1 text-text-primary"
+              >
+                <option value="newest">Newest first</option>
+                <option value="oldest">Oldest first</option>
+                <option value="relevance">Relevance</option>
+              </select>
+            </label>
+            <div className="flex flex-wrap gap-1" role="group" aria-label="Search folders">
+              {[
+                ["current", currentName],
+                ["all", "All mail"],
+                ["spam", "Spam"],
+                ["trash", "Trash"],
+                ["everywhere", "All folders"],
+              ]
+                .filter(([id]) => id !== "all" || activeLabel !== "all")
+                .map(([id, name]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    aria-pressed={scope === id}
+                    onClick={() => setScope(id!)}
+                    className={`rounded-full px-2 py-0.5 text-xs ${scope === id ? "bg-accent text-white" : "bg-bg-tertiary text-text-secondary hover:bg-bg-hover"}`}
+                  >
+                    {name}
+                  </button>
+                ))}
+            </div>
+            <div className="flex flex-wrap gap-1" role="group" aria-label="Search filters">
+              {searchPresets.map(({ label, token, needsValue }) => {
+                const active = presetIsActive(searchQuery, token);
+                return (
+                  <button
+                    key={token}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => handlePreset(token, needsValue)}
+                    className={`rounded-full border px-2 py-0.5 text-xs transition-colors ${active ? "border-accent/40 bg-accent-light text-accent" : "border-border-primary text-text-secondary hover:bg-bg-hover"}`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+            {searchQuery && (
+              <p role="status" className="pt-1 text-xs text-text-tertiary">
+                {hasIncompleteOperator(searchQuery)
+                  ? "Type a value to finish this filter"
+                  : searching
+                    ? "Searching…"
+                    : "Searching downloaded mail • up to 500 message matches"}
+              </p>
+            )}
+            {error && (
+              <p role="alert" className="pt-1 text-xs text-danger">
+                Search failed: {error}
+              </p>
+            )}
           </div>
         </div>
-      )}
-      {searchQuery && (
-        <p role="status" className="text-xs text-text-tertiary mt-1">
-          {hasIncompleteOperator(searchQuery)
-            ? "Type a value to finish this filter"
-            : searching
-            ? "Searching…"
-            : "Searching downloaded mail • up to 500 message matches"}
-        </p>
-      )}
-      {error && (
-        <p role="alert" className="text-xs text-danger mt-1">
-          Search failed: {error}
-        </p>
       )}
       <InputDialog
         isOpen={showSaveModal}

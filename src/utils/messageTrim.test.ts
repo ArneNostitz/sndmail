@@ -104,6 +104,42 @@ describe("trimHtmlBody", () => {
     const result = trimHtmlBody(html);
     expect(result.empty).toBe(false);
   });
+
+  it("removes an unwrapped German reply header and everything below it", () => {
+    const html = [
+      "<div>Danke für deine Rückmeldung.</div>",
+      "<div>Von: <a>hello@matchmii.com</a><br>An: franz@example.com<br>Datum: Tue, 06 Oct 2026<br>Betreff: Re: Followup</div>",
+      "<div>Hallo Franz,</div><div>the old sent text that must stay hidden</div>",
+    ].join("");
+    const result = trimHtmlBody(html);
+    expect(result.trimmed).toBe(true);
+    expect(result.html).toContain("Danke für deine Rückmeldung");
+    expect(result.html).not.toContain("hello@matchmii.com");
+    expect(result.html).not.toContain("old sent text");
+  });
+
+  it("removes a localized header split across separate rows", () => {
+    const html = [
+      "<p>My new reply</p>",
+      "<div>Von: me@example.com</div><div>An: them@example.com</div>",
+      "<div>Datum: 6.10.2026</div><div>Betreff: Re: Hello</div>",
+      "<div>previous sent paragraph</div>",
+    ].join("");
+    const result = trimHtmlBody(html);
+    expect(result.html).toContain("My new reply");
+    expect(result.html).not.toContain("previous sent paragraph");
+  });
+
+  it("removes an unwrapped previous message after a horizontal separator", () => {
+    const html = [
+      "<div>New answer</div><hr>",
+      "<div>Lieber Dominik,</div><div>this is clearly the previous sent text.</div>",
+    ].join("");
+    const result = trimHtmlBody(html);
+    expect(result.trimmed).toBe(true);
+    expect(result.html).toContain("New answer");
+    expect(result.html).not.toContain("previous sent text");
+  });
 });
 
 describe("previewText", () => {
@@ -144,6 +180,13 @@ describe("trimTextBody", () => {
     const result = trimTextBody("Sure\nOn Tue, Sep 1, 2026 at 23:27, Arne wrote:\nold");
     expect(result.trimmed).toBe(true);
     expect(result.text).toBe("Sure");
+  });
+
+  it("drops a German header block in plain text", () => {
+    const result = trimTextBody(
+      "Neue Antwort\n\nVon: me@example.com\nAn: them@example.com\nDatum: 6.10.2026\nBetreff: Re: Hello\n\nAlter gesendeter Text",
+    );
+    expect(result.text).toBe("Neue Antwort");
   });
 
   it("leaves a plain body untouched", () => {

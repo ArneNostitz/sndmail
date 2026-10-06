@@ -84,7 +84,7 @@ export async function processIncomingCodes(
     // A login mail often carries both — "tap the button, or enter this
     // code" — and the user decides which they want, so both are offered
     const match = detectOtpCode(message.subject, message.bodyText ?? stripTags(message.bodyHtml));
-    const link = detectSignInLink(message.bodyHtml);
+    const link = detectSignInLink(message.bodyHtml, message.subject, message.bodyText);
     if (!match && !link) continue;
 
     handled.add(message.id);

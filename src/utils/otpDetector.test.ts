@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { detectOtpCode, detectSignInLink } from "./otpDetector";
+import linkCases from "../../src-tauri/tests/fixtures/sign_in_link_cases.json";
 
 describe("detectOtpCode", () => {
   it("reads a code out of the subject", () => {
@@ -56,17 +57,41 @@ describe("detectOtpCode", () => {
 });
 
 describe("detectSignInLink", () => {
-  it("finds the sign-in button", () => {
-    const html = '<a href="https://app.example.com/magic?t=abc">Sign in to your account</a>';
-    expect(detectSignInLink(html)).toEqual({
-      url: "https://app.example.com/magic?t=abc",
+  it.each(linkCases)("follows shared one-time sign-in contract: $name", ({ html, context, expected_url }) => {
+    const result = detectSignInLink(html, null, context);
+    expect(result ? result.url : null).toBe(expected_url);
+  });
+
+  it("keeps a genuine sign-in link when an unrelated footer mentions subscriptions", () => {
+    const html = '<a href="https://click.example/magic?token=opaque">Sign in</a><a href="https://example.com/manage-subscription">Manage subscription</a>';
+    expect(detectSignInLink(html, null, "Use this one-time sign-in link. Manage your subscription preferences below.")?.url)
+      .toBe("https://click.example/magic?token=opaque");
+  });
+
+  it("recognizes auth context in HTML when plain text contains only an OTP", () => {
+    const html = '<a href="https://app.example.com/magic?token=9">Anmelden</a><p>Use this one-time sign-in link</p><p>Oder dieser Code</p><p>271260</p>';
+    expect(detectSignInLink(html, "Dein Login", "Anmelden\nOder dieser Code\n271260\n")?.url)
+      .toBe("https://app.example.com/magic?token=9");
+  });
+
+  it("returns the explicit one-time magic link URL and anchor label", () => {
+    const html = '<a href="https://click.example/track?state=opaque-123">Sign in to your account</a>';
+    expect(detectSignInLink(html, null, "Use this one-time sign-in link. It expires in 10 minutes and can only be used once.")).toEqual({
+      url: "https://click.example/track?state=opaque-123",
       label: "Sign in to your account",
     });
   });
 
-  it("qualifies on the URL when the label is generic", () => {
-    const html = '<a href="https://example.com/auth/login?token=xyz">Click here</a>';
-    expect(detectSignInLink(html)?.url).toBe("https://example.com/auth/login?token=xyz");
+  it("rejects generic login wording without one-time message context", () => {
+    expect(detectSignInLink('<a href="https://app.example.com/magic?t=abc">Sign in to your account</a>', "", "")).toBeNull();
+  });
+
+  it("rejects a normal login page even when nearby copy says one-time", () => {
+    expect(detectSignInLink('<a href="https://example.com/login">Sign in</a>', null, "Use this one-time sign-in link.")).toBeNull();
+  });
+
+  it("rejects a generic continue link beside one-time context", () => {
+    expect(detectSignInLink('<a href="https://example.com/auth/magic?token=opaque">Continue</a>', null, "Use this one-time sign-in link.")).toBeNull();
   });
 
   it("never picks the unsubscribe link", () => {

@@ -85,6 +85,19 @@ const CUT_PATTERNS: RegExp[] = [
 /** A line that opens a signature block in plain text. */
 const SIGNATURE_SEPARATOR = /^--\s?$/;
 
+// Header labels used by Outlook, Apple Mail, Thunderbird and several IMAP
+// clients when they paste a previous message without a blockquote. These are
+// deliberately paired and counted; removing every line beginning with
+// "From:" would destroy perfectly legitimate new content.
+const HEADER_LABELS = {
+  from: /(?:^|\s)(?:von|from):/i,
+  to: /(?:^|\s)(?:an|to|cc):/i,
+  date: /(?:^|\s)(?:datum|date|gesendet|sent):/i,
+  subject: /(?:^|\s)(?:betreff|subject):/i,
+};
+
+const REPLY_LEAD = /^(?:dear|hi|hello|hallo|liebe?r|guten\s+(?:morgen|tag|abend)|sehr\s+geehrte)/i;
+
 /**
  * Drop quoted mail and signatures from an HTML body.
  *
@@ -133,6 +146,18 @@ export function trimHtmlBody(html: string): { html: string; trimmed: boolean; em
   // introduce, so removing the quote leaves them dangling
   removed = cutAtAttribution(body) || removed;
 
+  // Some clients paste a complete reply header as ordinary divs/table rows
+  // and then append the old body without any quote markup. This is common in
+  // Outlook/Apple Mail exports ("Von/An/Datum/Betreff") and is the reason a
+  // simple blockquote-only trim still leaves a lot of old mail visible.
+  if (cutAtUnwrappedHeaders(body)) removed = true;
+
+  // A few clients omit both the quote wrapper and the header, leaving only a
+  // horizontal rule before the previous message. Treat it as quoted material
+  // only when the following content looks like a mail opening and contains
+  // multiple blocks, keeping ordinary visual dividers in new mail safe.
+  if (cutAtQuotedSeparator(body)) removed = true;
+
   if (!removed) return { html, trimmed: false, empty: !before };
 
   return { html: body.innerHTML, trimmed: true, empty: !hasContent(body) };
@@ -174,6 +199,96 @@ function cutAtAttribution(body: HTMLElement): boolean {
   return false;
 }
 
+function headerScore(text: string): { score: number; hasFrom: boolean; hasTo: boolean; hasDate: boolean; hasSubject: boolean } {
+  const normalized = text.replace(/[\u00a0\r\n]+/g, " ").replace(/\s+/g, " ").trim();
+  const hasFrom = HEADER_LABELS.from.test(normalized);
+  const hasTo = HEADER_LABELS.to.test(normalized);
+  const hasDate = HEADER_LABELS.date.test(normalized);
+  const hasSubject = HEADER_LABELS.subject.test(normalized);
+  return { score: [hasFrom, hasTo, hasDate, hasSubject].filter(Boolean).length, hasFrom, hasTo, hasDate, hasSubject };
+}
+
+function cutAtUnwrappedHeaders(body: HTMLElement): boolean {
+  const candidates = Array.from(body.querySelectorAll("div, p, section, table, tbody, tr, td, th, li"));
+  for (const candidate of candidates) {
+    const ownText = readableElementText(candidate);
+    const own = headerScore(ownText);
+    if (own.score >= 3 && own.hasFrom && own.hasTo && (own.hasDate || own.hasSubject)) {
+      removeFromNode(candidate);
+      return true;
+    }
+
+    // Header labels may be split into separate sibling rows. Look ahead only
+    // within the same small region so normal mail containing header-like
+    // words in distant paragraphs is not treated as quoted mail.
+    const siblings = Array.from(candidate.parentElement?.children ?? []);
+    const index = siblings.indexOf(candidate);
+    if (index < 0) continue;
+    if (own.score === 0) continue;
+    const windowText = siblings.slice(index, index + 6).map(readableElementText).join(" ");
+    const windowScore = headerScore(windowText);
+    if (windowScore.score >= 3 && windowScore.hasFrom && windowScore.hasTo && (windowScore.hasDate || windowScore.hasSubject)) {
+      removeFromNode(candidate);
+      return true;
+    }
+  }
+  return false;
+}
+
+function readableElementText(element: Element): string {
+  // textContent collapses <br>-separated header fields into one word in
+  // browser DOMs ("matchmii.comAn:"). Put structural breaks back before
+  // applying the label recognizer.
+  return element.innerHTML
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(?:div|p|section|tr|td|th|li)>/gi, "\n")
+    .replace(/<[^>]*>/g, " ");
+}
+
+function cutAtQuotedSeparator(body: HTMLElement): boolean {
+  for (const separator of Array.from(body.querySelectorAll("hr"))) {
+    const following = followingElements(separator);
+    const firstText = following.map((node) => (node.textContent ?? "").trim()).find(Boolean) ?? "";
+    const followingText = following.map((node) => node.textContent ?? "").join(" ").trim();
+    if (following.length >= 2 && followingText.length >= 40 && REPLY_LEAD.test(firstText)) {
+      removeFromNode(separator);
+      return true;
+    }
+  }
+  return false;
+}
+
+function followingElements(node: Element): Element[] {
+  const elements: Element[] = [];
+  let current: Node | null = node;
+  while (current?.parentNode) {
+    let sibling = current.nextSibling;
+    while (sibling) {
+      if (sibling.nodeType === Node.ELEMENT_NODE) elements.push(sibling as Element);
+      sibling = sibling.nextSibling;
+    }
+    current = current.parentNode;
+  }
+  return elements;
+}
+
+/** Remove this node and every later node, while retaining earlier body text. */
+function removeFromNode(node: Node): void {
+  let current: Node | null = node;
+  while (current?.parentNode) {
+    let sibling = current.nextSibling;
+    while (sibling) {
+      const next = sibling.nextSibling;
+      sibling.parentNode?.removeChild(sibling);
+      sibling = next;
+    }
+    const parent: Node = current.parentNode;
+    parent.removeChild(current);
+    if (parent === node.ownerDocument?.body) return;
+    current = parent;
+  }
+}
+
 /** Detach every node that follows `node` in document order. */
 function removeEverythingAfter(node: Node): void {
   let current: Node | null = node;
@@ -204,6 +319,14 @@ export function trimTextBody(text: string): { text: string; trimmed: boolean; em
       const t = l.trim();
       return t === "" || t.startsWith(">");
     })) {
+      cut = i;
+      break;
+    }
+    const currentHeader = Object.values(HEADER_LABELS).some((pattern) => pattern.test(line));
+    if (!currentHeader) continue;
+    const headerWindow = lines.slice(i, i + 6).join(" ");
+    const header = headerScore(headerWindow);
+    if (header.score >= 3 && header.hasFrom && header.hasTo && (header.hasDate || header.hasSubject)) {
       cut = i;
       break;
     }

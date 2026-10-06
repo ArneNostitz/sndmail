@@ -153,6 +153,12 @@ describe("threads service - unified inbox queries", () => {
     expect(params).toEqual(["a", "INBOX", "me@x.com", 50, 0]);
   });
 
+  it("filters the peer row itself, not only the peer timestamp subquery", async () => {
+    await getThreadsForAccounts(["a"], "INBOX", 50, 0, ["me@x.com"]);
+    const { sql } = lastSelect();
+    expect(sql).toContain("LOWER(TRIM(COALESCE(pm.from_address, ''))) NOT IN ($3)");
+  });
+
   it("keeps the legacy order when own addresses are unavailable", async () => {
     await getThreadsForAccounts(["a"], "INBOX", 50, 0, []);
     expect(lastSelect().sql).toContain("ORDER BY t.is_pinned DESC, t.last_message_at DESC");

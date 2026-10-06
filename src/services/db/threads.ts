@@ -123,6 +123,7 @@ function peerJoin(
   return {
     select: ", pm.from_name AS peer_name, pm.from_address AS peer_address",
     join: `LEFT JOIN messages pm ON pm.account_id = t.account_id AND pm.thread_id = t.id
+       AND LOWER(TRIM(COALESCE(pm.from_address, ''))) NOT IN (${placeholders})
        AND pm.date = (SELECT MAX(m3.date) FROM messages m3
                       WHERE m3.account_id = t.account_id AND m3.thread_id = t.id
                         AND LOWER(TRIM(COALESCE(m3.from_address, ''))) NOT IN (${placeholders}))`,

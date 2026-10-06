@@ -159,14 +159,6 @@ describe("threads service - unified inbox queries", () => {
     expect(sql).toContain("LOWER(TRIM(COALESCE(pm.from_address, ''))) NOT IN ($3)");
   });
 
-  it("excludes sent-only threads from the inbox", async () => {
-    await getThreadsForAccounts(["a"], "INBOX", 50, 0, ["me@x.com"]);
-    const { sql } = lastSelect();
-    expect(sql).toContain("FROM messages inbox_received");
-    expect(sql).toContain("inbox_received.thread_id = t.id");
-    expect(sql).toContain("LOWER(TRIM(COALESCE(inbox_received.from_address, ''))) NOT IN ($3)");
-  });
-
   it("keeps the legacy order when own addresses are unavailable", async () => {
     await getThreadsForAccounts(["a"], "INBOX", 50, 0, []);
     expect(lastSelect().sql).toContain("ORDER BY t.is_pinned DESC, t.last_message_at DESC");

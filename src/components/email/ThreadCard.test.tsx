@@ -153,6 +153,7 @@ describe("ThreadCard - who spoke last", () => {
       <ThreadCard thread={makeThread({ lastFromMe: true })} isSelected={false} onClick={onClick} />,
     );
     expect(screen.getByText("me:")).toBeInTheDocument();
+    expect(screen.getByTestId("thread-reply-indicator")).toHaveAttribute("aria-label", "You replied");
   });
 
   it("shows no marker when the other side wrote last", () => {
@@ -160,6 +161,18 @@ describe("ThreadCard - who spoke last", () => {
       <ThreadCard thread={makeThread({ lastFromMe: false })} isSelected={false} onClick={onClick} />,
     );
     expect(screen.queryByText("me:")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("thread-reply-indicator")).not.toBeInTheDocument();
+  });
+
+  it("displays the supplied latest outside-message timestamp", () => {
+    const { container } = render(
+      <ThreadCard
+        thread={makeThread({ lastMessageAt: new Date(2020, 0, 2).getTime() })}
+        isSelected={false}
+        onClick={onClick}
+      />,
+    );
+    expect(container).toHaveTextContent("Jan 2, 2020");
   });
 
   describe("folder tag", () => {

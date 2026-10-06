@@ -6,7 +6,7 @@ import { InlineAttachmentPreview } from "./InlineAttachmentPreview";
 import { AttachmentList, useAttachmentViewer, getAttachmentsForMessage } from "./AttachmentList";
 import type { DbMessage } from "@/services/db/messages";
 import type { DbAttachment } from "@/services/db/attachments";
-import { MailMinus } from "lucide-react";
+import { MailMinus, Maximize2, Minimize2 } from "lucide-react";
 import { useAccountStore } from "@/stores/accountStore";
 import { AuthBadge } from "./AuthBadge";
 import { AuthWarningBanner } from "./AuthWarningBanner";
@@ -16,6 +16,8 @@ import { ReadReceiptBadge } from "./ReadReceiptBadge";
 import { OneTimeCodeBanner } from "./OneTimeCodeBanner";
 import { RecipientLine } from "./RecipientLine";
 import type { MessageScanResult } from "@/utils/phishingDetector";
+import { trimMessageBody } from "@/utils/messageTrim";
+import { Tooltip } from "@/components/ui/Tooltip";
 
 interface MessageItemProps {
   message: DbMessage;
@@ -40,6 +42,7 @@ interface MessageItemProps {
 
 export const MessageItem = memo(forwardRef<HTMLDivElement, MessageItemProps>(function MessageItem({ message, isLast, blockImages, senderAllowlisted, accountId, threadId, isSpam, focused, isSearchMatch, highlightTerms, ownAddresses, onContextMenu, onSelectionContextMenu }, ref) {
   const [expanded, setExpanded] = useState(isLast || !!isSearchMatch);
+  const [showFullBody, setShowFullBody] = useState(!!isSearchMatch);
   // Repaint when the 12/24-hour preference changes
   useTimeFormat();
   const [attachments, setAttachments] = useState<DbAttachment[]>([]);
@@ -132,27 +135,33 @@ export const MessageItem = memo(forwardRef<HTMLDivElement, MessageItemProps>(fun
     setScanResult(null);
   };
 
-  // Scan HTML body for cid: references — these images are already rendered inline
-  const referencedCids = useMemo(() => {
-    const cids = new Set<string>();
-    if (!message.body_html) return cids;
-    const regex = /\bcid:([^"'\s)]+)/gi;
-    let m;
-    while ((m = regex.exec(message.body_html)) !== null) {
-      cids.add(m[1]!);
-    }
-    return cids;
-  }, [message.body_html]);
+  const fromDisplay = message.from_name ?? message.from_address ?? "Unknown";
 
-  // One viewer for the whole message: inline image/PDF previews and the
-  // attachment chips open into the same Quick Look / preview set
+  const trimmedBody = useMemo(
+    () => trimMessageBody(message.body_html, message.body_text),
+    [message.body_html, message.body_text],
+  );
+  useEffect(() => {
+    if (isSearchMatch) setShowFullBody(true);
+  }, [isSearchMatch]);
+  const bodyHtml = showFullBody ? message.body_html : trimmedBody.html;
+  const bodyText = showFullBody ? message.body_text : trimmedBody.text;
+  const visibleCids = useMemo(() => {
+    const cids = new Set<string>();
+    const source = bodyHtml ?? "";
+    const regex = /\bcid:([^"'\s)]+)/gi;
+    let match;
+    while ((match = regex.exec(source)) !== null) cids.add(match[1]!);
+    return cids;
+  }, [bodyHtml]);
+  // Keep inline previews aligned with the visible body while retaining the
+  // complete attachment list below it.
+  const referencedCids = visibleCids;
   const { openAttachment, viewer: attachmentViewer } = useAttachmentViewer(
     message.account_id,
     attachments,
     referencedCids,
   );
-
-  const fromDisplay = message.from_name ?? message.from_address ?? "Unknown";
 
   // "Opened" marker: read receipts received for a message the user sent
   const accounts = useAccountStore((s) => s.accounts);
@@ -247,20 +256,33 @@ export const MessageItem = memo(forwardRef<HTMLDivElement, MessageItemProps>(fun
 
           {blockImages != null ? (
             <EmailRenderer
-              html={message.body_html}
-              text={message.body_text}
+              html={bodyHtml}
+              text={bodyText}
               blockImages={blockImages}
               senderAddress={message.from_address}
               accountId={message.account_id}
               senderAllowlisted={senderAllowlisted}
               messageId={message.id}
-              inlineAttachments={attachments.filter((a) => a.content_id)}
+              inlineAttachments={attachments.filter((a) => a.content_id && visibleCids.has(a.content_id))}
               scanResult={scanResult}
               highlightTerms={isSearchMatch ? highlightTerms : undefined}
               onSelectionContextMenu={onSelectionContextMenu}
             />
           ) : (
             <div className="py-8 text-center text-text-tertiary text-sm">Loading...</div>
+          )}
+
+          {trimmedBody.trimmed && (
+            <Tooltip content={showFullBody ? "Hide quotes and signature again" : "Show the full message including quotes and signature"}>
+              <button
+                type="button"
+                onClick={() => setShowFullBody((current) => !current)}
+                className="mt-2 inline-flex items-center gap-1 text-xs text-accent hover:underline"
+              >
+                {showFullBody ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
+                {showFullBody ? "Hide quoted text" : "View full message"}
+              </button>
+            </Tooltip>
           )}
 
           <InlineAttachmentPreview

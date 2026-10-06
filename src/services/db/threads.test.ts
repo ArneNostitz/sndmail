@@ -149,12 +149,21 @@ describe("threads service - unified inbox queries", () => {
     expect(sql).toContain("MAX(received.date)");
     expect(sql).toContain("LOWER(COALESCE(received.from_address, '')) NOT IN ($3)");
     expect(sql).toContain("t.last_message_at\n  ) DESC");
+    expect(sql).toContain(") AS inbox_message_at");
     expect(params).toEqual(["a", "INBOX", "me@x.com", 50, 0]);
   });
 
   it("keeps the legacy order when own addresses are unavailable", async () => {
     await getThreadsForAccounts(["a"], "INBOX", 50, 0, []);
     expect(lastSelect().sql).toContain("ORDER BY t.is_pinned DESC, t.last_message_at DESC");
+  });
+
+  it("selects the inbox display date for the inbox list only", async () => {
+    await getThreadsForAccounts(["a"], "INBOX", 50, 0, ["me@x.com"]);
+    expect(lastSelect().sql).toContain("AS inbox_message_at");
+
+    await getThreadsForAccounts(["a"], "SENT", 50, 0, ["me@x.com"]);
+    expect(lastSelect().sql).not.toContain("AS inbox_message_at");
   });
 
   it("does not exclude spam threads from the spam folder", async () => {
@@ -185,6 +194,7 @@ describe("threads service - unified inbox queries", () => {
     const { sql, params } = lastSelect();
     expect(sql).toContain("MAX(received.date)");
     expect(sql).toContain("NOT IN ($2)");
+    expect(sql).toContain("AS inbox_message_at");
     expect(params).toEqual(["a", "me@x.com", 50, 0]);
   });
 

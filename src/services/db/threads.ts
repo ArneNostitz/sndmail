@@ -23,6 +23,8 @@ export interface DbThread {
    */
   peer_name?: string | null;
   peer_address?: string | null;
+  /** Inbox display/order date: latest outside message, falling back to thread date. */
+  inbox_message_at?: number | null;
 }
 
 export async function getThreadsForAccount(
@@ -165,7 +167,8 @@ export async function getThreadsForAccounts(
   if (labelIds.length > 0) {
     const labels = inClause(labelIds.length, nextIndex);
     const peer = peerJoin(ownAddresses, labels.nextIndex);
-    const orderDate = labelIds.includes("INBOX") && !labelIds.includes("SENT")
+    const inboxView = labelIds.includes("INBOX") && !labelIds.includes("SENT");
+    const orderDate = inboxView
       ? inboxOrder(ownAddresses, labels.nextIndex)
       : "t.last_message_at";
     // A Gmail thread can contain messages with different system labels. Our
@@ -180,7 +183,7 @@ export async function getThreadsForAccounts(
          )`
       : "";
     return db.select<DbThread[]>(
-      `SELECT t.*, m.from_name, m.from_address${peer.select} FROM threads t
+      `SELECT t.*, m.from_name, m.from_address${peer.select}${inboxView ? `, ${inboxOrder(ownAddresses, labels.nextIndex)} AS inbox_message_at` : ""} FROM threads t
        INNER JOIN thread_labels tl ON tl.account_id = t.account_id AND tl.thread_id = t.id
        LEFT JOIN messages m ON m.account_id = t.account_id AND m.thread_id = t.id
          AND m.date = (SELECT MAX(m2.date) FROM messages m2 WHERE m2.account_id = t.account_id AND m2.thread_id = t.id)
@@ -196,8 +199,9 @@ export async function getThreadsForAccounts(
   }
 
   const peer = peerJoin(ownAddresses, nextIndex);
+  const inboxView = labelId === "INBOX";
   return db.select<DbThread[]>(
-    `SELECT t.*, m.from_name, m.from_address${peer.select} FROM threads t
+    `SELECT t.*, m.from_name, m.from_address${peer.select}${inboxView ? `, ${inboxOrder(ownAddresses, nextIndex)} AS inbox_message_at` : ""} FROM threads t
      LEFT JOIN messages m ON m.account_id = t.account_id AND m.thread_id = t.id
        AND m.date = (SELECT MAX(m2.date) FROM messages m2 WHERE m2.account_id = t.account_id AND m2.thread_id = t.id)
      ${peer.join}
@@ -251,7 +255,7 @@ export async function getThreadsForCategoryAcrossAccounts(
     const peerPrimary = peerJoin(ownAddresses, nextIndex);
     const orderDate = inboxOrder(ownAddresses, nextIndex);
     return db.select<DbThread[]>(
-      `SELECT t.*, m.from_name, m.from_address${peerPrimary.select} FROM threads t
+      `SELECT t.*, m.from_name, m.from_address${peerPrimary.select}, ${inboxOrder(ownAddresses, nextIndex)} AS inbox_message_at FROM threads t
        INNER JOIN thread_labels tl ON tl.account_id = t.account_id AND tl.thread_id = t.id
        LEFT JOIN thread_categories tc ON tc.account_id = t.account_id AND tc.thread_id = t.id
        LEFT JOIN messages m ON m.account_id = t.account_id AND m.thread_id = t.id
@@ -276,7 +280,7 @@ export async function getThreadsForCategoryAcrossAccounts(
   const peer = peerJoin(ownAddresses, nextIndex + 1);
   const orderDate = inboxOrder(ownAddresses, nextIndex + 1);
   return db.select<DbThread[]>(
-    `SELECT t.*, m.from_name, m.from_address${peer.select} FROM threads t
+    `SELECT t.*, m.from_name, m.from_address${peer.select}, ${inboxOrder(ownAddresses, nextIndex + 1)} AS inbox_message_at FROM threads t
      INNER JOIN thread_labels tl ON tl.account_id = t.account_id AND tl.thread_id = t.id
      INNER JOIN thread_categories tc ON tc.account_id = t.account_id AND tc.thread_id = t.id
      LEFT JOIN messages m ON m.account_id = t.account_id AND m.thread_id = t.id

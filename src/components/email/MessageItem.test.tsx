@@ -6,8 +6,8 @@ import type { DbMessage } from "@/services/db/messages";
 import { useAccountStore } from "@/stores/accountStore";
 
 vi.mock("./EmailRenderer", () => ({
-  EmailRenderer: ({ highlightTerms }: { highlightTerms?: readonly string[] }) => (
-    <div data-testid="email-renderer" data-highlight-terms={highlightTerms?.join(",") ?? ""} />
+  EmailRenderer: ({ highlightTerms, html, text }: { highlightTerms?: readonly string[]; html: string | null; text: string | null }) => (
+    <div data-testid="email-renderer" data-highlight-terms={highlightTerms?.join(",") ?? ""} data-html={html ?? ""} data-text={text ?? ""} />
   ),
 }));
 
@@ -139,6 +139,43 @@ describe("MessageItem", () => {
     expect(screen.getByTestId("email-renderer")).toHaveAttribute(
       "data-highlight-terms",
       "festival",
+    );
+  });
+
+  it("hides quoted HTML by default and lets the reader reveal the full message", () => {
+    render(
+      <MessageItem
+        message={makeMessage({
+          body_html: '<p>My reply</p><div class="gmail_signature">My signature</div><blockquote><p>Earlier message</p></blockquote>',
+          body_text: "My reply\nEarlier message",
+        })}
+        isLast
+        blockImages={false}
+      />,
+    );
+
+    expect(screen.getByTestId("email-renderer")).toHaveAttribute("data-html", "<p>My reply</p>");
+    expect(screen.getByTestId("email-renderer")).toHaveAttribute("data-text", "My reply\nEarlier message");
+    fireEvent.click(screen.getByRole("button", { name: "View full message" }));
+    expect(screen.getByTestId("email-renderer")).toHaveAttribute(
+      "data-html",
+      '<p>My reply</p><div class="gmail_signature">My signature</div><blockquote><p>Earlier message</p></blockquote>',
+    );
+    expect(screen.getByRole("button", { name: "Hide quoted text" })).toBeInTheDocument();
+  });
+
+  it("shows full content for search matches even when it contains a quote", () => {
+    render(
+      <MessageItem
+        message={makeMessage({ body_html: "<p>Reply</p><blockquote>Search hit</blockquote>" })}
+        isLast={false}
+        blockImages={false}
+        isSearchMatch
+      />,
+    );
+    expect(screen.getByTestId("email-renderer")).toHaveAttribute(
+      "data-html",
+      "<p>Reply</p><blockquote>Search hit</blockquote>",
     );
   });
 

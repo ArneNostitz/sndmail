@@ -34,6 +34,14 @@ vi.mock("@/services/db/connection", () => ({
   ),
 }));
 
+vi.mock("@/services/db/messages", () => ({ upsertMessage: vi.fn(() => Promise.resolve()) }));
+vi.mock("@/services/db/threads", () => ({
+  upsertThread: vi.fn(() => Promise.resolve()),
+  setThreadLabels: vi.fn(() => Promise.resolve()),
+  getThreadLabelIds: vi.fn(() => Promise.resolve(["INBOX"])),
+}));
+vi.mock("@/services/db/accounts", () => ({ getAccount: vi.fn(() => Promise.resolve(null)) }));
+
 vi.mock("@/router/navigate", () => ({
   navigateToThread: vi.fn(),
   getActiveLabel: vi.fn(() => "inbox"),
@@ -53,6 +61,7 @@ import {
   spamThread,
   moveThread,
   executeEmailAction,
+  sendEmail,
   runBulkAction,
 } from "./emailActions";
 import { getDb } from "@/services/db/connection";
@@ -74,6 +83,41 @@ describe("emailActions", () => {
       removeThread: mockRemoveThread,
       beginThreadRemoval: mockRemoveThread,
     }) as never);
+  });
+
+  it("persists and announces a sent message after provider send succeeds", async () => {
+    const sentMessage = {
+      id: "sent-1", threadId: "t1", fromAddress: "me@example.com", fromName: "Me",
+      toAddresses: "them@example.com", ccAddresses: null, bccAddresses: null, replyTo: null,
+      subject: "Re: Hello", snippet: "Thanks", date: 1234, isRead: true, isStarred: false,
+      bodyHtml: "<p>Thanks</p>", bodyText: "Thanks", rawSize: 20, internalDate: 1234,
+      labelIds: ["SENT"], hasAttachments: false, attachments: [], listUnsubscribe: null,
+      listUnsubscribePost: null, authResults: null, messageIdHeader: "<sent@example.com>",
+      inReplyToHeader: "<original@example.com>", referencesHeader: null, dispositionNotificationTo: null,
+      mdnReport: null,
+    };
+    const provider = { ...mockProvider, sendMessage: vi.fn().mockResolvedValue({ id: "sent-1" }), fetchMessage: vi.fn().mockResolvedValue(sentMessage) };
+    vi.mocked(getEmailProvider).mockResolvedValue(provider as never);
+    const listener = vi.fn();
+    window.addEventListener("sndmail-message-sent", listener);
+
+    const result = await sendEmail("acct-1", "raw", "t1");
+
+    expect(result.success).toBe(true);
+    expect(provider.fetchMessage).toHaveBeenCalledWith("sent-1");
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect((listener.mock.calls[0]![0] as CustomEvent).detail).toEqual({ accountId: "acct-1", threadId: "t1", messageId: "sent-1" });
+    window.removeEventListener("sndmail-message-sent", listener);
+  });
+
+  it("does not announce a queued send before it is actually sent", async () => {
+    vi.mocked(useUIStore.getState).mockReturnValue(createMockUIStoreState({ isOnline: false }) as never);
+    const listener = vi.fn();
+    window.addEventListener("sndmail-message-sent", listener);
+    const result = await sendEmail("acct-1", "raw", "t1");
+    expect(result.queued).toBe(true);
+    expect(listener).not.toHaveBeenCalled();
+    window.removeEventListener("sndmail-message-sent", listener);
   });
 
   describe("online execution", () => {

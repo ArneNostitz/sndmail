@@ -6,7 +6,7 @@ import { useUIStore } from "@/stores/uiStore";
 import { useActiveLabel } from "@/hooks/useRouteNavigation";
 import { formatThreadListDate } from "@/utils/date";
 import { useTimeFormat } from "@/hooks/useTimeFormat";
-import { Paperclip, Star, Check, Pin, BellRing, VolumeX, CheckSquare } from "lucide-react";
+import { Paperclip, Star, Check, Pin, BellRing, VolumeX, CheckSquare, Reply } from "lucide-react";
 import { SenderAvatar } from "./SenderAvatar";
 import type { DragData } from "@/components/dnd/DndProvider";
 import { useLabelStore } from "@/stores/labelStore";
@@ -170,6 +170,13 @@ export const ThreadCard = memo(function ThreadCard({ thread, isSelected, onClick
           <span className="whitespace-nowrap text-xs text-text-tertiary">
             {formatThreadListDate(thread.lastMessageAt)}
           </span>
+          {thread.lastFromMe && (
+            <Tooltip content="You replied">
+              <span data-testid="thread-reply-indicator" aria-label="You replied" className="flex shrink-0 text-text-tertiary">
+                <Reply size={13} />
+              </span>
+            </Tooltip>
+          )}
           {receivedAccount && receivedAccountColor && (
             <Tooltip content={<span>{receivedAccount.displayName || receivedAccount.email}<br />{receivedAccount.email}</span>}>
               <span

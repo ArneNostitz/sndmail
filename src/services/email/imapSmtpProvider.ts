@@ -393,7 +393,7 @@ export class ImapSmtpProvider implements EmailProvider {
   async sendMessage(
     rawBase64Url: string,
     _threadId?: string,
-  ): Promise<{ id: string }> {
+  ): Promise<{ id: string; storedLocally?: boolean }> {
     const smtpConfig = await this.getSmtpConfig();
     const result = await smtpSendEmail(smtpConfig, rawBase64Url);
     if (!result.success) {
@@ -423,7 +423,7 @@ export class ImapSmtpProvider implements EmailProvider {
       );
     }
 
-    return { id: messageId };
+    return { id: messageId, storedLocally: true };
   }
 
   /**

@@ -79,7 +79,7 @@ export interface EmailProvider {
   sendMessage(
     rawBase64Url: string,
     threadId?: string,
-  ): Promise<{ id: string }>;
+  ): Promise<{ id: string; storedLocally?: boolean }>;
   createDraft(
     rawBase64Url: string,
     threadId?: string,

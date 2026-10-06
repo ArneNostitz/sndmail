@@ -102,6 +102,7 @@ export function ThreadView({ thread }: ThreadViewProps) {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loadAttempt, setLoadAttempt] = useState(0);
+  const [sentRefresh, setSentRefresh] = useState(0);
   const [recoveringBodies, setRecoveringBodies] = useState(false);
   const bodyRecoveryAttemptedRef = useRef<string | null>(null);
   const markedReadRef = useRef<string | null>(null);
@@ -179,7 +180,20 @@ export function ThreadView({ thread }: ThreadViewProps) {
       }
     })();
     return () => { cancelled = true; clearTimeout(timeout); };
-  }, [threadAccountId, thread.id, loadAttempt]);
+  }, [threadAccountId, thread.id, loadAttempt, sentRefresh]);
+
+  // A sent reply is stored locally before this event fires, so reload directly
+  // from SQLite and show it without waiting for the next provider sync.
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<{ accountId?: string; threadId?: string }>).detail;
+      if (detail?.accountId === threadAccountId && detail.threadId === thread.id) {
+        setSentRefresh((count) => count + 1);
+      }
+    };
+    window.addEventListener("sndmail-message-sent", handler);
+    return () => window.removeEventListener("sndmail-message-sent", handler);
+  }, [threadAccountId, thread.id]);
 
   // Repair missing bodies after the local thread has rendered. Remote retrieval
   // must not hold the normal thread-load timeout open.

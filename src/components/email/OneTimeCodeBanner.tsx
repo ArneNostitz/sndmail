@@ -16,7 +16,7 @@ export function OneTimeCodeBanner({ message }: { message: DbMessage }) {
     const text = message.body_text ?? stripTags(message.body_html);
     return {
       code: detectOtpCode(message.subject, text)?.code ?? null,
-      link: detectSignInLink(message.body_html)?.url ?? null,
+      link: detectSignInLink(message.body_html, message.subject, text)?.url ?? null,
     };
   }, [message.subject, message.body_text, message.body_html]);
   const [copied, setCopied] = useState(false);

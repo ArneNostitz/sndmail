@@ -188,13 +188,9 @@ function indexOfWord(haystack: string, word: string, from: number): number {
  * Words that mark a link as the one that signs you in, rather than the
  * unsubscribe footer or a marketing button sitting next to it.
  */
-const LINK_KEYWORDS = [
-  "sign in", "sign-in", "signin", "log in", "log-in", "login",
-  "verify", "confirm", "activate", "magic link", "continue to",
-  "complete your", "authenticate", "reset your password",
-  "anmelden", "einloggen", "bestätigen", "bestaetigen", "verifizieren",
-  "se connecter", "vérifier", "verifier", "iniciar sesión", "verificar",
-];
+const ONE_TIME_AUTH_CONTEXT = /\b(?:magic\s+(?:(?:sign[ -]?in|log[ -]?in|login)\s+)?link|passwordless\s+(?:(?:sign[ -]?in|log[ -]?in|login)\s+)?link|(?:one[ -]?time|single[ -]?use)\s+(?:passwordless\s+)?(?:sign[ -]?in|log[ -]?in|login)\s+link|(?:sign[ -]?in|log[ -]?in|login)\s+(?:magic|passwordless)\s+link|einmalige[rnms]?\s+anmeldelink)\b/i;
+const SIGN_IN_LABEL = /\b(?:sign\s+in|sign-in|signin|log\s+in|log-in|login|anmelden|einloggen)\b/i;
+const NON_LOGIN_ACTION = /\b(?:reset|activate|activation|confirm|confirmation|subscribe|subscription|purchase|register|registration|event|bestätig|bestaetig|aktivier|zurücksetzen|zuruecksetzen)\w*/i;
 
 /** Links that are never the sign-in link, however they are worded. */
 const LINK_EXCLUDE = /unsubscribe|abmelden|preferences|privacy|terms|imprint|impressum|\.(png|jpg|jpeg|gif|svg|css)(\?|$)/i;
@@ -213,7 +209,11 @@ export interface SignInLink {
  * to the footer is not. Returns null when nothing clearly qualifies; guessing
  * here would put a one-click launcher on an arbitrary link in an email.
  */
-export function detectSignInLink(html: string | null): SignInLink | null {
+export function detectSignInLink(
+  html: string | null,
+  subject: string | null = null,
+  bodyText: string | null = null,
+): SignInLink | null {
   if (!html || typeof DOMParser === "undefined") return null;
 
   let doc: Document;
@@ -223,19 +223,55 @@ export function detectSignInLink(html: string | null): SignInLink | null {
     return null;
   }
 
+  doc.querySelectorAll("script, style").forEach((node) => node.remove());
+  const htmlTextOnly = doc.body.innerHTML.replace(/<[^>]*>/g, " ");
+  const visibleHtmlText = new DOMParser().parseFromString(htmlTextOnly, "text/html").body.textContent ?? "";
+  const visibleBodyText = `${bodyText ?? ""} ${visibleHtmlText}`;
+  const messageContext = `${subject ?? ""} ${visibleBodyText}`;
+  if (!ONE_TIME_AUTH_CONTEXT.test(messageContext)) return null;
+
   for (const anchor of Array.from(doc.querySelectorAll("a[href]"))) {
     const url = anchor.getAttribute("href")?.trim();
     if (!url || !/^https?:\/\//i.test(url)) continue;
-    if (LINK_EXCLUDE.test(url)) continue;
+    if (linkIsExcluded(url)) continue;
 
     const label = (anchor.textContent ?? "").replace(/\s+/g, " ").trim();
-    const haystack = `${label} ${url}`.toLowerCase();
     if (LINK_EXCLUDE.test(label)) continue;
-    if (!LINK_KEYWORDS.some((k) => haystack.includes(k))) continue;
+    const targetKind = messageSpecificAuthTarget(url);
+    if (!targetKind || NON_LOGIN_ACTION.test(label) || NON_LOGIN_ACTION.test(new URL(url).pathname)) continue;
+    if (!SIGN_IN_LABEL.test(label) && targetKind !== "provider-magic") continue;
 
     return { url, label: label || url };
   }
   return null;
+}
+
+/** Require a message-specific secret destination or explicit magic-link path. */
+function messageSpecificAuthTarget(rawUrl: string): "provider-magic" | "direct" | null {
+  let url: URL;
+  try { url = new URL(rawUrl); } catch { return null; }
+  const path = url.pathname.toLowerCase();
+  const segments = path.split("/").filter(Boolean);
+  const secret = (key: string) => !!url.searchParams.get(key)?.trim();
+  const supabaseMagic = segments.join("/") === "auth/v1/verify" && url.searchParams.get("type") === "magiclink" && secret("token_hash");
+  const appwriteMagic = segments.slice(-3).join("/") === "account/sessions/magic-url" && secret("userId") && secret("secret");
+  if (supabaseMagic || appwriteMagic) return "provider-magic";
+  const magicPath = segments.some((segment) => /^(?:magic(?:-link)?|one-time|passwordless|sign-in-link)$/.test(segment));
+  const trackedAuthPath = segments.some((segment) => /^(?:track|tracking|click|redirect|r|t)$/.test(segment));
+  const opaqueTrackedValue = [...url.searchParams.values()].some((value) => value.trim().length > 0);
+  const secretParameter = [...url.searchParams].some(([key, value]) =>
+    /^(?:token|code|key|state|ticket|auth|nonce|login_token|magic_token)$/i.test(key) && value.trim().length > 0,
+  );
+  return (secretParameter && magicPath) || (trackedAuthPath && opaqueTrackedValue) ? "direct" : null;
+}
+
+function linkIsExcluded(rawUrl: string): boolean {
+  try {
+    const url = new URL(rawUrl);
+    return LINK_EXCLUDE.test(url.pathname);
+  } catch {
+    return true;
+  }
 }
 
 /**

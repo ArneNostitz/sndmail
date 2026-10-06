@@ -30,7 +30,7 @@ pub(super) async fn maybe_notify(
         .fetch_optional(&mut *db).await.map_err(|e| format!("OTP setting: {e}"))?;
     let notifications_enabled = notifications_enabled.as_deref() != Some("false");
     let code = subject.and_then(detect).or_else(|| body.and_then(detect));
-    let sign_in_link = body_html.and_then(detect_sign_in_link);
+    let sign_in_link = body_html.and_then(|html| detect_sign_in_link(html, subject, body));
     if code.is_none() && sign_in_link.is_none() { return Ok(()); }
     sqlx::query("INSERT OR IGNORE INTO worker_otp_notifications (account_id, message_id) VALUES (?, ?)")
         .bind(account).bind(message).execute(&mut *db).await.map_err(|e| format!("OTP dedup: {e}"))?;
@@ -250,19 +250,50 @@ fn detect(text: &str) -> Option<String> {
     None
 }
 
-fn detect_sign_in_link(html: &str) -> Option<String> {
+fn detect_sign_in_link(html: &str, subject: Option<&str>, body_text: Option<&str>) -> Option<String> {
     static ANCHOR: OnceLock<Regex> = OnceLock::new();
     static TAG: OnceLock<Regex> = OnceLock::new();
+    static SCRIPT_STYLE: OnceLock<Regex> = OnceLock::new();
+    static AUTH_CONTEXT: OnceLock<Regex> = OnceLock::new();
+    static SIGN_IN_LABEL: OnceLock<Regex> = OnceLock::new();
+    static NON_LOGIN_ACTION: OnceLock<Regex> = OnceLock::new();
     let anchor = ANCHOR.get_or_init(|| Regex::new(r#"(?is)<a\b[^>]*?href\s*=\s*[\"']([^\"']+)[\"'][^>]*>(.*?)</a\s*>"#).expect("fixed anchor regex"));
     let tags = TAG.get_or_init(|| Regex::new(r"(?is)<[^>]+>").expect("fixed html tag regex"));
-    const KEYWORDS: &[&str] = &["sign in", "sign-in", "signin", "log in", "log-in", "login", "verify", "confirm", "activate", "magic link", "continue to", "complete your", "authenticate", "anmelden", "einloggen", "bestätigen", "bestaetigen", "verifizieren"];
+    let script_style = SCRIPT_STYLE.get_or_init(|| Regex::new(r"(?is)<(?:script|style)\b[^>]*>.*?</(?:script|style)\s*>").unwrap());
+    let auth_context = AUTH_CONTEXT.get_or_init(|| Regex::new(r"(?i)\b(?:magic\s+(?:(?:sign[ -]?in|log[ -]?in|login)\s+)?link|passwordless\s+(?:(?:sign[ -]?in|log[ -]?in|login)\s+)?link|(?:one[ -]?time|single[ -]?use)\s+(?:passwordless\s+)?(?:sign[ -]?in|log[ -]?in|login)\s+link|(?:sign[ -]?in|log[ -]?in|login)\s+(?:magic|passwordless)\s+link|einmalige[rnms]?\s+anmeldelink)\b").unwrap());
+    let sign_in_label = SIGN_IN_LABEL.get_or_init(|| Regex::new(r"(?i)\b(?:sign\s+in|sign-in|signin|log\s+in|log-in|login|anmelden|einloggen)\b").unwrap());
+    let non_login_action = NON_LOGIN_ACTION.get_or_init(|| Regex::new(r"(?i)\b(?:reset|activate|activation|confirm|confirmation|subscribe|subscription|purchase|register|registration|event|bestätig|bestaetig|aktivier|zurücksetzen|zuruecksetzen)\w*").unwrap());
+    let without_scripts = script_style.replace_all(html, " ");
+    let visible_html = tags.replace_all(&without_scripts, " ");
+    let body_without_scripts = script_style.replace_all(body_text.unwrap_or(""), " ");
+    let body_visible = tags.replace_all(&body_without_scripts, " ");
+    let context = format!("{} {} {}", subject.unwrap_or(""), body_visible, visible_html);
+    if !auth_context.is_match(&context) { return None; }
     for capture in anchor.captures_iter(html) {
-        let url = capture.get(1)?.as_str().trim();
-        let label = tags.replace_all(capture.get(2)?.as_str(), " ");
-        let haystack = format!("{label} {url}").to_lowercase();
-        if !(url.starts_with("https://") || url.starts_with("http://")) { continue; }
-        if haystack.contains("unsubscribe") || haystack.contains("preferences") || haystack.contains("privacy") || haystack.contains("terms") || haystack.contains("imprint") { continue; }
-        if KEYWORDS.iter().any(|keyword| haystack.contains(keyword)) { return Some(url.replace("&amp;", "&")); }
+        let raw_url = capture.get(1)?.as_str().trim();
+        let decoded_url = raw_url.replace("&amp;", "&").replace("&#38;", "&").replace("&#x26;", "&").replace("&#X26;", "&");
+        let url = decoded_url.as_str();
+        let label_text = tags.replace_all(capture.get(2)?.as_str(), " ").replace("&nbsp;", " ");
+        let Ok(parsed) = reqwest::Url::parse(url) else { continue; };
+        if parsed.scheme() != "https" && parsed.scheme() != "http" { continue; }
+        let path: Vec<String> = parsed.path_segments().map(|segments| segments.map(str::to_lowercase).collect()).unwrap_or_default();
+        if ["unsubscribe", "preferences", "privacy", "terms", "imprint", "abmelden"].iter().any(|word| label_text.to_lowercase().contains(word) || path.iter().any(|part| part.contains(word))) { continue; }
+        let provider_supabase = path.join("/") == "auth/v1/verify"
+            && parsed.query_pairs().any(|(key, value)| key == "type" && value == "magiclink")
+            && parsed.query_pairs().any(|(key, value)| key == "token_hash" && !value.trim().is_empty());
+        let provider_appwrite = path.len() >= 3 && path[path.len() - 3..].join("/") == "account/sessions/magic-url"
+            && parsed.query_pairs().any(|(key, value)| key == "userId" && !value.trim().is_empty())
+            && parsed.query_pairs().any(|(key, value)| key == "secret" && !value.trim().is_empty());
+        let provider_magic = provider_supabase || provider_appwrite;
+        let magic_path = path.iter().any(|part| matches!(part.as_str(), "magic" | "magic-link" | "one-time" | "passwordless" | "sign-in-link"));
+        let tracked_path = path.iter().any(|part| matches!(part.as_str(), "track" | "tracking" | "click" | "redirect" | "r" | "t"));
+        let has_secret = parsed.query_pairs().any(|(key, value)|
+            matches!(key.to_ascii_lowercase().as_str(), "token" | "code" | "key" | "state" | "ticket" | "auth" | "nonce" | "login_token" | "magic_token") && !value.trim().is_empty());
+        let has_opaque_query = parsed.query_pairs().any(|(_, value)| !value.trim().is_empty());
+        if non_login_action.is_match(&label_text) || path.iter().any(|part| non_login_action.is_match(part)) { continue; }
+        if (sign_in_label.is_match(&label_text) || provider_magic) && (provider_magic || (has_secret && magic_path) || (tracked_path && has_opaque_query)) {
+            return Some(parsed.to_string());
+        }
     }
     None
 }
@@ -541,11 +572,24 @@ mod native {
 
 #[cfg(test)]
 mod tests {
-    use super::detect;
+    use super::{detect, detect_sign_in_link};
+    use serde::Deserialize;
+
+    #[derive(Deserialize)]
+    struct LinkCase { name: String, html: String, context: String, expected_url: Option<String> }
+
     #[test]
     fn finds_sign_in_code_but_not_order_number() {
         assert_eq!(detect("Your verification code is 581942").as_deref(), Some("581942"));
         assert_eq!(detect("Order number 581942"), None);
         assert_eq!(detect("Your verification code is 111111"), None);
+    }
+
+    #[test]
+    fn follows_shared_one_time_sign_in_contract() {
+        let cases: Vec<LinkCase> = serde_json::from_str(include_str!("../../../tests/fixtures/sign_in_link_cases.json")).unwrap();
+        for case in cases {
+            assert_eq!(detect_sign_in_link(&case.html, None, Some(&case.context)), case.expected_url, "{}", case.name);
+        }
     }
 }

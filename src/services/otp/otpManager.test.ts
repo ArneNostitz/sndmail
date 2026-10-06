@@ -81,12 +81,12 @@ describe("processIncomingCodes", () => {
         id: "m4",
         subject: "Dein Login",
         bodyText: "Anmelden\nOder dieser Code\n271260\n",
-        bodyHtml: '<a href="https://app.example.com/login?t=9">Anmelden</a><p>Oder dieser Code</p><p>271260</p>',
+        bodyHtml: '<a href="https://app.example.com/magic?token=9">Anmelden</a><p>Use this one-time sign-in link</p><p>Oder dieser Code</p><p>271260</p>',
       }),
     ], NOW);
-    expect(out).toEqual([{ code: "271260", linkUrl: "https://app.example.com/login?t=9", copied: true }]);
+    expect(out).toEqual([{ code: "271260", linkUrl: "https://app.example.com/magic?token=9", copied: true }]);
     expect(mockNotify).toHaveBeenCalledWith(
-      expect.objectContaining({ code: "271260", linkUrl: "https://app.example.com/login?t=9" }),
+      expect.objectContaining({ code: "271260", linkUrl: "https://app.example.com/magic?token=9" }),
     );
   });
 
@@ -97,7 +97,7 @@ describe("processIncomingCodes", () => {
         id: "m5",
         subject: "Dein Login",
         bodyText: "Anmelden\nOder dieser Code\n271260\n",
-        bodyHtml: '<a href="https://app.example.com/login?t=9">Anmelden</a><p>Oder dieser Code</p><p>271260</p>',
+        bodyHtml: '<a href="https://app.example.com/magic?token=9">Anmelden</a><p>Use this one-time sign-in link</p><p>Oder dieser Code</p><p>271260</p>',
       }),
     ], NOW);
     const toast = useToastStore.getState().toasts[0];
@@ -110,13 +110,14 @@ describe("processIncomingCodes", () => {
     const out = await processIncomingCodes([
       codeMail({
         id: "m2",
-        subject: "Finish signing in",
-        bodyHtml: '<a href="https://app.example.com/magic?t=1">Sign in</a>',
+        subject: "Your one-time sign-in link",
+        bodyText: "This link expires in 10 minutes and can only be used once.",
+        bodyHtml: '<p>This one-time sign-in link is valid for 10 minutes.</p><a href="https://app.example.com/magic?token=1">Sign in</a>',
       }),
     ], NOW);
-    expect(out).toEqual([{ code: null, linkUrl: "https://app.example.com/magic?t=1", copied: false }]);
+    expect(out).toEqual([{ code: null, linkUrl: "https://app.example.com/magic?token=1", copied: false }]);
     expect(mockNotify).toHaveBeenCalledWith(
-      expect.objectContaining({ linkUrl: "https://app.example.com/magic?t=1" }),
+      expect.objectContaining({ linkUrl: "https://app.example.com/magic?token=1" }),
     );
   });
 
@@ -126,6 +127,32 @@ describe("processIncomingCodes", () => {
     ], NOW);
     expect(out).toEqual([]);
     expect(mockNotify).not.toHaveBeenCalled();
+  });
+
+  it("does not announce a newsletter offer with a tracked sign-in footer", async () => {
+    const out = await processIncomingCodes([
+      codeMail({
+        id: "newsletter-offer",
+        subject: "Weekly newsletter",
+        bodyText: "A one-time offer for our newsletter readers.",
+        bodyHtml: '<p>A one-time offer for our newsletter readers.</p><a href="https://example.com/click?token=tracking">Sign in to your account</a>',
+      }),
+    ], NOW);
+    expect(out).toEqual([]);
+    expect(mockNotify).not.toHaveBeenCalled();
+  });
+
+  it("announces a link when the message explicitly says one-time sign-in link", async () => {
+    const out = await processIncomingCodes([
+      codeMail({
+        id: "explicit-auth-link",
+        subject: "Your one-time sign-in link",
+        bodyText: "Use this one-time sign-in link to access your account.",
+        bodyHtml: '<a href="https://example.com/click?token=auth">Sign in to your account</a>',
+      }),
+    ], NOW);
+    expect(out).toEqual([{ code: null, linkUrl: "https://example.com/click?token=auth", copied: false }]);
+    expect(mockNotify).toHaveBeenCalledWith(expect.objectContaining({ linkUrl: "https://example.com/click?token=auth" }));
   });
 
   it("survives a clipboard that refuses", async () => {

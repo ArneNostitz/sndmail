@@ -1,0 +1,194 @@
+[
+  {
+    "name": "genuine opaque tracked magic link with explicit one-time sign-in context",
+    "html": "<a href=\"https://click.example/track?id=opaque-123\">Sign in to your account</a>",
+    "expected_url": "https://click.example/track?id=opaque-123",
+    "context": "Use this one-time sign-in link. It expires in 10 minutes and can only be used once."
+  },
+  {
+    "name": "ordinary newsletter login portal with tracking token",
+    "html": "<p>Read the weekly update.</p><a href=\"https://example.com/login?utm_source=weekly\">Login</a>",
+    "expected_url": null,
+    "context": "Read the weekly update."
+  },
+  {
+    "name": "event registration",
+    "html": "<p>Join our event.</p><a href=\"https://example.com/event/register\">Jetzt anmelden</a>",
+    "expected_url": null,
+    "context": "Join our event."
+  },
+  {
+    "name": "tracking URL contains confirm substring",
+    "html": "<p>Read more.</p><a href=\"https://click.example/?id=abcconfirmpq\">Read more</a>",
+    "expected_url": null,
+    "context": "Read more."
+  },
+  {
+    "name": "German one-time access link",
+    "html": "<a href=\"https://click.example/t/opaque?token=abc\">Jetzt anmelden</a>",
+    "expected_url": "https://click.example/t/opaque?token=abc",
+    "context": "Dieser einmalige Anmeldelink ist 10 Minuten gültig."
+  },
+  {
+    "name": "German event Anmeldelink with tracked registration action",
+    "html": "<p>Hier ist der Anmeldelink für die Veranstaltung</p><a href=\"https://example.com/click?token=tracking\">Anmelden</a>",
+    "expected_url": null,
+    "context": "Hier ist der Anmeldelink für die Veranstaltung."
+  },
+  {
+    "name": "auth route and consumed secret without message wording",
+    "html": "<a href=\"https://example.com/auth/magic?token=opaque\">Continue</a>",
+    "expected_url": null,
+    "context": "Continue to your account."
+  },
+  {
+    "name": "normal login page despite one-time wording",
+    "html": "<a href=\"https://example.com/login\">Sign in</a>",
+    "expected_url": null,
+    "context": "Use this one-time sign-in link."
+  },
+  {
+    "name": "generic login with token despite one-time wording",
+    "html": "<a href=\"https://example.com/login?token=opaque\">Sign in</a>",
+    "expected_url": null,
+    "context": "Use this one-time sign-in link."
+  },
+  {
+    "name": "one-time words in attributes or scripts are not context",
+    "html": "<a href=\"https://example.com/login?next=one-time\">Sign in</a><script>one-time passwordless magic link</script>",
+    "expected_url": null,
+    "context": ""
+  },
+  {
+    "name": "generic continue link beside one-time context",
+    "html": "<a href=\"https://example.com/auth/magic?token=opaque\">Continue</a>",
+    "expected_url": null,
+    "context": "Use this one-time sign-in link."
+  },
+  {
+    "name": "auth-like query on ordinary route is insufficient",
+    "html": "<a href=\"https://example.com/event?token=opaque\">Confirm</a>",
+    "expected_url": null,
+    "context": "Please confirm your event attendance."
+  }
+  ,{
+    "name": "ordinary footer login before real magic link",
+    "html": "<a href=\"https://example.com/login?utm_source=mail\">Sign in</a><a href=\"https://click.example/magic?token=opaque\">Sign in</a>",
+    "expected_url": "https://click.example/magic?token=opaque",
+    "context": "Use this one-time sign-in link."
+  },
+  {
+    "name": "one-time wording does not qualify password reset",
+    "html": "<a href=\"https://example.com/auth/reset?token=opaque\">Sign in</a>",
+    "expected_url": null,
+    "context": "Use this one-time sign-in link to reset your password."
+  },
+  {
+    "name": "one-time wording does not qualify account activation",
+    "html": "<a href=\"https://example.com/auth/activate?token=opaque\">Sign in</a>",
+    "expected_url": null,
+    "context": "Use this one-time sign-in link to activate your account."
+  },
+  {
+    "name": "one-time wording does not qualify confirmation",
+    "html": "<a href=\"https://example.com/auth/confirm?token=opaque\">Sign in</a>",
+    "expected_url": null,
+    "context": "Use this one-time sign-in link to confirm your subscription."
+  },
+  {
+    "name": "empty secret parameter is insufficient",
+    "html": "<a href=\"https://example.com/auth/login?token=\">Sign in</a>",
+    "expected_url": null,
+    "context": "Use this one-time sign-in link."
+  },
+  {
+    "name": "encoded sign-in label",
+    "html": "<a href=\"https://click.example/magic?token=opaque\">Sign&nbsp;in</a>",
+    "expected_url": "https://click.example/magic?token=opaque",
+    "context": "Use this one-time sign-in link."
+  },
+  {
+    "name": "magic path without a consumed secret is insufficient",
+    "html": "<a href=\"https://example.com/magic\">Sign in</a>",
+    "expected_url": null,
+    "context": "Use this one-time sign-in link."
+  },
+  {
+    "name": "magic-shop path is not a magic endpoint",
+    "html": "<a href=\"https://example.com/magic-shop?utm=magic\">Sign in</a>",
+    "expected_url": null,
+    "context": "Use this one-time sign-in link."
+  },
+  {
+    "name": "Supabase magic verification link",
+    "html": "<a href=\"https://example.supabase.co/auth/v1/verify?token_hash=opaque&type=magiclink\">Click here</a>",
+    "expected_url": "https://example.supabase.co/auth/v1/verify?token_hash=opaque&type=magiclink",
+    "context": "Use this one-time passwordless sign-in link."
+  },
+  {
+    "name": "Supabase magic verification link with HTML-escaped ampersand",
+    "html": "<a href=\"https://example.supabase.co/auth/v1/verify?token_hash=opaque&amp;type=magiclink\">Click here</a>",
+    "expected_url": "https://example.supabase.co/auth/v1/verify?token_hash=opaque&type=magiclink",
+    "context": "Use this one-time passwordless sign-in link."
+  },
+  {
+    "name": "Supabase magic verification link with numeric HTML ampersand",
+    "html": "<a href=\"https://example.supabase.co/auth/v1/verify?token_hash=opaque&#38;type=magiclink\">Click here</a>",
+    "expected_url": "https://example.supabase.co/auth/v1/verify?token_hash=opaque&type=magiclink",
+    "context": "Use this one-time passwordless sign-in link."
+  },
+  {
+    "name": "Appwrite magic URL link",
+    "html": "<a href=\"https://cloud.example/v1/account/sessions/magic-url?userId=u1&secret=s1\">Sign in</a>",
+    "expected_url": "https://cloud.example/v1/account/sessions/magic-url?userId=u1&secret=s1",
+    "context": "Use this one-time sign-in link."
+  },
+  {
+    "name": "Appwrite magic URL link with HTML-escaped ampersand",
+    "html": "<a href=\"https://cloud.example/v1/account/sessions/magic-url?userId=u1&amp;secret=s1\">Sign in</a>",
+    "expected_url": "https://cloud.example/v1/account/sessions/magic-url?userId=u1&secret=s1",
+    "context": "Use this one-time sign-in link."
+  },
+  {
+    "name": "genuine sign-in beside subscription footer",
+    "html": "<a href=\"https://click.example/magic?token=opaque\">Sign in</a><a href=\"https://example.com/manage-subscription\">Manage subscription</a>",
+    "expected_url": "https://click.example/magic?token=opaque",
+    "context": "Use this one-time sign-in link. Manage your subscription preferences below."
+  },
+  {
+    "name": "one-time newsletter offer with tracked sign-in footer",
+    "html": "<p>A one-time offer for our newsletter readers.</p><a href=\"https://example.com/click?token=tracking\">Sign in to your account</a>",
+    "expected_url": null,
+    "context": "Weekly newsletter. A one-time offer for our readers."
+  },
+  {
+    "name": "one-time event pass with tracked sign-in footer",
+    "html": "<p>Your one-time event pass is ready.</p><a href=\"https://example.com/click?token=tracking\">Sign in to your account</a>",
+    "expected_url": null,
+    "context": "Your one-time event pass is ready."
+  },
+  {
+    "name": "OTP mentioned elsewhere with tracked sign-in footer",
+    "html": "<p>Your one-time code is 817263.</p><a href=\"https://example.com/click?token=tracking\">Sign in to your account</a>",
+    "expected_url": null,
+    "context": "Your one-time code is 817263."
+  },
+  {
+    "name": "one-time offer with tracked sign-in footer",
+    "html": "<p>A one-time offer for our newsletter readers.</p><a href=\"https://example.com/click?token=tracking\">Sign in to your account</a>",
+    "expected_url": null,
+    "context": "Weekly newsletter. A one-time offer for our readers."
+  },
+  {
+    "name": "one-time event pass with tracked sign-in footer",
+    "html": "<p>Your one-time event pass is ready.</p><a href=\"https://example.com/click?token=tracking\">Sign in to your account</a>",
+    "expected_url": null,
+    "context": "Your one-time event pass is ready."
+  },
+  {
+    "name": "one-time code elsewhere with tracked sign-in footer",
+    "html": "<p>Your one-time code is 817263.</p><a href=\"https://example.com/click?token=tracking\">Sign in to your account</a>",
+    "expected_url": null,
+    "context": "Your one-time code is 817263."
+  }
+]

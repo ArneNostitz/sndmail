@@ -1025,7 +1025,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         title: "Buttons on notifications",
         summary: "Reply, archive or copy a code straight from the notification.",
         description:
-          "On macOS, notifications offer Reply and Archive or Copy code and Open sign-in link, depending on the message; Windows and Linux show these actions in sndmail's in-app toast. sndmail never copies a one-time code automatically: it reaches your clipboard only after you press Copy code, and each action applies to the message that raised the notification. Choose Alerts under System Settings → Notifications → sndmail to keep macOS buttons visible.",
+          "On macOS, notifications offer Reply and Archive or Copy code and Open sign-in link, depending on the message; Windows and Linux show these actions in sndmail's in-app toast. Code and sign-in-link actions are for one-time codes and genuine one-time direct-login links, not ordinary newsletter links, generic login portal footers, event registration links, or verify/confirm buttons. sndmail never copies a one-time code automatically: it reaches your clipboard only after you press Copy code, and each action applies to the message that raised the notification. Choose Alerts under System Settings → Notifications → sndmail to keep macOS buttons visible.",
         tips: [
           { text: "Settings > Notifications has a \"Send a test\" button — its Copy code really copies." },
           { text: "Pick Alerts under System Settings > Notifications > sndmail to keep the buttons visible without hovering." },

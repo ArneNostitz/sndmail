@@ -213,10 +213,10 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       {
         id: "message-links",
         icon: LinkIcon,
-        title: "Links to individual emails",
-        summary: "Open a specific message from Raycast or another app.",
+        title: "Links to messages",
+        summary: "Copy links from a message or its thread list row.",
         description:
-          "Right-click a message and choose Copy Message Link to reference it from another app. Opening the link brings sndmail forward, opens the correct mailbox and conversation, and expands the linked message. Copy Message IDs provides the account, thread, and message identifiers for integrations; links work only where that mail is available locally.",
+          "Right-click an individual message or a thread in the list and choose Copy Message Link to reference it from another app. A list-row link opens the exact message shown for that row: the incoming message previewed in Inbox, or the latest non-receipt message in other folders. Opening the link brings sndmail forward, opens the correct mailbox and conversation, and expands the linked message. Copy Message IDs provides the account, thread, and message identifiers for integrations; links work where that message is available locally.",
         tips: [{ text: "Install sndmail to open sndmail:// links." }],
       },
       {

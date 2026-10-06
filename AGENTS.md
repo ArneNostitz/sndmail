@@ -179,7 +179,7 @@ Tailwind CSS v4 — uses `@import "tailwindcss"`, `@theme {}` for custom propert
 
 Vitest + jsdom. Setup file: `src/test/setup.ts` (imports `@testing-library/jest-dom/vitest`). Config: `globals: true` (no imports needed for `describe`, `it`, `expect`). Tests are colocated with source files (e.g., `uiStore.test.ts` next to `uiStore.ts`). Zustand test pattern: `useStore.setState()` in beforeEach, assert via `.getState()`.
 
-156 test files across stores (9), services (83), utils (19), components (37), constants (4), router (1), hooks (3), and config (1).
+187 test files across stores (9), services (99), utils (25), components (44), constants (4), router (1), hooks (4), and config (1).
 
 ## Database
 
@@ -223,7 +223,7 @@ Key tables (35 total): `accounts` (with `provider` "gmail_api"|"imap", IMAP/SMTP
 - **Vite build**: Multi-page — `index.html` (main app) + `splashscreen.html`
 - **Filter engine**: AND logic for criteria, merges actions when multiple filters match same message
 - **AI providers**: API keys stored in SQLite settings table. Provider selected per-feature in settings. Results cached in `ai_cache` table
-- **Deep links**: `mailto:` composes mail; `sndmail://open?account=<accountId>&thread=<threadId>&message=<messageId>` opens a local message (`message` is optional). `mailLink.ts` parses/creates identifiers-only links, `openMailLink.ts` checks account/thread/message ownership in SQLite before caching/navigation, and `mailLinkStore` retains exact-message focus until ThreadView is ready. Copy Message Link/IDs is in the message context menu. Native `getCurrent()` handles cold startup; single-instance enables the `deep-link` Cargo feature. macOS scheme changes require a rebuilt installed bundle.
+- **Deep links**: `mailto:` composes mail; `sndmail://open?account=<accountId>&thread=<threadId>&message=<messageId>` opens a local message (`message` is optional). `mailLink.ts` parses/creates identifiers-only links, `openMailLink.ts` checks account/thread/message ownership in SQLite before caching/navigation, and `mailLinkStore` retains exact-message focus until ThreadView is ready. Copy Message Link/IDs is available in an individual message context menu, and Copy Message Link is also available from a thread list-row context menu; its Inbox target is the incoming message previewed in the row, while other folders target the latest non-receipt message, using that row's account. Both reuse the existing scheme and only resolve where the message is available locally. Native `getCurrent()` handles cold startup; single-instance enables the `deep-link` Cargo feature. macOS scheme changes require a rebuilt installed bundle.
 - **Autostart**: Uses `--hidden` flag to start minimized to tray
 - **Background mail helper**: On macOS it starts at login independently of the main app. Quitting the app does not stop an enabled helper; disabling it in Settings > General unloads it and relaunches the app to transfer sync ownership. The helper queues filters, smart labels, and optional AI postprocessing for the main app to process when open. See [docs/background-worker.md](docs/background-worker.md).
 - **OTP notifications**: Background notifications never copy a one-time code automatically; clipboard access happens only after the user chooses **Copy code**.

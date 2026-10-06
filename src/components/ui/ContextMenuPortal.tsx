@@ -4,7 +4,7 @@ import { menuSurface, menuRow, menuHover, menuFont } from "./menuStyles";
 import { useContextMenuStore } from "@/stores/contextMenuStore";
 import { useThreadStore } from "@/stores/threadStore";
 import { useTaskStore } from "@/stores/taskStore";
-import { useAccountStore } from "@/stores/accountStore";
+import { listedAccountIds, useAccountStore } from "@/stores/accountStore";
 import { getActiveLabel, navigateToLabel } from "@/router/navigate";
 import { useComposerStore } from "@/stores/composerStore";
 import { useLabelStore } from "@/stores/labelStore";
@@ -55,6 +55,7 @@ import { createMailLink } from "@/utils/mailLink";
 import { notify, reportError } from "@/stores/toastStore";
 import { getIncompleteTaskCount, getTasksForThread, insertTask } from "@/services/db/tasks";
 import { extractTask } from "@/services/ai/taskExtraction";
+import { createListMessageLink } from "@/services/links/listMessageLink";
 
 function buildQuote(msg: { from_name: string | null; from_address: string | null; date: string | number; body_html: string | null; body_text: string | null }): string {
   const date = formatDateTime(msg.date);
@@ -277,16 +278,16 @@ function ThreadMenu({
   const isMulti = targetIds.length > 1;
 
   const thread = threads.find((t) => t.id === threadId);
-  if (!thread || !activeAccountId) {
+  const threadAccountId = thread?.accountId ?? activeAccountId;
+  if (!thread || !threadAccountId) {
     return <ContextMenu items={[]} position={position} onClose={onClose} />;
   }
 
   // A unified list spans mailboxes — act on each thread's own account, not
   // whichever mailbox the sidebar happens to have selected. A multi-selection
   // can span accounts too.
-  const threadAccountId = thread.accountId || activeAccountId;
   const accountFor = (id: string): string =>
-    threads.find((t) => t.id === id)?.accountId || activeAccountId;
+    threads.find((t) => t.id === id)?.accountId || threadAccountId;
 
   const isTrashView = activeLabel === "trash";
   const isDraftsView = activeLabel === "drafts";
@@ -351,6 +352,25 @@ function ThreadMenu({
       originalRecipients: recipientHeadersFromMessages(messages),
       accountId: threadAccountId,
     });
+  };
+
+  const handleCopyMessageLink = async () => {
+    try {
+      const messages = await getMessagesForThread(threadAccountId, thread.id);
+      const accountState = useAccountStore.getState();
+      const ownAccountIds = [...new Set([...listedAccountIds(accountState), threadAccountId])];
+      const own = activeLabel === "inbox"
+        ? await collectOwnAddresses(accountState.accounts, ownAccountIds)
+        : [];
+      const link = createListMessageLink(messages, threadAccountId, thread.id, activeLabel, own);
+      if (!link) {
+        reportError("Could not copy message link", "No matching message is available in this conversation.");
+        return;
+      }
+      const { writeText } = await import("@tauri-apps/plugin-clipboard-manager");
+      await writeText(link);
+      notify("success", "Message link copied");
+    } catch (error) { reportError("Could not copy message link", error); }
   };
 
   const targets = (): BulkTarget[] =>
@@ -523,6 +543,12 @@ function ThreadMenu({
       action: handleForward,
     },
     { id: "sep-1", label: "", separator: true },
+    ...(!isMulti ? [{
+      id: "copy-message-link",
+      label: "Copy Message Link",
+      icon: ExternalLink,
+      action: handleCopyMessageLink,
+    } as ContextMenuItem] : []),
     {
       id: "archive",
       label: "Archive",

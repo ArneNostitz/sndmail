@@ -144,6 +144,19 @@ function inboxOrder(ownAddresses: string[], startIndex: number): string {
   )`;
 }
 
+/** Inbox rows must have at least one received message. A thread that only
+ * contains the user's sent messages is not an inbox conversation. */
+function inboxHasOutsideMessage(ownAddresses: string[], startIndex: number): string {
+  if (ownAddresses.length === 0) return "1 = 1";
+  const placeholders = ownAddresses.map((_, i) => `$${startIndex + i}`).join(", ");
+  return `EXISTS (
+    SELECT 1 FROM messages inbox_received
+    WHERE inbox_received.account_id = t.account_id
+      AND inbox_received.thread_id = t.id
+      AND LOWER(TRIM(COALESCE(inbox_received.from_address, ''))) NOT IN (${placeholders})
+  )`;
+}
+
 /**
  * Threads across several accounts, newest first — the unified inbox.
  *
@@ -172,6 +185,7 @@ export async function getThreadsForAccounts(
     const orderDate = inboxView
       ? inboxOrder(ownAddresses, labels.nextIndex)
       : "t.last_message_at";
+    const inboxPredicate = inboxView ? `AND ${inboxHasOutsideMessage(ownAddresses, labels.nextIndex)}` : "";
     // A Gmail thread can contain messages with different system labels. Our
     // thread-level union may therefore contain both INBOX and SPAM; Spam wins
     // so a dangerous-looking red thread is never served in the Inbox.
@@ -191,6 +205,7 @@ export async function getThreadsForAccounts(
        ${peer.join}
        WHERE t.account_id IN (${placeholders}) AND tl.label_id IN (${labels.placeholders})
          ${excludeSpam}
+         ${inboxPredicate}
          AND ${HAS_REAL_MESSAGE} AND ${NOT_MERGED_AWAY}
        GROUP BY t.account_id, t.id
        ORDER BY t.is_pinned DESC, ${orderDate} DESC
@@ -201,12 +216,13 @@ export async function getThreadsForAccounts(
 
   const peer = peerJoin(ownAddresses, nextIndex);
   const inboxView = labelId === "INBOX";
+  const inboxPredicate = inboxView ? `AND ${inboxHasOutsideMessage(ownAddresses, nextIndex)}` : "";
   return db.select<DbThread[]>(
     `SELECT t.*, m.from_name, m.from_address${peer.select}${inboxView ? `, ${inboxOrder(ownAddresses, nextIndex)} AS inbox_message_at` : ""} FROM threads t
      LEFT JOIN messages m ON m.account_id = t.account_id AND m.thread_id = t.id
        AND m.date = (SELECT MAX(m2.date) FROM messages m2 WHERE m2.account_id = t.account_id AND m2.thread_id = t.id)
      ${peer.join}
-     WHERE t.account_id IN (${placeholders}) AND ${HAS_REAL_MESSAGE} AND ${NOT_MERGED_AWAY}
+     WHERE t.account_id IN (${placeholders}) ${inboxPredicate} AND ${HAS_REAL_MESSAGE} AND ${NOT_MERGED_AWAY}
      ORDER BY t.is_pinned DESC, t.last_message_at DESC
      LIMIT $${peer.nextIndex} OFFSET $${peer.nextIndex + 1}`,
     [...accountIds, ...peer.params, limit, offset],
@@ -255,6 +271,7 @@ export async function getThreadsForCategoryAcrossAccounts(
     // Primary includes threads with NULL category (uncategorized)
     const peerPrimary = peerJoin(ownAddresses, nextIndex);
     const orderDate = inboxOrder(ownAddresses, nextIndex);
+    const inboxPredicate = `AND ${inboxHasOutsideMessage(ownAddresses, nextIndex)}`;
     return db.select<DbThread[]>(
       `SELECT t.*, m.from_name, m.from_address${peerPrimary.select}, ${inboxOrder(ownAddresses, nextIndex)} AS inbox_message_at FROM threads t
        INNER JOIN thread_labels tl ON tl.account_id = t.account_id AND tl.thread_id = t.id
@@ -263,6 +280,7 @@ export async function getThreadsForCategoryAcrossAccounts(
          AND m.date = (SELECT MAX(m2.date) FROM messages m2 WHERE m2.account_id = t.account_id AND m2.thread_id = t.id)
        ${peerPrimary.join}
        WHERE t.account_id IN (${placeholders}) AND tl.label_id = 'INBOX'
+         ${inboxPredicate}
          AND NOT EXISTS (
            SELECT 1 FROM thread_labels spam
            WHERE spam.account_id = t.account_id
@@ -280,6 +298,7 @@ export async function getThreadsForCategoryAcrossAccounts(
 
   const peer = peerJoin(ownAddresses, nextIndex + 1);
   const orderDate = inboxOrder(ownAddresses, nextIndex + 1);
+  const inboxPredicate = `AND ${inboxHasOutsideMessage(ownAddresses, nextIndex + 1)}`;
   return db.select<DbThread[]>(
     `SELECT t.*, m.from_name, m.from_address${peer.select}, ${inboxOrder(ownAddresses, nextIndex + 1)} AS inbox_message_at FROM threads t
      INNER JOIN thread_labels tl ON tl.account_id = t.account_id AND tl.thread_id = t.id
@@ -288,6 +307,7 @@ export async function getThreadsForCategoryAcrossAccounts(
        AND m.date = (SELECT MAX(m2.date) FROM messages m2 WHERE m2.account_id = t.account_id AND m2.thread_id = t.id)
      ${peer.join}
      WHERE t.account_id IN (${placeholders}) AND tl.label_id = 'INBOX' AND tc.category = $${nextIndex}
+       ${inboxPredicate}
        AND NOT EXISTS (
          SELECT 1 FROM thread_labels spam
          WHERE spam.account_id = t.account_id

@@ -2,7 +2,7 @@ import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronRight, Maximize2, Minimize2 } from "lucide-react";
 import { formatFullDate } from "@/utils/date";
 import { useTimeFormat } from "@/hooks/useTimeFormat";
-import { trimMessageBody, previewText } from "@/utils/messageTrim";
+import { trimMessageBody, trimMessageBodyAgainstPrevious, previewText } from "@/utils/messageTrim";
 import { EmailRenderer, type EmailSelectionRequest } from "./EmailRenderer";
 import { InlineAttachmentPreview } from "./InlineAttachmentPreview";
 import { AttachmentList, useAttachmentViewer, getAttachmentsForMessage } from "./AttachmentList";
@@ -24,6 +24,7 @@ interface ChatMessageProps {
   senderAllowlisted?: boolean;
   isSpam?: boolean;
   isSearchMatch?: boolean;
+  previousSentMessage?: DbMessage;
   highlightTerms?: readonly string[];
   onContextMenu?: (e: React.MouseEvent) => void;
   onSelectionContextMenu?: (request: EmailSelectionRequest) => void;
@@ -48,6 +49,7 @@ export const ChatMessage = memo(function ChatMessage({
   senderAllowlisted,
   isSpam,
   isSearchMatch,
+  previousSentMessage,
   highlightTerms,
   onContextMenu,
   onSelectionContextMenu,
@@ -72,8 +74,10 @@ export const ChatMessage = memo(function ChatMessage({
   }, [collapsed, message.account_id, message.id]);
 
   const trimmed = useMemo(
-    () => trimMessageBody(message.body_html, message.body_text),
-    [message.body_html, message.body_text],
+    () => previousSentMessage
+      ? trimMessageBodyAgainstPrevious(message.body_html, message.body_text, previousSentMessage.body_html, previousSentMessage.body_text)
+      : trimMessageBody(message.body_html, message.body_text),
+    [message.body_html, message.body_text, previousSentMessage?.body_html, previousSentMessage?.body_text],
   );
 
   const referencedCids = useMemo(() => {

@@ -4,6 +4,8 @@ import { getEmailProvider } from "@/services/email/providerFactory";
 import { enqueuePendingOperation } from "@/services/db/pendingOperations";
 import { classifyError } from "@/utils/networkErrors";
 import { getDb } from "@/services/db/connection";
+import { upsertMessage } from "@/services/db/messages";
+import { upsertThread, setThreadLabels, getThreadLabelIds } from "@/services/db/threads";
 import { navigateToThread, getActiveLabel, getSelectedThreadId } from "@/router/navigate";
 
 // ---------------------------------------------------------------------------
@@ -470,7 +472,8 @@ export async function executeQueuedAction(
   params: Record<string, unknown>,
 ): Promise<void> {
   const action = { type: operationType, ...params } as EmailAction;
-  await executeViaProvider(accountId, action);
+  const data = await executeViaProvider(accountId, action);
+  if (action.type === "sendMessage") await persistSentMessageAndNotify(accountId, action.threadId, data);
 }
 
 // ---------------------------------------------------------------------------
@@ -604,12 +607,59 @@ export async function sendEmail(
     threadId,
   });
 
-  // Notify the UI to refresh (so sent message appears in Sent folder)
-  if (result.success) {
-    window.dispatchEvent(new Event("sndmail-sync-done"));
-  }
+  // Persist a Gmail sent message before notifying views. IMAP providers do
+  // this as part of sendMessage because the SMTP response has no message ID.
+  if (result.success && !result.queued) await persistSentMessageAndNotify(accountId, threadId, result.data);
 
   return result;
+}
+
+async function persistSentMessageAndNotify(
+  accountId: string,
+  threadId: string | undefined,
+  data: unknown,
+): Promise<void> {
+  const result = data as { id?: string; storedLocally?: boolean } | undefined;
+  const messageId = result?.id;
+  if (messageId && !result?.storedLocally) {
+    try {
+      const provider = await getEmailProvider(accountId);
+      const parsed = await provider.fetchMessage(messageId);
+      const candidateThreadId = threadId || parsed.threadId || messageId;
+      const existingLabels = threadId ? await getThreadLabelIds(accountId, threadId) : [];
+      const rows = await (await getDb()).select<{ message_count: number; subject: string | null; is_read: number; is_starred: number; is_important: number; has_attachments: number }[]>(
+        "SELECT message_count, subject, is_read, is_starred, is_important, has_attachments FROM threads WHERE account_id = $1 AND id = $2",
+        [accountId, candidateThreadId],
+      );
+      const existing = rows[0];
+      const localThreadId = existing ? candidateThreadId : parsed.threadId || candidateThreadId;
+      await upsertThread({
+        id: localThreadId, accountId, subject: existing?.subject ?? parsed.subject,
+        snippet: parsed.snippet, lastMessageAt: parsed.date,
+        messageCount: (existing?.message_count ?? 0) + 1,
+        isRead: (existing?.is_read ?? 1) === 1, isStarred: (existing?.is_starred ?? 0) === 1,
+        isImportant: (existing?.is_important ?? 0) === 1,
+        hasAttachments: (existing?.has_attachments ?? 0) === 1 || parsed.hasAttachments,
+      });
+      await upsertMessage({
+        id: parsed.id, accountId, threadId: localThreadId,
+        fromAddress: parsed.fromAddress, fromName: parsed.fromName,
+        toAddresses: parsed.toAddresses, ccAddresses: parsed.ccAddresses,
+        bccAddresses: parsed.bccAddresses, replyTo: parsed.replyTo,
+        subject: parsed.subject, snippet: parsed.snippet, date: parsed.date,
+        isRead: true, isStarred: parsed.isStarred, bodyHtml: parsed.bodyHtml,
+        bodyText: parsed.bodyText, rawSize: parsed.rawSize, internalDate: parsed.internalDate,
+        messageIdHeader: parsed.messageIdHeader, referencesHeader: parsed.referencesHeader,
+        inReplyToHeader: parsed.inReplyToHeader, dispositionNotificationTo: parsed.dispositionNotificationTo,
+      });
+      const labels = threadId ? existingLabels : await getThreadLabelIds(accountId, localThreadId);
+      await setThreadLabels(accountId, localThreadId, [...new Set([...labels, "SENT"])]);
+    } catch (err) {
+      console.warn("Could not persist sent Gmail message locally:", err);
+    }
+  }
+  window.dispatchEvent(new CustomEvent("sndmail-message-sent", { detail: { accountId, threadId, messageId } }));
+  window.dispatchEvent(new Event("sndmail-sync-done"));
 }
 
 export function createDraft(

@@ -217,6 +217,11 @@ export function InlineReply({ thread, messages, accountId, noReply, onSent }: In
         try {
           await sendEmail(accountId, raw, thread.id);
 
+          // The send path persists the message and emits its refresh event
+          // before resolving. Notify the inline reply owner only now, so it
+          // never reloads the thread before the sent message exists locally.
+          onSent();
+
           // Send & archive: remove from inbox if enabled
           if (useUIStore.getState().sendAndArchive) {
             try { await archiveThread(accountId, thread.id, []); } catch { /* ignore */ }
@@ -251,7 +256,6 @@ export function InlineReply({ thread, messages, accountId, noReply, onSent }: In
       // Reset state
       editor.commands.setContent("");
       setMode(null);
-      onSent();
     } catch (err) {
       reportError("Reply not sent", err);
     } finally {

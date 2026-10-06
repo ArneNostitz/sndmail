@@ -345,7 +345,7 @@ describe("GmailApiProvider", () => {
         "base64data",
         "thread-1",
       );
-      expect(result).toEqual({ id: "sent-msg-1" });
+      expect(result).toEqual({ id: "sent-msg-1", storedLocally: false });
     });
   });
 

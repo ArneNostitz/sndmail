@@ -233,9 +233,9 @@ export class GmailApiProvider implements EmailProvider {
   async sendMessage(
     rawBase64Url: string,
     threadId?: string,
-  ): Promise<{ id: string }> {
+  ): Promise<{ id: string; storedLocally?: boolean }> {
     const resp = await this.client.sendMessage(rawBase64Url, threadId);
-    return { id: resp.id };
+    return { id: resp.id, storedLocally: false };
   }
 
   async createDraft(

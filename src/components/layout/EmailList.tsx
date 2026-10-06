@@ -371,7 +371,12 @@ export function EmailList({ width, listRef }: { width?: number; listRef?: React.
           accountId: t.account_id,
           subject: t.subject,
           snippet: t.snippet,
-          lastMessageAt: t.last_message_at ?? 0,
+          // Inbox rows show the same outside-message date used for inbox
+          // ordering. Other folders and mixed INBOX/SENT views keep the latest
+          // message date from the thread itself.
+          lastMessageAt: (activeLabel === "inbox"
+            ? t.inbox_message_at
+            : undefined) ?? t.last_message_at ?? 0,
           messageCount: t.message_count,
           isRead: t.is_read === 1,
           isStarred: t.is_starred === 1,
@@ -390,7 +395,7 @@ export function EmailList({ width, listRef }: { width?: number; listRef?: React.
         };
       }),
     );
-  }, [ownAddressSet]);
+  }, [ownAddressSet, activeLabel, activeCategory]);
 
   // Search hits can live anywhere in the mailbox, so they are loaded straight
   // from the DB — filtering the currently loaded label page would hide every
@@ -711,6 +716,14 @@ export function EmailList({ width, listRef }: { width?: number; listRef?: React.
       if (timer) clearTimeout(timer);
     };
   }, [loadThreads, accountScopeKey, activeLabel]);
+
+  // Sent-message persistence completes before this event. Refresh immediately
+  // so a reply updates the row without the generic sync debounce.
+  useEffect(() => {
+    const handler = () => { void loadThreads(); };
+    window.addEventListener("sndmail-message-sent", handler);
+    return () => window.removeEventListener("sndmail-message-sent", handler);
+  }, [loadThreads]);
 
   // A merge removes a row from every list it appeared in
   useEffect(() => {

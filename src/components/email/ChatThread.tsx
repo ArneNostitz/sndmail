@@ -102,6 +102,7 @@ export function ChatThread({
 
       {rendered.map(({ msg, mine }, index) => {
         const isSearchMatch = searchMessageIds?.has(msg.id) ?? false;
+        const previousSentMessage = [...messages.slice(0, index)].reverse().find((candidate) => isOwnMessage(candidate, ownAddresses));
         return (
           <div key={msg.id} ref={(element) => messageRef?.(index, element)}
             className={focusedMessageId === msg.id ? "ring-2 ring-inset ring-accent/50" : undefined}>
@@ -116,6 +117,7 @@ export function ChatThread({
             }
             isSpam={isSpam}
             isSearchMatch={isSearchMatch}
+            previousSentMessage={mine ? undefined : previousSentMessage}
             highlightTerms={highlightTerms}
             onContextMenu={
               onMessageContextMenu ? (e) => onMessageContextMenu(e, msg) : undefined

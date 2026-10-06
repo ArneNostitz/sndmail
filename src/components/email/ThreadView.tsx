@@ -674,6 +674,9 @@ export function ThreadView({ thread }: ThreadViewProps) {
                   senderAllowlisted={msg.from_address ? allowlistedSenders.has(msg.from_address) : false}
                   isSpam={isSpam}
                   ownAddresses={ownAddresses}
+                  previousSentMessage={msg.from_address && ownAddresses.has(msg.from_address.toLowerCase())
+                    ? undefined
+                    : [...messages.slice(0, i)].reverse().find((candidate) => candidate.from_address && ownAddresses.has(candidate.from_address.toLowerCase()))}
                   isSearchMatch={searchMatch?.messageIds.has(msg.id)}
                   highlightTerms={bodySearchTerms}
                   onContextMenu={(e) => handleMessageContextMenu(e, msg)}

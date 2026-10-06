@@ -365,6 +365,156 @@ export function trimMessageBody(
 }
 
 /**
+ * Trim a reply against the immediately preceding message written by the
+ * user. Providers often omit quote markup, but the repeated sent paragraph is
+ * still a reliable boundary. This runs after the normal client-shape trim and
+ * only accepts a substantial phrase, so ordinary short greetings are safe.
+ */
+export function trimMessageBodyAgainstPrevious(
+  html: string | null,
+  text: string | null,
+  previousHtml: string | null,
+  previousText: string | null,
+): TrimResult {
+  const base = trimMessageBody(html, text);
+  const previous = trimMessageBody(previousHtml, previousText);
+  const previousPlain = plainBody(previous);
+  if (previousPlain.length < 24) return base;
+
+  const currentSource = base.html ?? base.text ?? "";
+  const currentPlain = plainBody(base);
+  const overlap = findOverlap(currentPlain, previousPlain);
+  if (overlap < 0) return base;
+
+  if (base.html) {
+    const cut = cutHtmlAtNormalizedOffset(base.html, overlap);
+    return {
+      html: cut.html,
+      text: cut.empty ? null : base.text,
+      trimmed: true,
+      empty: cut.empty,
+    };
+  }
+
+  const mapped = normalizedWithOffsets(currentSource);
+  const rawOffset = mapped.offsets[overlap] ?? currentSource.length;
+  const kept = currentSource.slice(0, rawOffset).trimEnd();
+  return { html: null, text: kept, trimmed: true, empty: kept.trim() === "" };
+}
+
+function plainBody(result: Pick<TrimResult, "html" | "text">): string {
+  if (result.html && typeof DOMParser !== "undefined") {
+    try {
+      return (new DOMParser().parseFromString(result.html, "text/html").body?.textContent ?? "")
+        .replace(INVISIBLE, " ")
+        .replace(/[\s\u00a0]+/g, " ")
+        .trim()
+        .toLowerCase();
+    } catch {
+      // Fall through to the text/plain representation.
+    }
+  }
+  return (result.text ?? "").replace(INVISIBLE, " ").replace(/[\s\u00a0]+/g, " ").trim().toLowerCase();
+}
+
+function findOverlap(current: string, previous: string): number {
+  const lines = previous.split(/(?<=[.!?])\s+|\s{2,}/).map((line) => line.trim()).filter((line) => line.length >= 24);
+  const candidates = [...new Set(lines)].sort((a, b) => b.length - a.length);
+  for (const candidate of candidates) {
+    const index = current.indexOf(candidate);
+    if (index >= 0) return index;
+  }
+  return -1;
+}
+
+function normalizedWithOffsets(source: string): { normalized: string; offsets: number[] } {
+  let normalized = "";
+  const offsets: number[] = [];
+  let whitespace = false;
+  for (let index = 0; index < source.length; index++) {
+    const isWhitespace = /\s/.test(source[index]!);
+    if (isWhitespace) {
+      if (normalized.length > 0 && !whitespace) {
+        normalized += " ";
+        offsets.push(index);
+      }
+      whitespace = true;
+      continue;
+    }
+    normalized += source[index];
+    offsets.push(index);
+    whitespace = false;
+  }
+  return { normalized, offsets };
+}
+
+function cutHtmlAtNormalizedOffset(html: string, normalizedOffset: number): { html: string; empty: boolean } {
+  if (typeof DOMParser === "undefined") return { html, empty: false };
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  const body = doc.body;
+  const walker = doc.createTreeWalker(body, NodeFilter.SHOW_TEXT);
+  let normalized = "";
+  let whitespace = false;
+  let node = walker.nextNode() as Text | null;
+  while (node) {
+    for (let index = 0; index < node.data.length; index++) {
+      const isWhitespace = /\s/.test(node.data[index]!);
+      if (isWhitespace) {
+        if (normalized.length > 0 && !whitespace) {
+          if (normalized.length === normalizedOffset) {
+            node.data = node.data.slice(0, index);
+            removeEverythingAfter(node);
+            removeAdjacentDecorations(node, body);
+            return { html: body.innerHTML, empty: !hasContent(body) };
+          }
+          normalized += " ";
+        }
+        whitespace = true;
+      } else {
+        if (normalized.length === normalizedOffset) {
+          node.data = node.data.slice(0, index);
+          removeEverythingAfter(node);
+          removeAdjacentDecorations(node, body);
+          return { html: body.innerHTML, empty: !hasContent(body) };
+        }
+        normalized += node.data[index];
+        whitespace = false;
+      }
+    }
+    node = walker.nextNode() as Text | null;
+  }
+  return { html, empty: !hasContent(body) };
+}
+
+function removeAdjacentDecorations(node: Node, body: HTMLElement): void {
+  let current: Node | null = node;
+  while (current?.parentNode) {
+    const parent: Node = current.parentNode;
+    let previous = current.previousSibling;
+    while (previous && isDecoration(previous)) {
+      const before = previous.previousSibling;
+      previous.parentNode?.removeChild(previous);
+      previous = before;
+    }
+    if (current.nodeType === Node.ELEMENT_NODE && !hasContent(current as HTMLElement)) {
+      parent.removeChild(current);
+    }
+    if (parent === body) return;
+    current = parent;
+  }
+}
+
+function isDecoration(node: Node): boolean {
+  if (node.nodeType === Node.ELEMENT_NODE) {
+    const element = node as Element;
+    if (element.tagName === "HR") return true;
+    return (element.textContent ?? "").replace(/[\s\u00a0]/g, "")
+      .replace(/[|*_\-=—–·•]+/g, "") === "";
+  }
+  return (node.textContent ?? "").trim() === "";
+}
+
+/**
  * A single line of the trimmed body, for a folded message.
  *
  * The stored snippet is the provider's, taken from the untrimmed mail, so it

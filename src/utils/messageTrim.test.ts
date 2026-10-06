@@ -1,4 +1,4 @@
-import { trimHtmlBody, trimTextBody, trimMessageBody, previewText } from "./messageTrim";
+import { trimHtmlBody, trimTextBody, trimMessageBody, trimMessageBodyAgainstPrevious, previewText } from "./messageTrim";
 
 describe("trimHtmlBody", () => {
   it("removes a Gmail quote block", () => {
@@ -238,5 +238,29 @@ describe("trimMessageBody", () => {
       trimmed: false,
       empty: true,
     });
+  });
+});
+
+describe("trimMessageBodyAgainstPrevious", () => {
+  it("removes repeated text from the previous sent message", () => {
+    const result = trimMessageBodyAgainstPrevious(
+      "<div>Thanks for checking.</div><hr><div>Here is the earlier paragraph that I sent to you about the bank documents and the next steps.</div>",
+      null,
+      "<div>Here is the earlier paragraph that I sent to you about the bank documents and the next steps.</div>",
+      null,
+    );
+    expect(result.html).toContain("Thanks for checking.");
+    expect(result.html).not.toContain("earlier paragraph");
+    expect(result.html).not.toContain("<hr>");
+  });
+
+  it("does not remove a short common greeting", () => {
+    const result = trimMessageBodyAgainstPrevious(
+      "<div>Hello, the meeting is confirmed for tomorrow.</div>",
+      null,
+      "<div>Hello</div>",
+      null,
+    );
+    expect(result.html).toContain("meeting is confirmed");
   });
 });

@@ -16,7 +16,7 @@ import { ReadReceiptBadge } from "./ReadReceiptBadge";
 import { OneTimeCodeBanner } from "./OneTimeCodeBanner";
 import { RecipientLine } from "./RecipientLine";
 import type { MessageScanResult } from "@/utils/phishingDetector";
-import { trimMessageBody } from "@/utils/messageTrim";
+import { trimMessageBody, trimMessageBodyAgainstPrevious } from "@/utils/messageTrim";
 import { Tooltip } from "@/components/ui/Tooltip";
 
 interface MessageItemProps {
@@ -36,11 +36,13 @@ interface MessageItemProps {
    * from a send-as alias.
    */
   ownAddresses?: Set<string>;
+  /** Immediately preceding message written by the user, used as the quote reference. */
+  previousSentMessage?: DbMessage;
   onContextMenu?: (e: React.MouseEvent) => void;
   onSelectionContextMenu?: (request: EmailSelectionRequest) => void;
 }
 
-export const MessageItem = memo(forwardRef<HTMLDivElement, MessageItemProps>(function MessageItem({ message, isLast, blockImages, senderAllowlisted, accountId, threadId, isSpam, focused, isSearchMatch, highlightTerms, ownAddresses, onContextMenu, onSelectionContextMenu }, ref) {
+export const MessageItem = memo(forwardRef<HTMLDivElement, MessageItemProps>(function MessageItem({ message, isLast, blockImages, senderAllowlisted, accountId, threadId, isSpam, focused, isSearchMatch, highlightTerms, ownAddresses, previousSentMessage, onContextMenu, onSelectionContextMenu }, ref) {
   const [expanded, setExpanded] = useState(isLast || !!isSearchMatch);
   const [showFullBody, setShowFullBody] = useState(!!isSearchMatch);
   // Repaint when the 12/24-hour preference changes
@@ -138,8 +140,10 @@ export const MessageItem = memo(forwardRef<HTMLDivElement, MessageItemProps>(fun
   const fromDisplay = message.from_name ?? message.from_address ?? "Unknown";
 
   const trimmedBody = useMemo(
-    () => trimMessageBody(message.body_html, message.body_text),
-    [message.body_html, message.body_text],
+    () => previousSentMessage
+      ? trimMessageBodyAgainstPrevious(message.body_html, message.body_text, previousSentMessage.body_html, previousSentMessage.body_text)
+      : trimMessageBody(message.body_html, message.body_text),
+    [message.body_html, message.body_text, previousSentMessage?.body_html, previousSentMessage?.body_text],
   );
   useEffect(() => {
     if (isSearchMatch) setShowFullBody(true);

@@ -97,6 +97,7 @@ const HEADER_LABELS = {
 };
 
 const REPLY_LEAD = /^(?:dear|hi|hello|hallo|liebe?r|guten\s+(?:morgen|tag|abend)|sehr\s+geehrte)/i;
+const HEADER_START = /^(?:von|from|an|to|cc|datum|date|gesendet|sent|betreff|subject):/i;
 
 /**
  * Drop quoted mail and signatures from an HTML body.
@@ -213,7 +214,7 @@ function cutAtUnwrappedHeaders(body: HTMLElement): boolean {
   for (const candidate of candidates) {
     const ownText = readableElementText(candidate);
     const own = headerScore(ownText);
-    if (own.score >= 3 && own.hasFrom && own.hasTo && (own.hasDate || own.hasSubject)) {
+    if (own.score >= 3 && own.hasFrom && own.hasTo && (own.hasDate || own.hasSubject) && HEADER_START.test(ownText.trim())) {
       removeFromNode(candidate);
       return true;
     }
@@ -224,7 +225,7 @@ function cutAtUnwrappedHeaders(body: HTMLElement): boolean {
     const siblings = Array.from(candidate.parentElement?.children ?? []);
     const index = siblings.indexOf(candidate);
     if (index < 0) continue;
-    if (own.score === 0) continue;
+    if (own.score === 0 || !HEADER_START.test(ownText.trim())) continue;
     const windowText = siblings.slice(index, index + 6).map(readableElementText).join(" ");
     const windowScore = headerScore(windowText);
     if (windowScore.score >= 3 && windowScore.hasFrom && windowScore.hasTo && (windowScore.hasDate || windowScore.hasSubject)) {
@@ -285,6 +286,9 @@ function removeFromNode(node: Node): void {
     const parent: Node = current.parentNode;
     parent.removeChild(current);
     if (parent === node.ownerDocument?.body) return;
+    // The wrapper still contains the new message before the removed node.
+    // Keep that wrapper; climbing further would delete the entire message.
+    if (parent.firstChild) return;
     current = parent;
   }
 }

@@ -147,7 +147,7 @@ describe("threads service - unified inbox queries", () => {
     const { sql, params } = lastSelect();
     expect(sql).toContain("COALESCE(");
     expect(sql).toContain("MAX(received.date)");
-    expect(sql).toContain("LOWER(COALESCE(received.from_address, '')) NOT IN ($3)");
+    expect(sql).toContain("LOWER(TRIM(COALESCE(received.from_address, ''))) NOT IN ($3)");
     expect(sql).toContain("t.last_message_at\n  ) DESC");
     expect(sql).toContain(") AS inbox_message_at");
     expect(params).toEqual(["a", "INBOX", "me@x.com", 50, 0]);
@@ -267,7 +267,7 @@ describe("threads service - naming the other party", () => {
   it("compares addresses case-insensitively", async () => {
     await getThreadsForAccounts(["a"], undefined, 50, 0, ["Me@X.com"]);
     const { sql, params } = lastSelect();
-    expect(sql).toContain("LOWER(COALESCE(m3.from_address, ''))");
+    expect(sql).toContain("LOWER(TRIM(COALESCE(m3.from_address, '')))");
     expect(params).toContain("me@x.com");
   });
 

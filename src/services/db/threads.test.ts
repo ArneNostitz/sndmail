@@ -148,15 +148,24 @@ describe("threads service - unified inbox queries", () => {
     expect(sql).toContain("COALESCE(");
     expect(sql).toContain("MAX(received.date)");
     expect(sql).toContain("LOWER(TRIM(COALESCE(received.from_address, ''))) NOT IN ($3)");
+    expect(sql).toContain("received.is_read_receipt = 0");
     expect(sql).toContain("t.last_message_at\n  ) DESC");
     expect(sql).toContain(") AS inbox_message_at");
     expect(params).toEqual(["a", "INBOX", "me@x.com", 50, 0]);
   });
 
-  it("filters the peer row itself, not only the peer timestamp subquery", async () => {
+  it("selects one external non-receipt peer row deterministically", async () => {
     await getThreadsForAccounts(["a"], "INBOX", 50, 0, ["me@x.com"]);
     const { sql } = lastSelect();
-    expect(sql).toContain("LOWER(TRIM(COALESCE(pm.from_address, ''))) NOT IN ($3)");
+    expect(sql).toContain("LEFT JOIN messages pm ON pm.id = (");
+    expect(sql).toContain("pm.account_id = t.account_id AND pm.thread_id = t.id");
+    expect(sql).toContain("candidate.account_id = t.account_id AND candidate.thread_id = t.id");
+    expect(sql).toContain("LOWER(TRIM(COALESCE(candidate.from_address, ''))) NOT IN ($3)");
+    expect(sql).toContain("candidate.is_read_receipt = 0");
+    expect(sql).toContain("ORDER BY candidate.date DESC, candidate.id DESC");
+    expect(sql).toContain("pm.snippet AS peer_snippet");
+    expect(sql).toContain("pm.date AS peer_message_at");
+    expect(sql).toContain("LIMIT 1");
   });
 
   it("keeps the legacy order when own addresses are unavailable", async () => {
@@ -271,9 +280,9 @@ describe("threads service - naming the other party", () => {
   });
 
   it("compares addresses case-insensitively", async () => {
-    await getThreadsForAccounts(["a"], undefined, 50, 0, ["Me@X.com"]);
+    await getThreadsForAccounts(["a"], "INBOX", 50, 0, [" Me@X.com "]);
     const { sql, params } = lastSelect();
-    expect(sql).toContain("LOWER(TRIM(COALESCE(m3.from_address, '')))");
+    expect(sql).toContain("LOWER(TRIM(COALESCE(candidate.from_address, '')))");
     expect(params).toContain("me@x.com");
   });
 

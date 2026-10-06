@@ -208,7 +208,7 @@ export const ThreadCard = memo(function ThreadCard({ thread, isSelected, onClick
         <span className="flex-1 truncate text-[0.6875rem] text-text-tertiary">
           {/* Who spoke last — a thread waiting on them reads differently
               from one waiting on you */}
-          {searchExcerpt == null && thread.lastFromMe && (
+          {activeLabel !== "inbox" && searchExcerpt == null && thread.lastFromMe && (
             <Tooltip content="You sent the last message">
               <span className="mr-1 rounded px-1 py-px align-baseline font-medium text-text-secondary bg-bg-tertiary">
                 me:

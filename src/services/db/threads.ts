@@ -23,6 +23,8 @@ export interface DbThread {
    */
   peer_name?: string | null;
   peer_address?: string | null;
+  peer_snippet?: string | null;
+  peer_message_at?: number | null;
   /** Inbox display/order date: latest outside message, falling back to thread date. */
   inbox_message_at?: number | null;
 }
@@ -121,13 +123,16 @@ function peerJoin(
     .map((_, i) => `$${startIndex + i}`)
     .join(", ");
   return {
-    select: ", pm.from_name AS peer_name, pm.from_address AS peer_address",
-    join: `LEFT JOIN messages pm ON pm.account_id = t.account_id AND pm.thread_id = t.id
-       AND LOWER(TRIM(COALESCE(pm.from_address, ''))) NOT IN (${placeholders})
-       AND pm.date = (SELECT MAX(m3.date) FROM messages m3
-                      WHERE m3.account_id = t.account_id AND m3.thread_id = t.id
-                        AND LOWER(TRIM(COALESCE(m3.from_address, ''))) NOT IN (${placeholders}))`,
-    params: ownAddresses.map((a) => a.toLowerCase()),
+    select: ", pm.from_name AS peer_name, pm.from_address AS peer_address, pm.snippet AS peer_snippet, pm.date AS peer_message_at",
+    join: `LEFT JOIN messages pm ON pm.id = (
+       SELECT candidate.id FROM messages candidate
+       WHERE candidate.account_id = t.account_id AND candidate.thread_id = t.id
+         AND LOWER(TRIM(COALESCE(candidate.from_address, ''))) NOT IN (${placeholders})
+         AND candidate.is_read_receipt = 0
+       ORDER BY candidate.date DESC, candidate.id DESC
+       LIMIT 1
+     ) AND pm.account_id = t.account_id AND pm.thread_id = t.id`,
+    params: ownAddresses.map((a) => a.trim().toLowerCase()),
     nextIndex: startIndex + ownAddresses.length,
   };
 }
@@ -139,7 +144,8 @@ function inboxOrder(ownAddresses: string[], startIndex: number): string {
   return `COALESCE(
     (SELECT MAX(received.date) FROM messages received
      WHERE received.account_id = t.account_id AND received.thread_id = t.id
-     AND LOWER(TRIM(COALESCE(received.from_address, ''))) NOT IN (${placeholders})),
+     AND LOWER(TRIM(COALESCE(received.from_address, ''))) NOT IN (${placeholders})
+     AND received.is_read_receipt = 0),
     t.last_message_at
   )`;
 }

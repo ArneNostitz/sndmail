@@ -44,8 +44,10 @@ vi.mock("@/stores/accountStore", () => ({
 }));
 
 vi.mock("@/hooks/useRouteNavigation", () => ({
-  useActiveLabel: () => "inbox",
+  useActiveLabel: () => activeLabel,
 }));
+
+let activeLabel = "inbox";
 
 vi.mock("@/stores/labelStore", () => ({
   useLabelStore: (selector: (s: Record<string, unknown>) => unknown) =>
@@ -77,6 +79,7 @@ describe("ThreadCard", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    activeLabel = "inbox";
   });
 
   it("renders sender name and subject", () => {
@@ -148,12 +151,21 @@ describe("ThreadCard", () => {
 describe("ThreadCard - who spoke last", () => {
   const onClick = vi.fn();
 
-  it("marks threads whose newest message the user sent", () => {
+  it("keeps the Reply icon but hides the me badge for inbox incoming previews after a reply", () => {
+    render(
+      <ThreadCard thread={makeThread({ lastFromMe: true })} isSelected={false} onClick={onClick} />,
+    );
+    expect(screen.queryByText("me:")).not.toBeInTheDocument();
+    expect(screen.getByTestId("thread-reply-indicator")).toHaveAttribute("aria-label", "You replied");
+  });
+
+  it("shows the me badge outside the inbox", () => {
+    activeLabel = "sent";
     render(
       <ThreadCard thread={makeThread({ lastFromMe: true })} isSelected={false} onClick={onClick} />,
     );
     expect(screen.getByText("me:")).toBeInTheDocument();
-    expect(screen.getByTestId("thread-reply-indicator")).toHaveAttribute("aria-label", "You replied");
+    expect(screen.getByTestId("thread-reply-indicator")).toBeInTheDocument();
   });
 
   it("shows no marker when the other side wrote last", () => {

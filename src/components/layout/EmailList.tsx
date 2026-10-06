@@ -370,12 +370,14 @@ export function EmailList({ width, listRef }: { width?: number; listRef?: React.
           id: t.id,
           accountId: t.account_id,
           subject: t.subject,
-          snippet: t.snippet,
+          snippet: activeLabel === "inbox" && t.peer_address
+            ? (t.peer_snippet ?? null)
+            : t.snippet,
           // Inbox rows show the same outside-message date used for inbox
           // ordering. Other folders and mixed INBOX/SENT views keep the latest
           // message date from the thread itself.
           lastMessageAt: (activeLabel === "inbox"
-            ? t.inbox_message_at
+            ? (t.peer_message_at ?? t.inbox_message_at)
             : undefined) ?? t.last_message_at ?? 0,
           messageCount: t.message_count,
           isRead: t.is_read === 1,

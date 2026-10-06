@@ -140,6 +140,18 @@ describe("trimHtmlBody", () => {
     expect(result.html).toContain("New answer");
     expect(result.html).not.toContain("previous sent text");
   });
+
+  it("keeps the new body when quoted headers share a wrapper with it", () => {
+    const html = [
+      "<div><div>Hallo</div><div>21. ok<br>Eisenstadt: nein<br>Ig<br>Franz</div>",
+      "<hr><div>Von: hello@matchmii.com<br>An: franz@example.com<br>Datum: Tue, 06 Oct 2026<br>Betreff: Re: Followup</div>",
+      "<div>old message</div></div>",
+    ].join("");
+    const result = trimHtmlBody(html);
+    expect(result.html).toContain("Eisenstadt: nein");
+    expect(result.html).not.toContain("old message");
+    expect(result.empty).toBe(false);
+  });
 });
 
 describe("previewText", () => {

@@ -125,7 +125,7 @@ function peerJoin(
     join: `LEFT JOIN messages pm ON pm.account_id = t.account_id AND pm.thread_id = t.id
        AND pm.date = (SELECT MAX(m3.date) FROM messages m3
                       WHERE m3.account_id = t.account_id AND m3.thread_id = t.id
-                        AND LOWER(COALESCE(m3.from_address, '')) NOT IN (${placeholders}))`,
+                        AND LOWER(TRIM(COALESCE(m3.from_address, ''))) NOT IN (${placeholders}))`,
     params: ownAddresses.map((a) => a.toLowerCase()),
     nextIndex: startIndex + ownAddresses.length,
   };
@@ -138,7 +138,7 @@ function inboxOrder(ownAddresses: string[], startIndex: number): string {
   return `COALESCE(
     (SELECT MAX(received.date) FROM messages received
      WHERE received.account_id = t.account_id AND received.thread_id = t.id
-       AND LOWER(COALESCE(received.from_address, '')) NOT IN (${placeholders})),
+     AND LOWER(TRIM(COALESCE(received.from_address, ''))) NOT IN (${placeholders})),
     t.last_message_at
   )`;
 }

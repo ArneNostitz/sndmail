@@ -24,6 +24,7 @@ export type SettingsTab =
   | "composing"
   | "mail-rules"
   | "people"
+  | "plugins"
   | "accounts"
   | "shortcuts"
   | "ai"
@@ -35,6 +36,7 @@ export const SETTINGS_TABS: SettingsTab[] = [
   "composing",
   "mail-rules",
   "people",
+  "plugins",
   "accounts",
   "shortcuts",
   "ai",

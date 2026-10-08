@@ -22,7 +22,11 @@ import { UPDATE_SOURCE_CONFIGURED } from "@/services/updateManager";
 import { deleteAccount, updateAccountColor } from "@/services/db/accounts";
 import { ACCOUNT_COLORS, accountColor } from "@/constants/accountColors";
 import { removeClient, reauthorizeAccount, getGmailClient } from "@/services/gmail/tokenManager";
-import { fetchSendAsAliases } from "@/services/gmail/sendAs";
+import {
+  fetchSendAsAliases,
+  createSendAsAlias,
+  deleteSendAsAlias,
+} from "@/services/gmail/sendAs";
 import { validateClientId, validateClientSecret } from "@/services/gmail/clientCredentials";
 import { triggerSync, forceFullSync, resyncAccount } from "@/services/gmail/syncManager";
 import { backgroundWorkerOwnsSync, reconfigureBackgroundWorkerRelay, requestWorkerResync, wakeBackgroundWorkerAndWait } from "@/services/worker/workerClient";
@@ -48,6 +52,7 @@ import {
   Filter,
   Users,
   UserCircle,
+  Puzzle,
   Keyboard,
   Sparkles,
   Check,
@@ -80,8 +85,15 @@ import {
   getAliasesForAccount,
   setDefaultAlias,
   mapDbAlias,
+  upsertAlias,
+  deleteAlias,
   type SendAsAlias,
 } from "@/services/db/sendAsAliases";
+import { collectOwnAddresses } from "@/services/accounts/ownAddresses";
+import {
+  findAliasSuggestions,
+  type AliasSuggestion,
+} from "@/services/accounts/aliasSuggestions";
 import { ALL_NAV_ITEMS } from "@/components/layout/Sidebar";
 import type { SidebarNavItem } from "@/stores/uiStore";
 import { Button } from "@/components/ui/Button";
@@ -96,6 +108,7 @@ const tabs: { id: SettingsTab; label: string; icon: LucideIcon }[] = [
   { id: "composing", label: "Composing", icon: PenLine },
   { id: "mail-rules", label: "Mail Rules", icon: Filter },
   { id: "people", label: "People", icon: Users },
+  { id: "plugins", label: "Plugins", icon: Puzzle },
   { id: "accounts", label: "Accounts", icon: UserCircle },
   { id: "shortcuts", label: "Shortcuts", icon: Keyboard },
   { id: "ai", label: "AI", icon: Sparkles },
@@ -167,7 +180,7 @@ export function SettingsPage() {
   const [backgroundWorkerEnabled, setBackgroundWorkerEnabled] = useState(true);
   const [backgroundWorkerReady, setBackgroundWorkerReady] = useState(false);
   const [workerNotificationPermission, setWorkerNotificationPermission] = useState<string | null>(null);
-  const [relayAccountId, setRelayAccountId] = useState("");
+  const [relayAccountIds, setRelayAccountIds] = useState<Set<string>>(() => new Set());
   const [relayReadContent, setRelayReadContent] = useState(false);
   const [relayToken, setRelayToken] = useState("");
   const [aiProvider, setAiProvider] = useState<"claude" | "openai" | "gemini" | "ollama" | "copilot">("claude");
@@ -484,18 +497,27 @@ export function SettingsPage() {
   }, [backgroundWorkerEnabled]);
 
   const handleRelayGrant = useCallback(async () => {
-    if (!relayAccountId) return;
+    if (relayAccountIds.size === 0) return;
     try {
       const token = await invoke<string>("worker_create_relay_profile", {
         profileId: "commonplace",
-        accountIds: [relayAccountId],
+        accountIds: [...relayAccountIds],
         readContent: relayReadContent,
       });
       setRelayToken(token);
     } catch (error) {
       reportError("Could not grant Commonplace mail access", error);
     }
-  }, [relayAccountId, relayReadContent]);
+  }, [relayAccountIds, relayReadContent]);
+
+  const toggleRelayAccount = useCallback((accountId: string) => {
+    setRelayAccountIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(accountId)) next.delete(accountId);
+      else next.add(accountId);
+      return next;
+    });
+  }, []);
 
   const handleRelayRevoke = useCallback(async () => {
     try {
@@ -633,7 +655,6 @@ export function SettingsPage() {
             )}
 
             <div className="space-y-8">
-        {activeTab === "general" && <SemanticSearchSettings />}
         {activeTab === "general" && (
                 <>
                   <Section title="Appearance">
@@ -798,45 +819,6 @@ export function SettingsPage() {
                     />
                   </Section>
 
-                  <Section title="Commonplace mail relay">
-                    <p className="text-sm text-text-secondary">
-                      Grant Commonplace local read access to one mailbox. The token is shown once; creating a new one replaces the old grant.
-                    </p>
-                    <SettingRow label="Mailbox">
-                      <select
-                        value={relayAccountId}
-                        onChange={(event) => setRelayAccountId(event.target.value)}
-                        className="w-56 bg-bg-tertiary text-text-primary text-sm px-3 py-1.5 rounded-md border border-border-primary"
-                      >
-                        <option value="">Choose a mailbox</option>
-                        {accounts.filter((account) => account.provider !== "caldav").map((account) => (
-                          <option key={account.id} value={account.id}>{account.email}</option>
-                        ))}
-                      </select>
-                    </SettingRow>
-                    <ToggleRow
-                      label="Allow message content"
-                      description="Off by default. Metadata access never includes subjects, snippets, bodies, credentials, or login codes."
-                      checked={relayReadContent}
-                      onToggle={() => setRelayReadContent(!relayReadContent)}
-                    />
-                    <div className="flex gap-2">
-                      <Button variant="secondary" size="md" onClick={handleRelayGrant} disabled={!relayAccountId}>Create access token</Button>
-                      <Button variant="secondary" size="md" onClick={handleRelayRevoke}>Revoke access</Button>
-                    </div>
-                    {relayToken && (
-                      <SettingRow label="Copy this token now">
-                        <input
-                          readOnly
-                          value={relayToken}
-                          onFocus={(event) => event.currentTarget.select()}
-                          className="w-80 bg-bg-tertiary text-text-primary text-xs px-3 py-1.5 rounded-md border border-border-primary"
-                          aria-label="Commonplace mail relay access token"
-                        />
-                      </SettingRow>
-                    )}
-                  </Section>
-
                   <Section title="Privacy & Security">
                     <ToggleRow
                       label="Block remote images"
@@ -957,6 +939,61 @@ export function SettingsPage() {
                         <option value="2000">2 GB</option>
                       </select>
                     </SettingRow>
+                  </Section>
+
+                  <SemanticSearchSettings />
+                </>
+              )}
+
+              {activeTab === "plugins" && (
+                <>
+                  <p className="text-sm text-text-secondary">
+                    Local integrations. Each plugin runs on your machine and only gets the access you grant it here.
+                  </p>
+                  <Section title="Commonplace">
+                    <p className="text-sm text-text-secondary">
+                      Grant Commonplace local read access to your sndmail mailboxes. The token is shown once; creating a new one replaces the old grant.
+                    </p>
+                    <SettingRow label="Shared inboxes">
+                      <div className="space-y-1.5">
+                        {accounts.filter((account) => account.provider !== "caldav").map((account) => (
+                          <label key={account.id} className="flex items-center gap-2 text-sm text-text-primary">
+                            <input
+                              type="checkbox"
+                              checked={relayAccountIds.has(account.id)}
+                              onChange={() => toggleRelayAccount(account.id)}
+                              className="accent-accent"
+                              aria-label={`Share ${account.email} with Commonplace`}
+                            />
+                            {account.email}
+                          </label>
+                        ))}
+                        {accounts.filter((account) => account.provider !== "caldav").length === 0 && (
+                          <p className="text-sm text-text-tertiary">Add a mail account first.</p>
+                        )}
+                      </div>
+                    </SettingRow>
+                    <ToggleRow
+                      label="Allow message content"
+                      description="Off by default. Metadata access never includes subjects, snippets, bodies, credentials, or login codes."
+                      checked={relayReadContent}
+                      onToggle={() => setRelayReadContent(!relayReadContent)}
+                    />
+                    <div className="flex gap-2">
+                      <Button variant="secondary" size="md" onClick={handleRelayGrant} disabled={relayAccountIds.size === 0}>Create access token</Button>
+                      <Button variant="secondary" size="md" onClick={handleRelayRevoke}>Revoke access</Button>
+                    </div>
+                    {relayToken && (
+                      <SettingRow label="Copy this token now">
+                        <input
+                          readOnly
+                          value={relayToken}
+                          onFocus={(event) => event.currentTarget.select()}
+                          className="w-80 bg-bg-tertiary text-text-primary text-xs px-3 py-1.5 rounded-md border border-border-primary"
+                          aria-label="Commonplace mail relay access token"
+                        />
+                      </SettingRow>
+                    )}
                   </Section>
                 </>
               )}
@@ -1249,6 +1286,13 @@ export function SettingsPage() {
                       Apply them from the right-click menu on any thread.
                     </p>
                     <QuickStepEditor />
+                  </Section>
+
+                  <Section title="Bundling & Delivery Schedules">
+                    <p className="text-xs text-text-tertiary mb-3">
+                      Collapse categories into a single row in the inbox. Optionally set a delivery schedule to batch emails.
+                    </p>
+                    <BundleSettings />
                   </Section>
                 </>
               )}
@@ -2009,13 +2053,6 @@ export function SettingsPage() {
                       />
                     ))}
                   </Section>
-
-                  <Section title="Bundling & Delivery Schedules">
-                    <p className="text-xs text-text-tertiary mb-3">
-                      Collapse categories into a single row in the inbox. Optionally set a delivery schedule to batch emails.
-                    </p>
-                    <BundleSettings />
-                  </Section>
                 </>
               )}
 
@@ -2087,37 +2124,59 @@ function AccountColorPicker({
 export function SendAsAliasesSection() {
   const accounts = useAccountStore((s) => s.accounts);
   const [aliases, setAliases] = useState<SendAsAlias[]>([]);
+  const [suggestions, setSuggestions] = useState<AliasSuggestion[]>([]);
+  const [newAliasEmail, setNewAliasEmail] = useState("");
+  const [aliasBusy, setAliasBusy] = useState(false);
+  const [aliasError, setAliasError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const reloadAliases = useCallback(async (accountId: string) => {
+
+  const reload = useCallback(async (accountId: string) => {
     const dbAliases = await getAliasesForAccount(accountId);
     setAliases(dbAliases.map(mapDbAlias));
+    const own = await collectOwnAddresses(
+      useAccountStore.getState().accounts,
+      [accountId],
+    );
+    setSuggestions(await findAliasSuggestions(accountId, own));
   }, []);
 
+  const activeAccount = accounts.find((a) => a.isActive);
+  const isMailAccount = !!activeAccount && activeAccount.provider !== "caldav";
+  const isGmail = activeAccount?.provider === "gmail_api";
+
   useEffect(() => {
-    const activeAccount = accounts.find((a) => a.isActive);
-    if (!activeAccount || activeAccount.provider !== "gmail_api") {
+    const account = accounts.find((a) => a.isActive);
+    if (!account || account.provider === "caldav") {
       setAliases([]);
+      setSuggestions([]);
       return;
     }
     let cancelled = false;
-    getAliasesForAccount(activeAccount.id).then((dbAliases) => {
-      if (cancelled) return;
-      setAliases(dbAliases.map(mapDbAlias));
-    });
+    (async () => {
+      try {
+        const dbAliases = await getAliasesForAccount(account.id);
+        if (cancelled) return;
+        setAliases(dbAliases.map(mapDbAlias));
+        const own = await collectOwnAddresses(accounts, [account.id]);
+        if (cancelled) return;
+        setSuggestions(await findAliasSuggestions(account.id, own));
+      } catch {
+        // Suggested aliases are optional decoration; the stored list is the truth.
+        if (!cancelled) setSuggestions([]);
+      }
+    })();
     return () => { cancelled = true; };
-  }, [accounts, reloadAliases]);
-
-  const activeAccount = accounts.find((a) => a.isActive);
+  }, [accounts]);
 
   const handleRefresh = async () => {
-    if (!activeAccount || activeAccount.provider !== "gmail_api") return;
+    if (!activeAccount || !isGmail) return;
     setRefreshing(true);
     setLoadError(null);
     try {
       const client = await getGmailClient(activeAccount.id);
       await fetchSendAsAliases(client, activeAccount.id);
-      await reloadAliases(activeAccount.id);
+      await reload(activeAccount.id);
       notify("success", "Aliases refreshed");
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -2125,6 +2184,58 @@ export function SendAsAliasesSection() {
       reportError("Could not refresh Gmail aliases", error);
     } finally {
       setRefreshing(false);
+    }
+  };
+
+  const handleAddAlias = async (email: string): Promise<boolean> => {
+    if (!activeAccount || !isMailAccount) return false;
+    const normalized = email.trim().toLowerCase();
+    if (!normalized.includes("@") || normalized.split("@").some((part) => !part.trim())) {
+      setAliasError("Enter a full email address, e.g. hello@reimedy.com.");
+      return false;
+    }
+    if (aliases.some((a) => a.email.toLowerCase() === normalized)) {
+      setAliasError("That address is already listed.");
+      return false;
+    }
+    setAliasBusy(true);
+    setAliasError(null);
+    try {
+      if (isGmail) {
+        const client = await getGmailClient(activeAccount.id);
+        await createSendAsAlias(client, activeAccount.id, normalized);
+      } else {
+        await upsertAlias({ accountId: activeAccount.id, email: normalized });
+      }
+      await reload(activeAccount.id);
+      notify("success", `Alias ${normalized} added`);
+      return true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setAliasError(message);
+      reportError("Could not add alias", error);
+      return false;
+    } finally {
+      setAliasBusy(false);
+    }
+  };
+
+  const handleRemoveAlias = async (alias: SendAsAlias) => {
+    if (!activeAccount || alias.isPrimary) return;
+    setAliasBusy(true);
+    try {
+      if (isGmail) {
+        const client = await getGmailClient(activeAccount.id);
+        await deleteSendAsAlias(client, activeAccount.id, alias.email);
+      } else {
+        await deleteAlias(alias.id);
+      }
+      await reload(activeAccount.id);
+      notify("success", "Alias removed");
+    } catch (error) {
+      reportError("Could not remove alias", error);
+    } finally {
+      setAliasBusy(false);
     }
   };
 
@@ -2141,32 +2252,100 @@ export function SendAsAliasesSection() {
 
   return (
     <Section title="Send-As Aliases">
-      {activeAccount?.provider === "gmail_api" ? (
+      {!isMailAccount ? (
+        <p className="text-xs text-text-tertiary mb-3">Send-as aliases are available for mail accounts.</p>
+      ) : (
         <>
           <p className="text-xs text-text-tertiary mb-3">
-            Add an address in Google Admin as an alternate email address, or in Gmail under Settings → Accounts → Send mail as. Complete Gmail’s verification, then refresh here. Only verified aliases are available to send from.
+            {isGmail
+              ? "Addresses this account can send from. Workspace domain aliases (e.g. hello@reimedy.com for an account on diracting.com) are accepted without verification; any other address gets Gmail's verification mail. Replies automatically use the address the original email was sent to."
+              : "Addresses this account can send from. Your SMTP server decides which From addresses it accepts; replies automatically use the address the original email was sent to."}
           </p>
-          <button
-            type="button"
-            onClick={handleRefresh}
-            disabled={refreshing}
-            className="mb-3 flex items-center gap-1.5 text-xs text-accent hover:text-accent-hover disabled:opacity-50"
-          >
-            <RefreshCw size={13} className={refreshing ? "animate-spin" : ""} />
-            {refreshing ? "Refreshing…" : "Refresh aliases"}
-          </button>
-          {loadError && (loadError.includes("403") || loadError.toLowerCase().includes("reauthorize")) && (
-            <p role="alert" className="text-xs text-warning mb-3">
-              Gmail denied access to send-as settings. Re-authorize this Gmail account in Settings → Accounts, then try again. ({loadError})
-            </p>
+          <div className="flex gap-2 mb-3">
+            <input
+              type="email"
+              value={newAliasEmail}
+              onChange={(e) => setNewAliasEmail(e.target.value)}
+              placeholder="hello@reimedy.com"
+              aria-label="New alias address"
+              disabled={aliasBusy}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  void handleAddAlias(newAliasEmail).then((added) => {
+                    if (added) setNewAliasEmail("");
+                  });
+                }
+              }}
+              className="flex-1 min-w-0 bg-bg-tertiary text-text-primary text-sm px-3 py-1.5 rounded-md border border-border-primary focus:border-accent outline-none disabled:opacity-50"
+            />
+            <Button
+              variant="secondary"
+              size="md"
+              disabled={aliasBusy || !newAliasEmail.trim()}
+              onClick={() =>
+                void handleAddAlias(newAliasEmail).then((added) => {
+                  if (added) setNewAliasEmail("");
+                })
+              }
+            >
+              Add alias
+            </Button>
+          </div>
+          {aliasError && (
+            <p role="alert" className="text-xs text-warning mb-3">{aliasError}</p>
+          )}
+          {suggestions.length > 0 && (
+            <div className="mb-3 space-y-1.5">
+              <p className="text-xs font-medium text-text-secondary">
+                Suggested — addresses your mail was sent to
+              </p>
+              {suggestions.map((s) => (
+                <div
+                  key={s.email}
+                  className="flex items-center justify-between gap-3 py-2 px-4 bg-bg-secondary rounded-lg"
+                >
+                  <span className="text-sm text-text-primary truncate">{s.email}</span>
+                  <span className="text-xs text-text-tertiary shrink-0">
+                    {s.occurrences} message{s.occurrences === 1 ? "" : "s"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => void handleAddAlias(s.email)}
+                    disabled={aliasBusy}
+                    className="text-xs text-accent hover:text-accent-hover transition-colors shrink-0 disabled:opacity-50"
+                  >
+                    Add
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          {isGmail && (
+            <>
+              <button
+                type="button"
+                onClick={handleRefresh}
+                disabled={refreshing}
+                className="mb-3 flex items-center gap-1.5 text-xs text-accent hover:text-accent-hover disabled:opacity-50"
+              >
+                <RefreshCw size={13} className={refreshing ? "animate-spin" : ""} />
+                {refreshing ? "Refreshing…" : "Refresh aliases"}
+              </button>
+              {loadError && (loadError.includes("403") || loadError.toLowerCase().includes("reauthorize")) && (
+                <p role="alert" className="text-xs text-warning mb-3">
+                  Gmail denied access to send-as settings. Re-authorize this Gmail account in Settings → Accounts, then try again. ({loadError})
+                </p>
+              )}
+            </>
           )}
         </>
-      ) : (
-        <p className="text-xs text-text-tertiary mb-3">Send-as aliases are available for Gmail accounts.</p>
       )}
       {aliases.length === 0 ? (
         <p className="text-sm text-text-tertiary">
-          No aliases found. Add and verify an address with Google, then refresh aliases.
+          {isMailAccount
+            ? "No aliases yet. Add one above, or add it from the suggestions when your mail was sent to another of your domains."
+            : "No mail account selected."}
         </p>
       ) : (
         <div className="space-y-2">
@@ -2200,14 +2379,25 @@ export function SendAsAliasesSection() {
                   </div>
                 </div>
               </div>
-              {!alias.isDefault && (
-                <button
-                  onClick={() => handleSetDefault(alias)}
-                  className="text-xs text-accent hover:text-accent-hover transition-colors shrink-0 ml-3"
-                >
-                  Set as default
-                </button>
-              )}
+              <div className="flex items-center gap-3 shrink-0 ml-3">
+                {!alias.isDefault && (
+                  <button
+                    onClick={() => handleSetDefault(alias)}
+                    className="text-xs text-accent hover:text-accent-hover transition-colors"
+                  >
+                    Set as default
+                  </button>
+                )}
+                {!alias.isPrimary && (
+                  <button
+                    onClick={() => handleRemoveAlias(alias)}
+                    disabled={aliasBusy}
+                    className="text-xs text-danger hover:opacity-80 transition-colors disabled:opacity-50"
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
             </div>
           ))}
         </div>

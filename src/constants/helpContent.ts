@@ -72,7 +72,7 @@ import {
 
 export interface HelpTip {
   text: string;
-  shortcut?: string;
+  shortcutId?: string;
 }
 
 export interface HelpCard {
@@ -123,7 +123,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         description:
           "Open Settings > Accounts and click 'Add account' (the account switcher at the top of the sidebar does the same thing). 'Continue with Google' opens your browser for the Gmail OAuth sign-in and adds the account when you come back. For other providers, pick a tile — Outlook, iCloud, Yahoo, Fastmail, Proton, GMX, Zoho, AOL — and the IMAP wizard opens with that provider's servers and auth method already filled in. Anything else goes through 'Other mail account (IMAP/SMTP)', where servers are auto-discovered from your address where possible. You can add multiple accounts of any type and switch between them instantly. Each account syncs independently with its own inbox, labels, and settings.",
         tips: [
-          { text: "Open settings from anywhere", shortcut: "Ctrl+," },
+          { text: "Open settings from anywhere", shortcutId: "app.settings" },
           { text: "Gmail accounts use OAuth; IMAP accounts use password or app-password." },
           { text: "Each account has its own labels, filters, and sync state." },
           { text: "Remove or re-authorize accounts in Settings > Accounts." },
@@ -227,9 +227,10 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         description:
           "All related emails are automatically grouped into conversation threads. Click a thread in the email list to open it and see every message in the conversation, with the newest message at the bottom. Each message shows the sender, timestamp, and full formatted content. Inline attachments and images are displayed directly in the message body. You can reply inline to any individual message in the thread without opening the full composer.",
         tips: [
-          { text: "Open a thread", shortcut: "o" },
-          { text: "Navigate between threads", shortcut: "j / k" },
-          { text: "Go back to the list", shortcut: "Escape" },
+          { text: "Open a thread", shortcutId: "nav.open" },
+          { text: "Next thread", shortcutId: "nav.next" },
+          { text: "Previous thread", shortcutId: "nav.prev" },
+          { text: "Go back to the list", shortcutId: "nav.escape" },
           { text: "Pop out a thread into its own window from the action bar." },
           { text: "Inline reply lets you respond to a specific message without leaving the thread." },
         ],
@@ -391,8 +392,8 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         description:
           "The composer uses a full rich text editor powered by TipTap. You can format text (bold, italic, lists, links, code blocks), add file attachments, insert a signature, and pick a template — all from one place. The composer opens as a panel at the bottom of the screen. Add recipients with autocomplete (ranked by how often you email them), set a subject, and compose your message.",
         tips: [
-          { text: "Open the composer", shortcut: "c" },
-          { text: "Send the email", shortcut: "Ctrl+Enter" },
+          { text: "Open the composer", shortcutId: "action.compose" },
+          { text: "Send the email", shortcutId: "app.send" },
           { text: "Recipient autocomplete is ranked by contact frequency." },
           { text: "Use the toolbar or markdown-style shortcuts for formatting." },
           { text: "Close the composer with Escape (draft is auto-saved)." },
@@ -406,9 +407,9 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         description:
           "Reply sends your response to the original sender only. Reply All includes everyone on the thread (To and CC). Forward lets you send the email to someone new with your own message. You can set your default reply action (Reply vs Reply All) in Composing settings, so pressing the reply shortcut does what you expect. The inline reply feature also lets you reply to a specific message directly within the thread view.",
         tips: [
-          { text: "Reply", shortcut: "r" },
-          { text: "Reply All", shortcut: "a" },
-          { text: "Forward", shortcut: "f" },
+          { text: "Reply", shortcutId: "action.reply" },
+          { text: "Reply All", shortcutId: "action.replyAll" },
+          { text: "Forward", shortcutId: "action.forward" },
           { text: "Set your default reply mode (Reply or Reply All) in Settings." },
           { text: "Inline reply lets you respond without opening the full composer." },
         ],
@@ -568,8 +569,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         description:
           "The command palette is the fastest way to do anything in the app. Open it with a shortcut and start typing to search your email, jump to any label or folder, switch accounts, or trigger actions. Results update as you type. The palette searches across email content, sender names, subject lines, labels, and folders — all from one input.",
         tips: [
-          { text: "Open the command palette", shortcut: "Ctrl+K" },
-          { text: "Also opens with", shortcut: "/" },
+          { text: "Open the command palette", shortcutId: "app.commandPalette" },
           { text: "Type to search email, labels, folders, and actions." },
           { text: "Results update instantly as you type." },
           { text: "Press Enter to open the first result, or arrow keys to navigate." },
@@ -583,14 +583,14 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         description:
           "Almost every action has a keyboard shortcut, inspired by Superhuman's keyboard-first design. Shortcuts are disabled when you're typing in an input field, text area, or rich text editor to avoid conflicts. The app supports two-key sequences (press g then another key within 1 second) for navigation commands. All shortcuts are fully customizable — rebind any key in Settings.",
         tips: [
-          { text: "View all shortcuts", shortcut: "?" },
+          { text: "View all shortcuts", shortcutId: "app.help" },
           { text: "Navigation: j/k (up/down), o (open), Escape (back)" },
           { text: "In-thread: Arrow Up/Down to navigate between messages" },
           { text: "Actions: e (archive), s (star), # (trash), r (reply)" },
           { text: "Two-key: g then i (Inbox), g then s (Starred), g then t (Sent)" },
-          { text: "Ask Inbox (AI)", shortcut: "i" },
-          { text: "Open settings", shortcut: "Ctrl+," },
-          { text: "Sync current folder", shortcut: "F5" },
+          { text: "Ask Inbox (AI)", shortcutId: "app.askInbox" },
+          { text: "Open settings", shortcutId: "app.settings" },
+          { text: "Sync current folder", shortcutId: "app.syncFolder" },
           { text: "Customize all shortcuts in Settings > Shortcuts." },
           { text: "Shortcuts are disabled in text inputs to prevent conflicts." },
         ],
@@ -692,9 +692,9 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         description:
           "Star threads to flag them for follow-up — starred threads have their own view in the sidebar. Pin threads to keep them stuck at the top of your email list, regardless of date. Mute threads to stop getting bothered by them — muted threads are auto-archived, and future replies in the thread won't appear in your inbox or trigger notifications.",
         tips: [
-          { text: "Star / unstar", shortcut: "s" },
-          { text: "Pin / unpin", shortcut: "p" },
-          { text: "Mute / unmute", shortcut: "m" },
+          { text: "Star / unstar", shortcutId: "action.star" },
+          { text: "Pin / unpin", shortcutId: "action.pin" },
+          { text: "Mute / unmute", shortcutId: "action.mute" },
           { text: "Starred threads appear in the Starred view in the sidebar." },
           { text: "Pinned threads stay at the top of the list regardless of date." },
           { text: "Muted threads are auto-archived and suppress notifications." },
@@ -708,8 +708,8 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         description:
           "Archive removes a thread from your inbox but keeps it in All Mail — it's still searchable and accessible. Trash moves a thread to the Trash folder. Deleting a thread that's already in Trash permanently removes it from the database. This two-stage delete prevents accidental permanent deletions. Archived threads come back to your inbox if someone replies to them.",
         tips: [
-          { text: "Archive", shortcut: "e" },
-          { text: "Trash", shortcut: "#" },
+          { text: "Archive", shortcutId: "action.archive" },
+          { text: "Trash", shortcutId: "action.delete" },
           { text: "Also works with Delete or Backspace keys." },
           { text: "Deleting from Trash permanently removes the thread." },
           { text: "Archived threads return to inbox when new replies arrive." },
@@ -723,7 +723,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         description:
           "Press V to open a searchable popup where you can pick a destination folder or label. Type to filter the list, use arrow keys to navigate, and press Enter to move the thread. For Gmail, moving adds the destination label and removes the thread from your current location. For IMAP accounts, the thread is moved to the selected folder on the server. Works with multi-select — move multiple threads at once.",
         tips: [
-          { text: "Open the move-to dialog", shortcut: "v" },
+          { text: "Open the move-to dialog", shortcutId: "action.moveToFolder" },
           { text: "Type to search and filter destinations." },
           { text: "Navigate with arrow keys, select with Enter." },
           { text: "Also available from the action bar and right-click menu." },
@@ -738,8 +738,8 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         description:
           "Click threads to toggle their selection. Shift+click to select a range from the last selected thread to the clicked one. Once you have multiple threads selected, any action you take (archive, trash, star, label, etc.) applies to all of them at once. Keyboard shortcuts also work on your selection — press e to archive all selected threads, # to trash them, etc.",
         tips: [
-          { text: "Select all threads", shortcut: "Ctrl+A" },
-          { text: "Select range from current position", shortcut: "Ctrl+Shift+A" },
+          { text: "Select all threads", shortcutId: "action.selectAll" },
+          { text: "Select range from current position", shortcutId: "action.selectFromHere" },
           { text: "Click to toggle individual thread selection." },
           { text: "Shift+click to select a range of threads." },
           { text: "All keyboard actions (archive, trash, star) work on the selection." },
@@ -768,7 +768,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         description:
           "The Attachment Library gives you a searchable, filterable view of every attachment across all your emails. Find files without remembering which email they were in. Filter by file type (images, PDFs, documents, spreadsheets, archives), sender, date range, or file size. Switch between grid and list views. Preview images and PDFs inline, download files, or jump directly to the original email thread.",
         tips: [
-          { text: "Go to Attachments", shortcut: "g a" },
+          { text: "Go to Attachments", shortcutId: "nav.goAttachments" },
           { text: "Open Attachments from the sidebar navigation (Paperclip icon)." },
           { text: "Search by filename, subject, or sender name." },
           { text: "Filter by type, sender, date range, or file size." },
@@ -849,7 +849,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         description:
           "Mark unwanted emails as spam to move them to the Spam folder. The action is context-aware: when viewing the Spam folder, the button changes to \"Not spam\" so you can rescue legitimate emails that were incorrectly flagged. For Gmail accounts, spam reports sync with Gmail to improve its spam filter. For IMAP accounts, messages are moved to the server's Junk/Spam folder.",
         tips: [
-          { text: "Report spam / Not spam", shortcut: "!" },
+          { text: "Report spam / Not spam", shortcutId: "action.spam" },
           { text: "In the Spam folder, the shortcut marks threads as Not spam." },
           { text: "Gmail accounts: spam reports help improve Gmail's filter over time." },
           { text: "IMAP accounts: messages are moved to the Junk/Spam folder on the server." },
@@ -988,7 +988,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         description:
           "When viewing a newsletter or marketing email, click Unsubscribe (or press u) to instantly unsubscribe. The app detects the List-Unsubscribe header and handles the process automatically using the RFC 8058 one-click POST method when available, or falls back to a mailto: unsubscribe. Your unsubscribe actions are logged so you can track what you've unsubscribed from.",
         tips: [
-          { text: "Unsubscribe from the current thread", shortcut: "u" },
+          { text: "Unsubscribe from the current thread", shortcutId: "action.unsubscribe" },
           { text: "Or click the unsubscribe icon next to the search box while a thread is selected." },
           { text: "Uses RFC 8058 one-click unsubscribe when available." },
           { text: "Falls back to mailto: unsubscribe if one-click isn't supported." },
@@ -1157,7 +1157,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         description:
           "sndmail includes a built-in task manager accessible from the sidebar or via the g then k shortcut. Create tasks with titles, descriptions, priorities (none, low, medium, high, urgent), due dates, and tags. Tasks can have one level of subtasks for breaking down complex items. Drag to reorder tasks, filter by status or priority, and group by priority, due date, or tag. Completed tasks can be shown or hidden. The task sidebar panel shows tasks linked to the current email thread.",
         tips: [
-          { text: "Go to Tasks page", shortcut: "g k" },
+          { text: "Go to Tasks page", shortcutId: "nav.goTasks" },
           { text: "Open tasks from the Tasks item in the sidebar." },
           { text: "Quick-add a task from the input at the bottom of the task sidebar." },
           { text: "The sidebar badge shows your incomplete task count." },
@@ -1173,7 +1173,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         description:
           "When viewing an email thread, press t to have AI analyze the conversation and extract an actionable task. You can also highlight a specific instruction in an email and choose Make AI task; the selected text becomes the AI's focus and is retained on the linked task. The AI identifies the task title, description, suggested due date, and priority from the email content.",
         tips: [
-          { text: "Extract task from email", shortcut: "t" },
+          { text: "Extract task from email", shortcutId: "action.createTaskFromEmail" },
           { text: "Also available in the command palette (Ctrl+K → 'Create Task from Email')." },
           { text: "Highlight an instruction in an email, then choose Make AI task to turn that exact request into a linked task." },
           { text: "Edit the extracted fields before creating the task." },
@@ -1272,7 +1272,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         description:
           "Customize your workspace layout: collapse the sidebar to icon-only mode for more screen space, choose the reading pane position (right, bottom, or hidden), drag the divider to resize the email list width, and toggle the contact sidebar. All layout preferences are saved and restored automatically on startup. The sidebar toggle also has a keyboard shortcut for quick access.",
         tips: [
-          { text: "Toggle sidebar", shortcut: "Ctrl+Shift+E" },
+          { text: "Toggle sidebar", shortcutId: "app.toggleSidebar" },
           { text: "Collapse sidebar to icons-only for more screen space." },
           { text: "Drag the list/pane divider to adjust widths." },
           { text: "All layout preferences persist across restarts." },
@@ -1310,7 +1310,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         description:
           "Hover the account avatar at the top of the sidebar and it turns into a refresh button — click it to manually check every mailbox the current list shows. Normal delivery is automatic through Gmail push or IMAP IDLE, so sndmail does not periodically refresh every account. The account tooltip shows live sync status; a spinning ring means work is in progress and turns red when it fails.",
         tips: [
-          { text: "Refresh mail", shortcut: "F5" },
+          { text: "Refresh mail", shortcutId: "app.syncFolder" },
           { text: "Hover the avatar, then click the refresh icon to sync now." },
           { text: "In the unified inbox, refresh checks all accounts at once." },
           { text: "The tooltip appears immediately — no hover delay." },
@@ -1415,7 +1415,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         description:
           "Press F5 to immediately check the current folder or label. Normal delivery is push-driven, but a manual check is useful after reconnecting or when a provider's push connection is unavailable. For Gmail, this fetches new History API changes; for IMAP, it checks for new UIDs.",
         tips: [
-          { text: "Sync current folder", shortcut: "F5" },
+          { text: "Sync current folder", shortcutId: "app.syncFolder" },
           { text: "Normal delivery is automatic through Gmail push or IMAP IDLE." },
           { text: "Manual sync is useful after reconnecting or as a fallback." },
         ],

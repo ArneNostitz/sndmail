@@ -20,7 +20,7 @@ import { refreshMail } from "@/services/refreshMail";
  * Parse a key binding string and check if it matches a keyboard event.
  * Supports formats like: "j", "#", "Ctrl+K", "Ctrl+Shift+E", "Ctrl+Enter"
  */
-function matchesKey(binding: string, e: KeyboardEvent): boolean {
+export function matchesKey(binding: string, e: KeyboardEvent): boolean {
   const parts = binding.split("+");
   const key = parts[parts.length - 1]!;
   const needsCtrl = parts.some((p) => p === "Ctrl" || p === "Cmd");
@@ -329,9 +329,22 @@ async function executeAction(actionId: string): Promise<void> {
     case "nav.goAttachments":
       navigateToLabel("attachments");
       break;
+    case "nav.goTop": {
+      if (threads[0]) {
+        navigateToThread(threads[0].id);
+      }
+      break;
+    }
     case "nav.escape": {
       if (useComposerStore.getState().isOpen) {
         useComposerStore.getState().closeComposer();
+      } else if (useThreadStore.getState().searchThreadIds !== null) {
+        const keepSelectedId = getSelectedThreadId();
+        if (keepSelectedId) {
+          useThreadStore.getState().setFocusThreadIdOnSearchClear(keepSelectedId);
+        }
+        useThreadStore.getState().clearSearch();
+        document.querySelector<HTMLInputElement>('input[aria-label="Search mail"]')?.blur();
       } else if (useThreadStore.getState().selectedThreadIds.size > 0) {
         useThreadStore.getState().clearMultiSelect();
       } else if (selectedId) {

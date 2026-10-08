@@ -62,7 +62,22 @@ export function SearchBar() {
   const [revision, setRevision] = useState(0);
   const [focused, setFocused] = useState(false);
   const [hovered, setHovered] = useState(false);
-  const showSearchOptions = focused || hovered || Boolean(searchQuery.trim());
+  const [showSearchOptions, setShowSearchOptions] = useState(false);
+  const hideOptionsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (focused || hovered) {
+      if (hideOptionsTimerRef.current) clearTimeout(hideOptionsTimerRef.current);
+      hideOptionsTimerRef.current = null;
+      setShowSearchOptions(true);
+    } else {
+      hideOptionsTimerRef.current = setTimeout(() => setShowSearchOptions(false), 2000);
+    }
+    return () => {
+      if (hideOptionsTimerRef.current) clearTimeout(hideOptionsTimerRef.current);
+    };
+  }, [focused, hovered]);
+
   const currentName =
     smartFolder?.name ??
     labels.find((l) => l.id === activeLabel)?.name ??
@@ -205,7 +220,7 @@ export function SearchBar() {
 
   return (
     <div
-      className="relative"
+      className="relative pb-2"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
@@ -256,7 +271,7 @@ export function SearchBar() {
         )}
       </div>
       {showSearchOptions && (
-        <div className="absolute right-0 top-full z-50 mt-2 w-[min(26rem,calc(100vw-1rem))] max-w-[calc(100vw-1rem)] rounded-xl border border-border-primary bg-bg-primary p-3 shadow-xl">
+        <div className="absolute right-0 top-full z-50 w-[min(26rem,calc(100vw-1rem))] max-w-[calc(100vw-1rem)] rounded-xl border border-border-primary bg-bg-primary p-3 shadow-xl">
           <div className="space-y-2">
             <label className="flex items-center gap-2 text-xs text-text-secondary">
               Sort
@@ -271,27 +286,6 @@ export function SearchBar() {
                 <option value="relevance">Relevance</option>
               </select>
             </label>
-            <div className="flex flex-wrap gap-1" role="group" aria-label="Search folders">
-              {[
-                ["current", currentName],
-                ["all", "All mail"],
-                ["spam", "Spam"],
-                ["trash", "Trash"],
-                ["everywhere", "All folders"],
-              ]
-                .filter(([id]) => id !== "all" || activeLabel !== "all")
-                .map(([id, name]) => (
-                  <button
-                    key={id}
-                    type="button"
-                    aria-pressed={scope === id}
-                    onClick={() => setScope(id!)}
-                    className={`rounded-full px-2 py-0.5 text-xs ${scope === id ? "bg-accent text-white" : "bg-bg-tertiary text-text-secondary hover:bg-bg-hover"}`}
-                  >
-                    {name}
-                  </button>
-                ))}
-            </div>
             <div className="flex flex-wrap gap-1" role="group" aria-label="Search filters">
               {searchPresets.map(({ label, token, needsValue }) => {
                 const active = presetIsActive(searchQuery, token);
@@ -307,6 +301,27 @@ export function SearchBar() {
                   </button>
                 );
               })}
+            </div>
+            <div className="flex flex-wrap gap-1" role="group" aria-label="Search folders">
+              {[
+                ["current", currentName],
+                ["all", "All mail"],
+                ["spam", "Spam"],
+                ["trash", "Trash"],
+                ["everywhere", "All folders"],
+              ]
+                .filter(([id]) => id !== "all" || activeLabel !== "all")
+                .map(([id, name]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    aria-pressed={scope === id}
+                    onClick={() => setScope(id!)}
+                    className={`rounded px-2 py-0.5 text-xs ${scope === id ? "bg-accent text-white" : "bg-bg-tertiary text-text-secondary hover:bg-bg-hover"}`}
+                  >
+                    {name}
+                  </button>
+                ))}
             </div>
             {searchQuery && (
               <p role="status" className="pt-1 text-xs text-text-tertiary">

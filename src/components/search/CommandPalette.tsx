@@ -8,6 +8,7 @@ import { getGmailClient } from "@/services/gmail/tokenManager";
 import { getTemplatesForAccount, type DbTemplate } from "@/services/db/templates";
 import { useActiveLabel } from "@/hooks/useRouteNavigation";
 import { navigateToLabel, navigateToSettings, navigateBack, getSelectedThreadId } from "@/router/navigate";
+import { useShortcutStore } from "@/stores/shortcutStore";
 
 interface Command {
   id: string;
@@ -32,6 +33,7 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
   const openComposer = useComposerStore((s) => s.openComposer);
   const activeLabel = useActiveLabel();
   const activeAccountId = useAccountStore((s) => s.activeAccountId);
+  const keyMap = useShortcutStore((s) => s.keyMap);
   const [templates, setTemplates] = useState<DbTemplate[]>([]);
 
   useEffect(() => {
@@ -41,18 +43,18 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
 
   const commands: Command[] = useMemo(() => [
     // Navigation
-    { id: "go-inbox", label: "Go to Inbox", shortcut: "g i", category: "Navigation", action: () => { navigateToLabel("inbox"); onClose(); } },
-    { id: "go-starred", label: "Go to Starred", shortcut: "g s", category: "Navigation", action: () => { navigateToLabel("starred"); onClose(); } },
-    { id: "go-sent", label: "Go to Sent", shortcut: "g t", category: "Navigation", action: () => { navigateToLabel("sent"); onClose(); } },
-    { id: "go-drafts", label: "Go to Drafts", shortcut: "g d", category: "Navigation", action: () => { navigateToLabel("drafts"); onClose(); } },
+    { id: "go-inbox", label: "Go to Inbox", shortcut: keyMap["nav.goInbox"] ?? "g i", category: "Navigation", action: () => { navigateToLabel("inbox"); onClose(); } },
+    { id: "go-starred", label: "Go to Starred", shortcut: keyMap["nav.goStarred"] ?? "g s", category: "Navigation", action: () => { navigateToLabel("starred"); onClose(); } },
+    { id: "go-sent", label: "Go to Sent", shortcut: keyMap["nav.goSent"] ?? "g t", category: "Navigation", action: () => { navigateToLabel("sent"); onClose(); } },
+    { id: "go-drafts", label: "Go to Drafts", shortcut: keyMap["nav.goDrafts"] ?? "g d", category: "Navigation", action: () => { navigateToLabel("drafts"); onClose(); } },
     { id: "go-snoozed", label: "Go to Snoozed", category: "Navigation", action: () => { navigateToLabel("snoozed"); onClose(); } },
     { id: "go-trash", label: "Go to Trash", category: "Navigation", action: () => { navigateToLabel("trash"); onClose(); } },
     { id: "go-all", label: "Go to All Mail", category: "Navigation", action: () => { navigateToLabel("all"); onClose(); } },
 
     // Actions
-    { id: "compose", label: "Compose New Email", shortcut: "c", category: "Actions", action: () => { openComposer(); onClose(); } },
-    { id: "deselect", label: "Close Thread", shortcut: "Esc", category: "Actions", action: () => { navigateBack(); onClose(); } },
-    { id: "spam", label: activeLabel === "spam" ? "Not Spam" : "Report Spam", shortcut: "!", category: "Actions", action: async () => {
+    { id: "compose", label: "Compose New Email", shortcut: keyMap["action.compose"] ?? "c", category: "Actions", action: () => { openComposer(); onClose(); } },
+    { id: "deselect", label: "Close Thread", shortcut: keyMap["nav.escape"] ?? "Esc", category: "Actions", action: () => { navigateBack(); onClose(); } },
+    { id: "spam", label: activeLabel === "spam" ? "Not Spam" : "Report Spam", shortcut: keyMap["action.spam"] ?? "!", category: "Actions", action: async () => {
       onClose();
       const selectedId = getSelectedThreadId();
       const accountId = useAccountStore.getState().activeAccountId;
@@ -75,24 +77,24 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
       onClose();
       useUIStore.getState().setTaskSidebarVisible(true);
     } },
-    { id: "task-extract", label: "Create Task from Email (AI)", shortcut: "t", category: "Tasks", action: () => {
+    { id: "task-extract", label: "Create Task from Email (AI)", shortcut: keyMap["action.createTaskFromEmail"] ?? "t", category: "Tasks", action: () => {
       onClose();
       const threadId = getSelectedThreadId();
       if (threadId) {
         window.dispatchEvent(new CustomEvent("sndmail-extract-task", { detail: { threadId } }));
       }
     } },
-    { id: "task-view", label: "View Tasks", shortcut: "g k", category: "Tasks", action: () => { navigateToLabel("tasks"); onClose(); } },
+    { id: "task-view", label: "View Tasks", shortcut: keyMap["nav.goTasks"] ?? "g k", category: "Tasks", action: () => { navigateToLabel("tasks"); onClose(); } },
     { id: "task-toggle-panel", label: "Toggle Task Panel", category: "Tasks", action: () => { useUIStore.getState().toggleTaskSidebar(); onClose(); } },
 
     // AI
     { id: "ask-ai", label: "Ask AI about your inbox", category: "AI", action: () => { onClose(); window.dispatchEvent(new Event("sndmail-toggle-ask-inbox")); } },
 
     // Settings
-    { id: "open-settings", label: "Open Settings", shortcut: "Ctrl+,", category: "Settings", action: () => { onClose(); navigateToSettings(); } },
+    { id: "open-settings", label: "Open Settings", shortcut: keyMap["app.settings"] ?? "Ctrl+,", category: "Settings", action: () => { onClose(); navigateToSettings(); } },
     { id: "open-settings-accounts", label: "Open Settings: Accounts", category: "Settings", action: () => { onClose(); navigateToSettings("accounts"); } },
     { id: "add-account", label: "Add Email Account", category: "Settings", action: () => { onClose(); useUIStore.getState().requestAddAccount(); } },
-    { id: "toggle-sidebar", label: "Toggle Sidebar", shortcut: "Ctrl+Shift+E", category: "Settings", action: () => { toggleSidebar(); onClose(); } },
+    { id: "toggle-sidebar", label: "Toggle Sidebar", shortcut: keyMap["app.toggleSidebar"] ?? "Ctrl+Shift+E", category: "Settings", action: () => { toggleSidebar(); onClose(); } },
     { id: "theme-light", label: "Switch to Light Theme", category: "Settings", action: () => { setTheme("light"); onClose(); } },
     { id: "theme-dark", label: "Switch to Dark Theme", category: "Settings", action: () => { setTheme("dark"); onClose(); } },
     { id: "theme-system", label: "Use System Theme", category: "Settings", action: () => { setTheme("system"); onClose(); } },

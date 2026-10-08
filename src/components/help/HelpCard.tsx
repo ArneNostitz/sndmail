@@ -1,5 +1,6 @@
 import { ChevronRight } from "lucide-react";
 import { navigateToSettings } from "@/router/navigate";
+import { useShortcutStore } from "@/stores/shortcutStore";
 import type { HelpCard as HelpCardData } from "@/constants/helpContent";
 
 interface HelpCardProps {
@@ -10,6 +11,7 @@ interface HelpCardProps {
 
 export function HelpCard({ card, isExpanded, onToggle }: HelpCardProps) {
   const Icon = card.icon;
+  const keyMap = useShortcutStore((state) => state.keyMap);
 
   return (
     <div className="rounded-lg border border-border-secondary bg-bg-primary/60 overflow-hidden transition-colors hover:border-border-primary">
@@ -51,9 +53,9 @@ export function HelpCard({ card, isExpanded, onToggle }: HelpCardProps) {
                   <li key={i} className="flex items-start gap-2 text-xs text-text-secondary">
                     <span className="text-text-tertiary mt-0.5 shrink-0">•</span>
                     <span className="flex-1">{tip.text}</span>
-                    {tip.shortcut && (
+                    {tip.shortcutId && (
                       <kbd className="shrink-0 px-1.5 py-0.5 text-[0.625rem] bg-bg-secondary border border-border-secondary rounded text-text-tertiary font-mono">
-                        {tip.shortcut}
+                        {keyMap[tip.shortcutId] ?? tip.shortcutId}
                       </kbd>
                     )}
                   </li>

@@ -86,13 +86,13 @@ describe("HelpPage card expansion", () => {
     expect(expandable.length).toBeGreaterThan(allCards.length / 2);
   });
 
-  it("every card tip with a shortcut has non-empty shortcut text", () => {
+  it("every card tip with a shortcut has a non-empty shortcut id", () => {
     const allCards = getAllCards();
     for (const card of allCards) {
       if (card.tips) {
         for (const tip of card.tips) {
-          if (tip.shortcut !== undefined) {
-            expect(tip.shortcut.trim().length).toBeGreaterThan(0);
+          if (tip.shortcutId !== undefined) {
+            expect(tip.shortcutId.trim().length).toBeGreaterThan(0);
           }
         }
       }

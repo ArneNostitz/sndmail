@@ -586,7 +586,7 @@ export function SettingsPage() {
         <kbd className="text-[0.625rem] text-text-tertiary bg-bg-tertiary px-1.5 py-0.5 rounded font-mono">
           {keyMap["app.settings"] ?? "Ctrl+,"}
         </kbd>
-        <Tooltip content="Close settings (Esc)"><button
+        <Tooltip content={`Close settings (${keyMap["nav.escape"] ?? "Escape"})`}><button
           onClick={closeSettings}
           className="ml-auto p-1.5 -mr-1 rounded-md text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors"
 

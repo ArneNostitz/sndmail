@@ -570,6 +570,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         tips: [
           { text: "Enable it in Settings > General, then download the model when prompted." },
           { text: "Semantic results are added on top of keyword results — never instead of them." },
+          { text: "Turn semantic matches off per search with the Semantic button in the search filter popup." },
           { text: "Scope still applies: current folder, All mail (no Spam/Trash), or All folders." },
           { text: "The index only covers downloaded mail, and only searches with free text use it." },
           { text: "Disabling it stops all background processes; nothing runs while it is off." },

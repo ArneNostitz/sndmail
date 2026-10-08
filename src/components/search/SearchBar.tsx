@@ -10,6 +10,11 @@ import { useActiveLabel } from "@/hooks/useRouteNavigation";
 import { useLabelStore } from "@/stores/labelStore";
 import { parseSearchQuery } from "@/services/search/searchParser";
 import { resolveQueryTokens } from "@/services/search/smartFolderQuery";
+import {
+  isSemanticSearchReady,
+  semanticSearch,
+} from "@/services/search/semanticSearchRuntime";
+import { mergeSemanticHits } from "@/services/search/semanticSearchMerge";
 
 import { Tooltip } from "@/components/ui/Tooltip";
 const folderIds: Record<string, string[]> = {
@@ -92,6 +97,7 @@ export function SearchBar() {
     const timer = setTimeout(async () => {
       try {
         const folder = scope === "current" ? activeLabel : scope;
+        const parsedQuery = parseSearchQuery(searchQuery);
         const labelIds =
           folderIds[folder] ??
           (folder.startsWith("smart-folder:") ? [] : [folder]);
@@ -116,22 +122,49 @@ export function SearchBar() {
               : {}),
           },
         );
-        if (!cancelled) {
-          const matches = new Map<string, SearchMatch>();
-          for (const hit of hits) {
-            const existing = matches.get(hit.thread_id);
-            if (existing) {
-              existing.messageIds.add(hit.message_id);
-              if (!existing.excerpt && hit.match_excerpt) {
-                existing.excerpt = hit.match_excerpt.replace(/\s+/g, " ").trim();
-              }
-            } else {
-              matches.set(hit.thread_id, {
-                messageIds: new Set([hit.message_id]),
-                excerpt: hit.match_excerpt?.replace(/\s+/g, " ").trim() || null,
-              });
+        const matches = new Map<string, SearchMatch>();
+        for (const hit of hits) {
+          const existing = matches.get(hit.thread_id);
+          if (existing) {
+            existing.messageIds.add(hit.message_id);
+            if (!existing.excerpt && hit.match_excerpt) {
+              existing.excerpt = hit.match_excerpt.replace(/\s+/g, " ").trim();
             }
+          } else {
+            matches.set(hit.thread_id, {
+              messageIds: new Set([hit.message_id]),
+              excerpt: hit.match_excerpt?.replace(/\s+/g, " ").trim() || null,
+            });
           }
+        }
+        // Hybrid results ride on top of the keyword matches. Semantic search
+        // is additive and best-effort: any failure leaves the keyword results
+        // untouched, so it never breaks the search itself. A smart folder's
+        // saved query cannot be applied to the index, so it stays keyword-only.
+        if (
+          parsedQuery.freeText?.trim() &&
+          !(scope === "current" && smartFolder) &&
+          isSemanticSearchReady()
+        ) {
+          try {
+            const response = await semanticSearch(
+              parsedQuery.freeText.trim(),
+              100,
+            );
+            mergeSemanticHits(response.hits ?? [], matches, {
+              accountIds: accountKey ? accountKey.split(",") : [],
+              labelIds,
+              excludeSpamTrash:
+                folder !== "everywhere" &&
+                folder !== "spam" &&
+                folder !== "trash",
+              labels,
+            });
+          } catch {
+            // Keyword results stand on their own.
+          }
+        }
+        if (!cancelled) {
           useThreadStore
             .getState()
             .setSearch(searchQuery, new Set(matches.keys()), matches);
@@ -314,7 +347,9 @@ export function SearchBar() {
                   ? "Type a value to finish this filter"
                   : searching
                     ? "Searching…"
-                    : "Searching downloaded mail • up to 500 message matches"}
+                    : `Searching downloaded mail • up to 500 message matches${
+                        isSemanticSearchReady() ? " • semantic matches included" : ""
+                      }`}
               </p>
             )}
             {error && (

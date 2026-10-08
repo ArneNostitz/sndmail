@@ -15,9 +15,35 @@ export interface SemanticSearchStatus {
   modelId: string;
 }
 
+/** A single semantic hit, as returned by the native hybrid query. */
+export interface SemanticEvidence {
+  passage: string;
+  titleContext: string | null;
+  distance: number;
+}
+
+export interface SemanticHit {
+  id: string;
+  title: string;
+  subtitle?: string | null;
+  snippet?: string | null;
+  tags?: string[];
+  metadata?: Record<string, unknown>;
+  matchKind?: string | null;
+  relevance?: number | null;
+  semanticEvidence?: SemanticEvidence | null;
+}
+
+export interface SemanticSearchResponse {
+  hits: SemanticHit[];
+}
+
 // Serialize status reads and mutations, including across panel remounts.
 // A rejected command must not prevent subsequent retries.
 let commandTail: Promise<unknown> = Promise.resolve();
+// Latest observed status. The 5s observer keeps this warm for the app's
+// lifetime, so search-time readiness checks need no extra IPC round trip.
+let lastStatus: SemanticSearchStatus | null = null;
 // Shared by mutations, Settings reads, and the application observer. Retain
 // failures until a healthy snapshot so dismissing a toast does not recreate it.
 const reportedFailures = new Set<string>();
@@ -61,6 +87,7 @@ function command(
     if (signal?.aborted) throw new Error("Semantic search request cancelled");
     return invoke<SemanticSearchStatus>(name, args).then(
       (status) => {
+        lastStatus = status;
         if (name === "semantic_search_status" && signal?.aborted) return status;
         // Report before the component checks its abort signal: already-sent
         // commands can fail or return an error status after Settings closes.
@@ -122,4 +149,37 @@ export function downloadSemanticSearchModel(signal?: AbortSignal) {
 /** Non-destructive incremental rescan; native retains existing embeddings. */
 export function reindexSemanticSearch(signal?: AbortSignal) {
   return command("semantic_search_reindex", undefined, signal);
+}
+
+/**
+ * True when the hybrid index can serve queries right now. "indexing" also
+ * counts: the index holds every already-scanned message, so results are
+ * useful while the rest catches up.
+ */
+export function isSemanticSearchReady(): boolean {
+  const status = lastStatus;
+  return Boolean(
+    status?.supported &&
+      status.enabled &&
+      (status.state === "ready" || status.state === "indexing"),
+  );
+}
+
+/**
+ * Run one hybrid query against the local index. Not routed through the
+ * serialized command tail: searches are frequent and purely additive —
+ * callers fall back to keyword results when this rejects.
+ */
+export function semanticSearch(
+  query: string,
+  limit = 50,
+  signal?: AbortSignal,
+): Promise<SemanticSearchResponse> {
+  if (signal?.aborted) {
+    return Promise.reject(new Error("Semantic search request cancelled"));
+  }
+  return invoke<SemanticSearchResponse>("semantic_search_query", {
+    query,
+    limit,
+  });
 }

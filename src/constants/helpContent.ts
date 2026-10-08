@@ -560,6 +560,22 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         ],
       },
       {
+        id: "semantic-search",
+        icon: Brain,
+        title: "Semantic search",
+        summary: "Optional meaning-based matches layered on top of keyword search.",
+        description:
+          "Keyword search stays the always-on base. Turn on semantic search in Settings > General and sndmail runs a private local search service on your machine: it downloads a small multilingual model once, indexes your downloaded mail in the background, and keeps itself up to date while the app is open. Once the index is ready, searches also find conversations by meaning — 'that mail about the hiking trip refund' works even when no keyword matches — and the extra results are merged into the normal result list, respecting the folder and account scope you picked. Everything runs locally; nothing is uploaded. Turning it off stops every process immediately, and keyword search works exactly as before.",
+        tips: [
+          { text: "Enable it in Settings > General, then download the model when prompted." },
+          { text: "Semantic results are added on top of keyword results — never instead of them." },
+          { text: "Scope still applies: current folder, All mail (no Spam/Trash), or All folders." },
+          { text: "The index only covers downloaded mail, and only searches with free text use it." },
+          { text: "Disabling it stops all background processes; nothing runs while it is off." },
+        ],
+        relatedSettingsTab: "general",
+      },
+      {
         id: "command-palette",
         icon: Command,
         title: "Command palette",

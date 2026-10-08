@@ -124,7 +124,7 @@ function loadEsbuild() {
   catch { return createRequire(require.resolve("vite/package.json"))("esbuild"); }
 }
 
-async function dependencyLicenses(inputs) {
+async function dependencyLicenses(inputs, bundleName) {
   const packages = new Set();
   for (const input of Object.keys(inputs)) {
     const absolute = resolve(root, input);
@@ -133,7 +133,7 @@ async function dependencyLicenses(inputs) {
     const suffix = absolute.slice(marker + 14).split("/");
     packages.add(absolute.slice(0, marker + 14) + suffix.slice(0, suffix[0].startsWith("@") ? 2 : 1).join("/"));
   }
-  const notices = ["Bundled indexer dependency licenses. Generated from the packages actually included by esbuild."];
+  const notices = [`Bundled ${bundleName} dependency licenses. Generated from the packages actually included by esbuild.`];
   for (const directory of [...packages].sort()) {
     const manifest = JSON.parse(await readFile(join(directory, "package.json"), "utf8"));
     let licenseDirectory = directory;
@@ -159,14 +159,17 @@ async function dependencyLicenses(inputs) {
       if ((await stat(join(licenseDirectory, file))).isFile()) notices.push(await readFile(join(licenseDirectory, file), "utf8"));
     }
   }
+  if (packages.size === 0) {
+    notices.push("\nThis bundle includes no third-party packages: esbuild inlined only sndmail's own scripts.\n");
+  }
   return notices.join("\n");
 }
 
-async function prepareWorker() {
+async function prepareBundle(name, entry) {
   const esbuild = loadEsbuild();
-  const output = join(destination, ".indexer." + randomUUID() + ".cjs");
+  const output = join(destination, "." + name + "." + randomUUID() + ".cjs");
   try {
-    const result = await esbuild.build({ absWorkingDir: root, entryPoints: ["scripts/semantic-search/worker.ts"],
+    const result = await esbuild.build({ absWorkingDir: root, entryPoints: [entry],
       outfile: output, bundle: true, platform: "node", format: "cjs", target: "node22", metafile: true,
       sourcemap: false, minify: false, legalComments: "inline", logLevel: "silent",
       nodePaths: semanticEnv("BUILD_NODE_MODULES") ? [resolve(semanticEnv("BUILD_NODE_MODULES"))] : [],
@@ -175,19 +178,20 @@ async function prepareWorker() {
     for (const file of Object.values(result.metafile.outputs)) for (const dependency of file.imports) {
       if (dependency.external && !builtins.has(dependency.path)) throw new Error("the worker bundle still has an external non-Node dependency");
     }
-    await atomicText("indexer.cjs.license.txt", await dependencyLicenses(result.metafile.inputs));
-    await rename(output, join(destination, "indexer.cjs"));
+    await atomicText(name + ".license.txt", await dependencyLicenses(result.metafile.inputs, name));
+    await rename(output, join(destination, name));
   } finally { await rm(output, { force: true }); }
 }
 
 await mkdir(destination, { recursive: true });
 const supported = macTarget && process.platform === "darwin" && ["arm64", "x64"].includes(targetArch);
 if (!supported) {
-  for (const name of ["node", "typesense-server", "indexer.cjs"]) await removeGenerated(name);
+  for (const name of ["node", "typesense-server", "indexer.cjs", "searcher.cjs"]) await removeGenerated(name);
   report("runtime", false, "only macOS arm64/x64 resources are prepared by this script");
 } else {
   for (const [name, action] of [
-    ["indexer.cjs", prepareWorker],
+    ["indexer.cjs", () => prepareBundle("indexer.cjs", "scripts/semantic-search/worker.ts")],
+    ["searcher.cjs", () => prepareBundle("searcher.cjs", "scripts/semantic-search/searcher.ts")],
     ["node", async () => { const input = await binaryInputs("node"); await copyExecutable("node", input.source, input.license); }],
     ["typesense-server", async () => {
       const explicitBinary = semanticEnv("TYPESENSE_PATH");
@@ -214,7 +218,7 @@ if (!supported) {
     try { await action(); report(name, true); }
     catch (error) {
       await removeGenerated(name);
-      report(name, false, name === "indexer.cjs" ? "worker bundling failed; provision esbuild and html-to-text@10.0.1 with their license files" : error.message);
+      report(name, false, name.endsWith(".cjs") ? "script bundling failed; provision esbuild and html-to-text@10.0.1 with their license files" : error.message);
     }
   }
 }
@@ -231,7 +235,7 @@ for (const result of results.filter((item) => item.ready)) {
     resources.push({ name: "typesense-server.source.txt", bytes: notice.length, sha256: createHash("sha256").update(notice).digest("hex") });
   }
 }
-const ready = supported && results.length === 3 && results.every((item) => item.ready);
+const ready = supported && results.length === 4 && results.every((item) => item.ready);
 await atomicText("runtime-manifest.json", JSON.stringify({ ready, platform: process.platform, architecture: targetArch, cargoTarget, offline,
   signedByPreparation: Boolean(process.env.APPLE_SIGNING_IDENTITY) && !offline && ready,
   preparedAt: new Date().toISOString(), resources, status: results,

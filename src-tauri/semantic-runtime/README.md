@@ -31,10 +31,12 @@ Outputs, relative to the Tauri resource directory:
 - `semantic-runtime/node`: locally provisioned Node >=22 executable.
 - `semantic-runtime/typesense-server`: locally provisioned Typesense executable.
 - `semantic-runtime/indexer.cjs`: bundled worker with no external npm dependencies.
+- `semantic-runtime/searcher.cjs`: bundled one-shot search entry with no external npm dependencies.
 - `semantic-runtime/node.license.txt`: actual license supplied with that Node build.
 - `semantic-runtime/typesense-server.license.txt`: actual Typesense license text.
 - `semantic-runtime/typesense-server.source.txt`: archive provenance and source notice.
 - `semantic-runtime/indexer.cjs.license.txt`: licenses from bundled dependencies.
+- `semantic-runtime/searcher.cjs.license.txt`: licenses from bundled dependencies.
 - `semantic-runtime/runtime-manifest.json`: readiness, architecture, hashes, notices.
 
 Preparation is macOS arm64/x64 only. CARGO_BUILD_TARGET determines architecture
@@ -141,6 +143,24 @@ Normal shutdown removes only that marker and an empty lock directory. It never
 removes standalone locks or another worker's marker. After a forced kill/crash,
 native recovery must confirm the prior process has stopped before clearing a
 stale lock. Native must allow only one writer for this managed collection.
+
+## Searcher/native protocol
+
+The searcher is a short-lived read-only child spawned per query batch; it takes
+no lock and never writes to the index:
+
+```text
+<resource-dir>/semantic-runtime/node <resource-dir>/semantic-runtime/searcher.cjs <app-data>/semantic-search/worker.json --query <text> --limit <n>
+```
+
+It reuses the worker's private config file (lock fields and
+`sndmailDatabasePath` are ignored) with the same private-file and loopback-only
+enforcement. It prints exactly one JSON line: `{"hits":[...]}` with each hit's
+`id`, `title`, `subtitle`, `snippet`, `tags`, `metadata`, `matchKind`,
+`relevance`, and `semanticEvidence`; failures print
+`{"error":"<generic message>"}` and exit 1. No internals, paths, or keys are
+emitted. Only run it while the managed server is up; native code must treat any
+failure as a silent skip back to local FTS results.
 
 ## Resource budget and preservation
 

@@ -8,6 +8,7 @@ import { convert } from "html-to-text";
 import type { UniversalDocument } from "../types";
 import { workerSignal } from "../runtime-control";
 import { expandPath } from "../shared";
+import { trimTextBody } from "../../../src/utils/messageTrim";
 
 const execFileAsync = promisify(execFile);
 // Same whitespace characters as JavaScript String.trim(), used by readableBody.
@@ -61,7 +62,14 @@ export async function collectSndmailDocuments(_exportPath?: string, dbPathOverri
     for (const row of rows) {
       const sender = [row.from_name, row.from_address].filter(Boolean).join(" ");
       const readable = readableBody(row.body_text, row.body_html);
-      const body = (readable || row.snippet || "").slice(0, 100000);
+      // Only what the sender actually wrote gets indexed and embedded: the
+      // same trim the chat view applies, so quotes, signatures, legal
+      // footers and "On ... wrote:" attribution lines never end up in the
+      // vector index. A mail that trims to nothing (a bare forward) falls
+      // back to its snippet so it stays findable by its own words.
+      const trimmed = trimTextBody(readable);
+      const bodyFull = trimmed.text.trim() ? trimmed.text : (row.snippet || "");
+      const body = bodyFull.slice(0, 100000);
       const snippet = row.snippet || body.slice(0, 600);
       documents.push({
         id: createHash("sha256").update(JSON.stringify(["sndmail", row.account_id, row.id])).digest("hex"),
@@ -72,7 +80,7 @@ export async function collectSndmailDocuments(_exportPath?: string, dbPathOverri
         tags: [row.account_email, ...(row.labels || "").split(", ")].filter(Boolean),
         metadata: { account: row.account_id, accountName: row.account_email, threadId: row.thread_id,
           messageId: row.id, from: sender, to: row.to_addresses, labels: row.labels || "", folder: row.labels || "Mail",
-          body_index_truncated: readable.length > 100000 || row.body_length > 1000000,
+          body_index_truncated: bodyFull.length > 100000 || row.body_length > 1000000,
           body_missing: !row.body_length },
         updated_at: Math.trunc(row.date < 1e12 ? row.date * 1000 : row.date),
       });

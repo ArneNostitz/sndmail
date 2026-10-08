@@ -86,6 +86,12 @@ interface ThreadState {
     matches?: Map<string, SearchMatch>,
   ) => void;
   clearSearch: () => void;
+  /**
+   * When a search is cleared with a thread selected, this id tells the list
+   * to load the page that contains it so the row stays in context.
+   */
+  focusThreadIdOnSearchClear: string | null;
+  setFocusThreadIdOnSearchClear: (id: string | null) => void;
 }
 
 export const useThreadStore = create<ThreadState>((set, get) => ({
@@ -100,6 +106,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
   visibleThreadIds: [],
   removingThreadIds: new Set<string>(),
   cachedThreads: new Map<string, Thread>(),
+  focusThreadIdOnSearchClear: null,
 
   setThreads: (threads) =>
     set({
@@ -188,7 +195,15 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
 
     set((state) => {
       const removing = new Set(state.removingThreadIds);
-      for (const id of list) removing.add(id);
+      let changed = false;
+      for (const id of list) {
+        if (!removing.has(id)) {
+          removing.add(id);
+          changed = true;
+        }
+      }
+      // If every id is already exiting, don't churn subscribers.
+      if (!changed) return {};
       return { removingThreadIds: removing };
     });
 
@@ -234,4 +249,5 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     set({ searchQuery: query, searchThreadIds: threadIds, searchMatches }),
   clearSearch: () =>
     set({ searchQuery: "", searchThreadIds: null, searchMatches: new Map() }),
+  setFocusThreadIdOnSearchClear: (id) => set({ focusThreadIdOnSearchClear: id }),
 }));

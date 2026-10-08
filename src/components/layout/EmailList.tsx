@@ -481,102 +481,126 @@ export function EmailList({ width, listRef }: { width?: number; listRef?: React.
     clearSearch();
   }, [accountScopeKey, activeLabel, activeCategory, clearSearch]);
 
-  const loadThreads = useCallback(async () => {
-    if (accountIds.length === 0) {
-      setThreads([]);
-      return;
+  // Fetch a single page for the current view. Shared by initial load, infinite
+  // scroll, and the focused search-clear load that has to find a specific row.
+  const fetchPage = useCallback(async (offset: number): Promise<{ threads: Thread[]; hasMore: boolean }> => {
+    if (accountIds.length === 0) return { threads: [], hasMore: false };
+
+    // Smart folder query path — smart folders are saved per account, so this
+    // view stays scoped to the active one even in the unified list.
+    if (isSmartFolder && activeSmartFolder && activeAccountId) {
+      const { sql, params } = getSmartFolderSearchQuery(
+        activeSmartFolder.query,
+        activeAccountId,
+        PAGE_SIZE,
+      );
+      const db = await getDb();
+      const rows = await db.select<SmartFolderRow[]>(sql, params);
+      const mapped = await mapSmartFolderRows(rows);
+      return { threads: mapped, hasMore: false }; // Smart folders load all at once
     }
 
+    let dbThreads;
+    // Server-side category filtering for inbox
+    if (activeLabel === "inbox" && activeCategory !== "All") {
+      dbThreads = await getThreadsForCategoryAcrossAccounts(
+        accountIds,
+        activeCategory,
+        PAGE_SIZE,
+        offset,
+        ownAddresses,
+      );
+    } else {
+      const gmailLabelId = LABEL_MAP[activeLabel] ?? activeLabel;
+      dbThreads = await getThreadsForAccounts(
+        accountIds,
+        gmailLabelId.length === 0 ? undefined : gmailLabelId,
+        PAGE_SIZE,
+        offset,
+        ownAddresses,
+      );
+    }
+
+    const mapped = await mapDbThreads(dbThreads);
+    return { threads: mapped, hasMore: dbThreads.length === PAGE_SIZE };
+  }, [accountIds, activeAccountId, activeLabel, activeCategory, isSmartFolder, activeSmartFolder, ownAddresses, ownAddressKey, mapDbThreads]);
+
+  const loadThreads = useCallback(async () => {
     setLoading(true);
     setHasMore(true);
     try {
-      // Smart folder query path — smart folders are saved per account, so this
-      // view stays scoped to the active one even in the unified list.
-      if (isSmartFolder && activeSmartFolder && activeAccountId) {
-        const { sql, params } = getSmartFolderSearchQuery(
-          activeSmartFolder.query,
-          activeAccountId,
-          PAGE_SIZE,
-        );
-        const db = await getDb();
-        const rows = await db.select<SmartFolderRow[]>(sql, params);
-        const mapped = await mapSmartFolderRows(rows);
-        setThreads(mapped);
-        setHasMore(false); // Smart folders load all at once
-      } else {
-        let dbThreads;
-        // Server-side category filtering for inbox
-        if (activeLabel === "inbox" && activeCategory !== "All") {
-          dbThreads = await getThreadsForCategoryAcrossAccounts(
-            accountIds,
-            activeCategory,
-            PAGE_SIZE,
-            0,
-            ownAddresses,
-          );
-        } else {
-          const gmailLabelId = LABEL_MAP[activeLabel] ?? activeLabel;
-          dbThreads = await getThreadsForAccounts(
-            accountIds,
-            gmailLabelId.length === 0 ? undefined : gmailLabelId,
-            PAGE_SIZE,
-            0,
-            ownAddresses,
-          );
-        }
-
-        const mapped = await mapDbThreads(dbThreads);
-        setThreads(mapped);
-        setHasMore(dbThreads.length === PAGE_SIZE);
-      }
+      const { threads: page, hasMore } = await fetchPage(0);
+      setThreads(page);
+      setHasMore(hasMore);
     } catch (err) {
       console.error("Failed to load threads:", err);
     } finally {
       setLoading(false);
     }
-  }, [activeAccountId, accountScopeKey, ownAddressKey, activeLabel, activeCategory, isSmartFolder, activeSmartFolder, setThreads, setLoading, mapDbThreads]);
+  }, [fetchPage, setThreads, setHasMore, setLoading]);
 
   const loadMore = useCallback(async () => {
-    if (accountIds.length === 0 || loadingMore || !hasMore) return;
+    if (loadingMore || !hasMore) return;
 
     setLoadingMore(true);
     try {
-      const offset = threads.length;
-      let dbThreads;
-      if (activeLabel === "inbox" && activeCategory !== "All") {
-        dbThreads = await getThreadsForCategoryAcrossAccounts(
-          accountIds,
-          activeCategory,
-          PAGE_SIZE,
-          offset,
-          ownAddresses,
-        );
-      } else {
-        const gmailLabelId = LABEL_MAP[activeLabel] ?? activeLabel;
-        dbThreads = await getThreadsForAccounts(
-          accountIds,
-          gmailLabelId.length === 0 ? undefined : gmailLabelId,
-          PAGE_SIZE,
-          offset,
-          ownAddresses,
-        );
+      const { threads: page, hasMore: more } = await fetchPage(threads.length);
+      if (page.length > 0) {
+        setThreads([...threads, ...page]);
       }
-
-      const mapped = await mapDbThreads(dbThreads);
-      if (mapped.length > 0) {
-        setThreads([...threads, ...mapped]);
-      }
-      setHasMore(dbThreads.length === PAGE_SIZE);
+      setHasMore(more);
     } catch (err) {
       console.error("Failed to load more threads:", err);
     } finally {
       setLoadingMore(false);
     }
-  }, [accountScopeKey, ownAddressKey, activeLabel, activeCategory, threads, loadingMore, hasMore, setThreads, mapDbThreads]);
+  }, [fetchPage, threads, loadingMore, hasMore, setThreads, setHasMore, setLoadingMore]);
+
+  // When Escape clears a search with a thread selected, load the page that
+  // contains that thread so it stays in context with its neighbours.
+  const loadThreadsFocusedOn = useCallback(async (threadId: string) => {
+    setLoading(true);
+    setHasMore(true);
+    try {
+      const all: Thread[] = [];
+      let offset = 0;
+      let hasMore = true;
+      let found = false;
+      const maxPages = 10;
+      for (let pageCount = 0; pageCount < maxPages && hasMore && !found; pageCount++) {
+        const { threads: page, hasMore: more } = await fetchPage(offset);
+        all.push(...page);
+        offset += page.length;
+        hasMore = more;
+        found = page.some((t) => t.id === threadId);
+      }
+      setThreads(all);
+      setHasMore(hasMore);
+      // Let the row render, then scroll it into view
+      requestAnimationFrame(() => {
+        const el = scrollContainerRef.current?.querySelector(`[data-thread-id="${CSS.escape(threadId)}"]`);
+        if (el) {
+          el.scrollIntoView({ block: "center" });
+        }
+      });
+    } catch (err) {
+      console.error("Failed to load focused threads:", err);
+    } finally {
+      setLoading(false);
+      useThreadStore.getState().setFocusThreadIdOnSearchClear(null);
+    }
+  }, [fetchPage, setThreads, setHasMore, setLoading]);
 
   useEffect(() => {
     loadThreads();
   }, [loadThreads]);
+
+  const focusThreadIdOnSearchClear = useThreadStore((s) => s.focusThreadIdOnSearchClear);
+  useEffect(() => {
+    if (searchThreadIds === null && focusThreadIdOnSearchClear) {
+      void loadThreadsFocusedOn(focusThreadIdOnSearchClear);
+    }
+  }, [searchThreadIds, focusThreadIdOnSearchClear, loadThreadsFocusedOn]);
 
   // Stable thread ID key — only changes when the actual set of thread IDs changes, not on every array reference
   const threadIdKey = useMemo(() => threads.map((t) => t.id).join(","), [threads]);

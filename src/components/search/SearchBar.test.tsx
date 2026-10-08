@@ -33,14 +33,16 @@ describe("SearchBar", () => {
     expect(screen.queryByRole("group", { name: "Search folders" })).toBeNull();
     expect(screen.queryByRole("group", { name: "Search filters" })).toBeNull();
 
-    fireEvent.change(screen.getByRole("textbox"), {
+    const input = screen.getByRole("textbox");
+    fireEvent.focus(input);
+    fireEvent.change(input, {
       target: { value: "invoice" },
     });
     expect(screen.getByRole("group", { name: "Search folders" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Has attachments" })).toBeInTheDocument();
   });
 
-  it("shows the anchored search options on hover and while the field is focused", () => {
+  it("shows the anchored search options on hover and while the field is focused", async () => {
     render(<SearchBar />);
     const input = screen.getByRole("textbox");
     const searchArea = input.parentElement!.parentElement!;
@@ -48,6 +50,9 @@ describe("SearchBar", () => {
     fireEvent.mouseEnter(searchArea);
     expect(screen.getByRole("group", { name: "Search filters" })).toBeInTheDocument();
     fireEvent.mouseLeave(searchArea);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000);
+    });
     expect(screen.queryByRole("group", { name: "Search filters" })).toBeNull();
 
     fireEvent.focus(input);
@@ -56,7 +61,9 @@ describe("SearchBar", () => {
 
   it("adds and removes preset operators without discarding the typed search", () => {
     render(<SearchBar />);
-    fireEvent.change(screen.getByRole("textbox"), {
+    const input = screen.getByRole("textbox");
+    fireEvent.focus(input);
+    fireEvent.change(input, {
       target: { value: "invoice" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Has attachments" }));
@@ -84,7 +91,9 @@ describe("SearchBar", () => {
       },
     ]);
     render(<SearchBar />);
-    fireEvent.change(screen.getByRole("textbox"), {
+    const input = screen.getByRole("textbox");
+    fireEvent.focus(input);
+    fireEvent.change(input, {
       target: { value: "invoice" },
     });
     await act(async () => {
@@ -99,7 +108,9 @@ describe("SearchBar", () => {
   it("scopes to Inbox and expands to all folders without changing the query", async () => {
     vi.mocked(searchMessages).mockResolvedValue([]);
     render(<SearchBar />);
-    fireEvent.change(screen.getByRole("textbox"), {
+    const input = screen.getByRole("textbox");
+    fireEvent.focus(input);
+    fireEvent.change(input, {
       target: { value: "invoice" },
     });
     await act(async () => {
@@ -130,7 +141,9 @@ describe("SearchBar", () => {
       }),
     );
     render(<SearchBar />);
-    fireEvent.change(screen.getByRole("textbox"), {
+    const input = screen.getByRole("textbox");
+    fireEvent.focus(input);
+    fireEvent.change(input, {
       target: { value: "invoice" },
     });
     await act(async () => {
@@ -148,7 +161,9 @@ describe("SearchBar", () => {
       new Error("Database unavailable"),
     );
     render(<SearchBar />);
-    fireEvent.change(screen.getByRole("textbox"), {
+    const input = screen.getByRole("textbox");
+    fireEvent.focus(input);
+    fireEvent.change(input, {
       target: { value: "invoice" },
     });
     await act(async () => {

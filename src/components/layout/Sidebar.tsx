@@ -42,6 +42,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useTaskStore } from "@/stores/taskStore";
+import { useShortcutStore } from "@/stores/shortcutStore";
 
 import { Tooltip } from "@/components/ui/Tooltip";
 interface SidebarProps {
@@ -219,6 +220,7 @@ export function Sidebar({ collapsed }: SidebarProps) {
   const activeLabel = useActiveLabel();
   const toggleSidebar = useUIStore((s) => s.toggleSidebar);
   const sidebarNavConfig = useUIStore((s) => s.sidebarNavConfig);
+  const keyMap = useShortcutStore((s) => s.keyMap);
   const taskIncompleteCount = useTaskStore((s) => s.incompleteCount);
   const settingsOpen = useUIStore((s) => s.settingsOpen);
   const inboxViewMode = useUIStore((s) => s.inboxViewMode);
@@ -638,7 +640,7 @@ export function Sidebar({ collapsed }: SidebarProps) {
 
       {/* Bottom bar: Settings + collapse toggle */}
       <div className={`py-2 flex ${collapsed ? "flex-col items-center gap-1 px-2" : "items-center gap-1 px-3"}`}>
-        <Tooltip content="Settings (Ctrl+,)"><button
+        <Tooltip content={`Settings (${keyMap["app.settings"] ?? "Ctrl+,"})`}><button
           onClick={() => navigateToLabel("settings")}
           className={`flex items-center text-sm rounded-md transition-colors ${
             collapsed ? "p-2 justify-center" : "gap-3 flex-1 px-3 py-2 text-left"

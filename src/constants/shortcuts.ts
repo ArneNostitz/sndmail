@@ -27,6 +27,7 @@ export const SHORTCUTS: ShortcutCategory[] = [
     { id: "nav.goNewsletters", keys: "g then n", desc: "Go to Newsletters" },
     { id: "nav.goTasks", keys: "g then k", desc: "Go to Tasks" },
     { id: "nav.goAttachments", keys: "g then a", desc: "Go to Attachments" },
+    { id: "nav.goTop", keys: "Ctrl+Up", desc: "Go to top of list" },
     { id: "nav.escape", keys: "Escape", desc: "Close / Go back" },
   ]},
   { category: "Actions", items: [
@@ -54,6 +55,11 @@ export const SHORTCUTS: ShortcutCategory[] = [
     { id: "app.askInbox", keys: "i", desc: "Ask AI about your inbox" },
     { id: "app.help", keys: "?", desc: "Show keyboard shortcuts" },
     { id: "app.syncFolder", keys: "F5", desc: "Sync current folder" },
+  ]},
+  { category: "Composer", items: [
+    { id: "composer.bold", keys: "Ctrl+B", desc: "Bold" },
+    { id: "composer.italic", keys: "Ctrl+I", desc: "Italic" },
+    { id: "composer.underline", keys: "Ctrl+U", desc: "Underline" },
   ]},
 ];
 

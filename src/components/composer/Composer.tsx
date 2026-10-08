@@ -19,6 +19,8 @@ import { FromSelector } from "./FromSelector";
 import { useComposerStore } from "@/stores/composerStore";
 import { useAccountStore } from "@/stores/accountStore";
 import { useUIStore } from "@/stores/uiStore";
+import { useShortcutStore } from "@/stores/shortcutStore";
+import { matchesKey } from "@/hooks/useKeyboardShortcuts";
 import { sendEmail, archiveThread, deleteDraft as deleteDraftAction } from "@/services/emailActions";
 import { buildRawEmail } from "@/utils/emailBuilder";
 import { upsertContact } from "@/services/db/contacts";
@@ -67,6 +69,7 @@ export function Composer() {
   const accounts = useAccountStore((s) => s.accounts);
   const composerAccountId = useComposerStore((s) => s.accountId);
   const setComposerAccountId = useComposerStore((s) => s.setAccountId);
+  const keyMap = useShortcutStore((s) => s.keyMap);
   // A reply carries the mailbox that holds its thread; new mail uses the
   // account currently selected in the sidebar.
   const sendAccountId = composerAccountId ?? activeAccountId;
@@ -138,6 +141,25 @@ export function Composer() {
       attributes: {
         class:
           "prose prose-sm max-w-none px-4 py-3 min-h-[200px] focus:outline-none text-text-primary",
+      },
+      handleKeyDown: (_view, event) => {
+        if (!editor) return false;
+        if (matchesKey(keyMap["composer.bold"] ?? "Ctrl+B", event)) {
+          event.preventDefault();
+          editor.chain().focus().toggleBold().run();
+          return true;
+        }
+        if (matchesKey(keyMap["composer.italic"] ?? "Ctrl+I", event)) {
+          event.preventDefault();
+          editor.chain().focus().toggleItalic().run();
+          return true;
+        }
+        if (matchesKey(keyMap["composer.underline"] ?? "Ctrl+U", event)) {
+          event.preventDefault();
+          editor.chain().focus().toggleUnderline().run();
+          return true;
+        }
+        return false;
       },
       handleDrop: (_view, event) => {
         // Prevent TipTap from handling file drops as inline content.

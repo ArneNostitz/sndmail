@@ -360,8 +360,19 @@ export async function executeEmailAction(
 ): Promise<ActionResult> {
   const action = await withMessageIds(accountId, rawAction);
 
-  // 1. Optimistic UI update
-  applyOptimisticUpdate(action);
+  // 1. Optimistic UI update (skip when the row is already leaving from a
+  //    bulk action, so a large selection doesn't schedule redundant updates)
+  const isRemoveAction =
+    action.type === "archive" ||
+    action.type === "trash" ||
+    action.type === "permanentDelete" ||
+    action.type === "moveToFolder";
+  const alreadyRemoving =
+    isRemoveAction &&
+    useThreadStore.getState().removingThreadIds?.has(action.threadId);
+  if (!alreadyRemoving) {
+    applyOptimisticUpdate(action);
+  }
 
   // 2. Local DB update
   try {

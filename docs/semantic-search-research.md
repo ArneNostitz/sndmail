@@ -156,14 +156,17 @@ already treats semantic results as an async, additive merge over instant FTS
 
 | Architecture | Idle RSS | Idle CPU | Query | Background indexing |
 |---|---|---|---|---|
-| Typesense enabled (today) | **~1–2 GB est.** (server + fp32 E5 in server + worker) **[verified estimate, not measured]** | ~0 (worker sleeps 300s) | fast warm | resident server must be alive during embed batches |
+| Typesense enabled (today) | **~870 MB measured** at 7,960 messages / 2,494 passages and rising; planning doc estimate ~1–2 GB **[verified measurement + doc estimate]** | ~0 (worker sleeps 300s) | fast warm (~20 ms warm vector query over 2.5k passages) | resident server must be alive during embed batches |
 | Typesense stopped-when-idle, start on demand | 0 between uses | 0 | + server/model load seconds cold **[estimate]** | periodic wake-ups defeat "idle 0" |
 | **One-shot process + SQLite vectors (proposed)** | **0** — nothing resident | **0** | ~0.3–1 s cold, FTS instant meanwhile | short burst worker after syncs: spawn, embed pending messages, exit |
 | agent-brain stack | FastAPI+Chroma+Python: hundreds of MB **[estimate]** | always | fast | always-on server |
 
 Disk: vectors int8 in existing sndmail.db ≈ **20 MB per 50k passages**, plus
 int8 model 25 MB (MiniLM) or ~120 MB (e5-small) — vs today's ~453 MiB model +
-Typesense index files **[verified sizes/estimates as labeled]**.
+Typesense index files **[verified sizes/estimates as labeled]**. Measured
+Typesense index data at 2,494 passages was ~20 MB; the loaded server RSS was
+~716 MB, so the dominant cost is the in-memory model + keyword index, not the
+passage vectors themselves.
 
 ## 5. Ranked recommendation
 
@@ -188,17 +191,19 @@ Typesense index files **[verified sizes/estimates as labeled]**.
    latency (30–40 ms scan vs single-digit ms) ever matters — at 10k emails
    it will not.
 4. **Keep today's Typesense runtime** only if measured real RSS on our corpus
-   comes in far under the 1–2 GB estimate (measure first — see below). Nothing
-   in the research suggests it will: an in-memory index + fp32 model in-process
-   is structural, not a tuning issue.
+   comes in far under the 1–2 GB estimate. **Measurement on Arne's mailbox
+   shows ~870 MB at only 2,494 passages**, so Typesense does not pass the idle
+   budget. The in-memory model + keyword index is structural, not tunable.
 5. **Rejected:** agent-brain and any Python/server stack; hnswlib, LanceDB,
    Qdrant local, Milvus Lite; cloud embeddings (privacy + network dependency).
 
 ## 6. Decisive measurements before any migration
 
 1. **Measure actual Typesense-enabled RSS today** on a real ~7.5k–10k mailbox
-   (`ps`/`footprint` on server + worker, idle and mid-reindex). Our 1–2 GB
-   number is a planning estimate, not data.
+   (`ps`/`footprint` on server + worker, idle and mid-reindex). **Done:**
+   ~870 MB combined at 2,494 passages on 7,960 messages; server ~716 MB,
+   worker ~154 MB. The planning estimate is now confirmed as directionally
+   correct, not a worst case.
 2. **Quality eval on real mail:** take ~200 real queries with known relevant
    threads, compare FTS-only vs hybrid with e5-small vs MiniLM (recall@10) —
    semantic value over FTS on mail is the premise worth validating.
@@ -216,6 +221,9 @@ Typesense index files **[verified sizes/estimates as labeled]**.
 - 1-bit recall figures in circulation come from OpenAI-sized embeddings;
   expect worse on 384-d models — hence int8 (or bit+float rescore) as the
   recommended precision.
+- The Typesense measurement was taken while indexing was ongoing; a fully idle
+  (post-backfill) RSS may be slightly lower, but the server still holds the
+  model in memory and the whole keyword index is RAM-resident.
 - No cited benchmark covers incremental embedding under concurrent mail sync;
   item 4 above is required before committing.
 - Quality claims for e5-small vs MiniLM on *email* text are untested here;

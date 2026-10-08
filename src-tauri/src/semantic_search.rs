@@ -19,7 +19,8 @@ const MODEL_DIR: &str = "ts_multilingual-e5-small";
 const MODEL_MD5: &str = "59cdc138465277af7094b9b7872c6b7a";
 const VOCAB_MD5: &str = "bf25eb5120ad92ef5c7d8596b5dc4046";
 const VOCAB: &str = "sentencepiece.bpe.model";
-const MODEL_ORIGIN: &str = "https://models.typesense.org/public/multilingual-e5-small";
+const MODEL_ORIGIN: &str = "https://huggingface.co/typesense/models-moved/resolve/main/multilingual-e5-small";
+const MODEL_ORIGIN_FALLBACK: &str = "https://models.typesense.org/public/multilingual-e5-small";
 const URL: &str = "http://127.0.0.1:8108";
 const COLLECTION: &str = "universal-search";
 const CANCELLED: &str = "Semantic search operation cancelled.";
@@ -577,13 +578,30 @@ impl SemanticSearchManager {
     async fn download_files(&self, generation: u64, stage: &Path) -> Result<(), String> {
         tokio::fs::create_dir_all(stage).await.map_err(|_| "Cannot create model download staging directory.".to_string())?;
         let client = reqwest::Client::builder().https_only(true).no_proxy()
-            .redirect(reqwest::redirect::Policy::none()).connect_timeout(Duration::from_secs(15))
+            .connect_timeout(Duration::from_secs(15))
             .build().map_err(|_| "Cannot initialize model downloads.".to_string())?;
         let files = [("config.json", None), ("model.onnx", Some(MODEL_MD5)), (VOCAB, Some(VOCAB_MD5))];
+        // Try the primary origin first; fall back if the canonical Typesense
+        // mirror changes or is unreachable. Redirects are followed by default.
+        let origins: [&str; 2] = [MODEL_ORIGIN, MODEL_ORIGIN_FALLBACK];
+        let mut last_origin_error: Option<String> = None;
+        let mut resolved_origin: &str = MODEL_ORIGIN;
+        for origin in origins {
+            let mut ok = true;
+            for (name, _) in files {
+                let response = client.head(format!("{origin}/{name}")).timeout(Duration::from_secs(15)).send().await;
+                if response.ok().filter(|r| r.status().is_success()).is_none() { ok = false; break; }
+            }
+            if ok { resolved_origin = origin; last_origin_error = None; break; }
+            last_origin_error = Some(format!("{origin} did not report all model files."));
+        }
+        if let Some(err) = last_origin_error {
+            log::warn!("semantic model origin probe failed: {}", err);
+        }
         // Content-Length is optional; never substitute an estimate for measured bytes.
         let mut total = Some(0u64);
         for (name, _) in files {
-            let response = client.head(format!("{MODEL_ORIGIN}/{name}")).timeout(Duration::from_secs(15)).send().await;
+            let response = client.head(format!("{resolved_origin}/{name}")).timeout(Duration::from_secs(15)).send().await;
             let length = response.ok().filter(|r| r.status().is_success()).and_then(|r| r.content_length());
             total = total.zip(length).and_then(|(a, b)| a.checked_add(b));
         }
@@ -593,7 +611,7 @@ impl SemanticSearchManager {
             // The outer download cancellation select also covers this header
             // deadline; a server that accepts a socket cannot stall it forever.
             let mut response = tokio::time::timeout(
-                Duration::from_secs(30), client.get(format!("{MODEL_ORIGIN}/{name}")).send()
+                Duration::from_secs(30), client.get(format!("{resolved_origin}/{name}")).send()
             ).await.map_err(|_| "The model server did not send response headers within 30 seconds. Retry the download.".to_string())?
                 .map_err(|_| "Model download failed. Check your connection and retry.".to_string())?
                 .error_for_status().map_err(|_| "The official model download is unavailable. Retry later.".to_string())?;
@@ -686,7 +704,7 @@ impl SemanticSearchManager {
         }
         // Children inherit background priority. ONNX thread counts themselves
         // are NOT capped by Typesense's request-pool-size setting.
-        let mut child = command.spawn().map_err(|_| "Cannot launch the bundled semantic runtime. Check that this sndmail installation contains executable, signed runtime files.".to_string())?;
+        let mut child = command.spawn().map_err(|e| format!("Cannot launch the bundled semantic runtime: {e}"))?;
         let stdout = child.stdout.take();
         if worker {
             let group_id = child.id();
@@ -736,7 +754,7 @@ impl SemanticSearchManager {
                 .map_err(|_| "Semantic runtime startup task failed.".to_string())??;
         }
         let key = self.inner.lock().unwrap().config.as_ref().ok_or("Private search configuration is unavailable.")?.api_key.clone();
-        let client = reqwest::Client::builder().no_proxy().redirect(reqwest::redirect::Policy::none())
+        let client = reqwest::Client::builder().no_proxy()
             .timeout(Duration::from_secs(2)).build().map_err(|_| "Cannot initialize the local search connection.".to_string())?;
         let deadline = Instant::now() + Duration::from_secs(45);
         loop {
@@ -910,9 +928,20 @@ impl SemanticSearchManager {
 fn background_command(node: &Path) -> Command {
     #[cfg(target_os = "macos")]
     {
-        let mut command = Command::new("/usr/bin/taskpolicy");
-        command.args(["-b", "/usr/bin/nice", "-n", "15"]).arg(node);
-        command
+        // taskpolicy is only available on some macOS configurations; fall back
+        // to nice or a plain node launch so development and TestFlight builds
+        // do not fail with "No such file or directory" on this path.
+        if Path::new("/usr/bin/taskpolicy").is_file() {
+            let mut command = Command::new("/usr/bin/taskpolicy");
+            command.args(["-b", "/usr/bin/nice", "-n", "15"]).arg(node);
+            command
+        } else if Path::new("/usr/bin/nice").is_file() {
+            let mut command = Command::new("/usr/bin/nice");
+            command.args(["-n", "15"]).arg(node);
+            command
+        } else {
+            Command::new(node)
+        }
     }
     #[cfg(target_os = "linux")]
     {

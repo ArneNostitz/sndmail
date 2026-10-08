@@ -365,7 +365,7 @@ export function SearchBar() {
                 content={
                   isSemanticSearchReady()
                     ? "Include semantic (meaning-based) matches on top of keyword matches"
-                    : "Enable Semantic Search in Settings → General first"
+                    : "Enable Semantic Search in Settings → Semantic Search first"
                 }
                 placement="top"
               >

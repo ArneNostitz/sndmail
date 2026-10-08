@@ -247,6 +247,11 @@ describe("uiStore", () => {
       expect(useUIStore.getState().settingsTab).toBe("accounts");
     });
 
+    it("openSettings should support the semantic search tab", () => {
+      useUIStore.getState().openSettings("semantic-search");
+      expect(useUIStore.getState().settingsTab).toBe("semantic-search");
+    });
+
     it("openSettings should keep the current tab when none is given", () => {
       useUIStore.setState({ settingsTab: "ai" });
       useUIStore.getState().openSettings();

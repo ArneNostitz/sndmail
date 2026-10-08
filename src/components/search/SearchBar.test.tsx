@@ -221,6 +221,30 @@ describe("SearchBar", () => {
     });
   });
 
+  it("stays keyword-only when the semantic toggle is switched off", async () => {
+    vi.mocked(searchMessages).mockResolvedValue([]);
+    semanticState.ready = true;
+    render(<SearchBar />);
+    const input = screen.getByRole("textbox");
+    fireEvent.focus(input);
+    fireEvent.change(input, {
+      target: { value: "invoice" },
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(250);
+    });
+    expect(semanticState.search).toHaveBeenCalledWith("invoice", 100);
+    semanticState.search.mockClear();
+    const toggle = screen.getByRole("button", { name: /Semantic/ });
+    expect(toggle).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-pressed", "false");
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(250);
+    });
+    expect(semanticState.search).not.toHaveBeenCalled();
+  });
+
   it("stays keyword-only when the semantic index is not ready", async () => {
     vi.mocked(searchMessages).mockResolvedValue([]);
     render(<SearchBar />);

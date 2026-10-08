@@ -4,7 +4,7 @@ import { useAccountStore, listedAccountIds } from "@/stores/accountStore";
 import { useThreadStore, type SearchMatch } from "@/stores/threadStore";
 import { useSmartFolderStore } from "@/stores/smartFolderStore";
 import { InputDialog } from "@/components/ui/InputDialog";
-import { Search, X, FolderPlus } from "lucide-react";
+import { Search, X, FolderPlus, Brain } from "lucide-react";
 
 import { useActiveLabel } from "@/hooks/useRouteNavigation";
 import { useLabelStore } from "@/stores/labelStore";
@@ -62,6 +62,7 @@ export function SearchBar() {
   const accountKey = useAccountStore((s) => listedAccountIds(s).join(","));
   const [scope, setScope] = useState("current");
   const [sort, setSort] = useState<"newest" | "oldest" | "relevance">("newest");
+  const [semanticEnabled, setSemanticEnabled] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
   const [revision, setRevision] = useState(0);
@@ -156,9 +157,11 @@ export function SearchBar() {
         // is additive and best-effort: any failure leaves the keyword results
         // untouched, so it never breaks the search itself. A smart folder's
         // saved query cannot be applied to the index, so it stays keyword-only.
+        // The popup toggle turns the semantic layer off for this search.
         if (
           parsedQuery.freeText?.trim() &&
           !(scope === "current" && smartFolder) &&
+          semanticEnabled &&
           isSemanticSearchReady()
         ) {
           try {
@@ -207,6 +210,7 @@ export function SearchBar() {
     accountKey,
     revision,
     smartFolder,
+    semanticEnabled,
   ]);
 
   const [showSaveModal, setShowSaveModal] = useState(false);
@@ -356,6 +360,31 @@ export function SearchBar() {
                   </button>
                 ))}
             </div>
+            <div className="flex flex-wrap gap-1" role="group" aria-label="Semantic search">
+              <Tooltip
+                content={
+                  isSemanticSearchReady()
+                    ? "Include semantic (meaning-based) matches on top of keyword matches"
+                    : "Enable Semantic Search in Settings → General first"
+                }
+                placement="top"
+              >
+                <button
+                  type="button"
+                  aria-pressed={semanticEnabled}
+                  disabled={!isSemanticSearchReady()}
+                  onClick={() => setSemanticEnabled((value) => !value)}
+                  className={`flex items-center gap-1 rounded px-2 py-0.5 text-xs ${
+                    semanticEnabled && isSemanticSearchReady()
+                      ? "bg-accent text-white"
+                      : "bg-bg-tertiary text-text-secondary hover:bg-bg-hover"
+                  } disabled:cursor-not-allowed disabled:opacity-60`}
+                >
+                  <Brain size={12} />
+                  Semantic
+                </button>
+              </Tooltip>
+            </div>
             {searchQuery && (
               <p role="status" className="pt-1 text-xs text-text-tertiary">
                 {hasIncompleteOperator(searchQuery)
@@ -363,7 +392,9 @@ export function SearchBar() {
                   : searching
                     ? "Searching…"
                     : `Searching downloaded mail • up to 500 message matches${
-                        isSemanticSearchReady() ? " • semantic matches included" : ""
+                        semanticEnabled && isSemanticSearchReady()
+                          ? " • semantic matches included"
+                          : ""
                       }`}
               </p>
             )}

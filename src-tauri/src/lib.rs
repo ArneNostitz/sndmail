@@ -287,6 +287,7 @@ pub fn run() {
             semantic_search::semantic_search_set_enabled,
             semantic_search::semantic_search_download_model,
             semantic_search::semantic_search_reindex,
+            semantic_search::semantic_search_query,
             notifications::notification_native_available,
             notifications::notification_native_request_permission,
             notifications::notification_native_register_categories,

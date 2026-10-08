@@ -74,6 +74,41 @@ pub struct Status {
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct SemanticEvidence {
+    passage: String,
+    title_context: Option<String>,
+    distance: f64,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SearcherHit {
+    id: String,
+    title: String,
+    #[serde(default)]
+    subtitle: Option<String>,
+    #[serde(default)]
+    snippet: Option<String>,
+    #[serde(default)]
+    tags: Vec<String>,
+    #[serde(default)]
+    metadata: serde_json::Value,
+    #[serde(default)]
+    match_kind: Option<String>,
+    #[serde(default)]
+    relevance: Option<f64>,
+    #[serde(default)]
+    semantic_evidence: Option<SemanticEvidence>,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchResponse {
+    hits: Vec<SearcherHit>,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct Config {
     enabled: bool,
     api_key: String,
@@ -221,7 +256,7 @@ impl SemanticSearchManager {
         let supported = cfg!(all(any(target_os = "macos", target_os = "linux"), any(target_arch = "aarch64", target_arch = "x86_64")))
             && data.is_some()
             && resources.as_ref().is_some_and(|p| {
-                ["node", "typesense-server", "indexer.cjs"].iter().all(|name| p.join(name).is_file())
+                ["node", "typesense-server", "indexer.cjs", "searcher.cjs"].iter().all(|name| p.join(name).is_file())
             });
         #[cfg(target_os = "macos")]
         let discovery = app.path().home_dir().ok().map(|p| p.join("Library/Application Support/universal-search/sndmail-runtime.json"));
@@ -792,6 +827,66 @@ impl SemanticSearchManager {
         self.retire(children);
     }
 
+    // A short-lived read-only searcher spawn. It needs neither the worker lock
+    // nor the supervisor: the process is its own lifetime and is always killed
+    // and reaped by this method, success or failure.
+    fn query(&self, query: String, limit: u32) -> Result<SearchResponse, String> {
+        if query.trim().is_empty() { return Ok(SearchResponse { hits: Vec::new() }); }
+        let inner = self.inner.lock().unwrap();
+        if inner.closing { return Err("sndmail is quitting.".into()); }
+        if !inner.status.supported { return Err("This sndmail build does not contain a supported semantic runtime.".into()); }
+        if !inner.status.enabled { return Err("Local semantic search is disabled.".into()); }
+        if !matches!(inner.status.state.as_str(), "ready" | "indexing") {
+            return Err("Local semantic search is still starting up or indexing.".into());
+        }
+        let api_key = inner.config.as_ref().ok_or("Private search configuration is unavailable.")?.api_key.clone();
+        drop(inner);
+        // A dedicated minimal config file: the worker's worker.json is rewritten
+        // by every indexer launch and carries lock fields the searcher ignores.
+        let config_path = self.root.join("searcher.json");
+        private_write(&config_path, &encode(&serde_json::json!({
+            "url": URL, "apiKey": api_key, "collection": COLLECTION
+        }))?)?;
+        let node = self.resources.join("node");
+        let mut command = background_command(&node);
+        command.arg(self.resources.join("searcher.cjs")).arg(&config_path)
+            .arg("--query").arg(&query)
+            .arg("--source").arg("sndmail")
+            .arg("--limit").arg(limit.to_string())
+            .current_dir(&self.root).env_clear()
+            .stdin(Stdio::null()).stderr(Stdio::null()).stdout(Stdio::piped());
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::CommandExt;
+            command.process_group(0);
+        }
+        let mut child = command.spawn().map_err(|_| "Cannot launch the bundled semantic searcher. Check that this sndmail installation contains executable, signed runtime files.".to_string())?;
+        let stdout = child.stdout.take().ok_or("Semantic searcher output is unavailable.")?;
+        let (tx, rx) = std::sync::mpsc::channel::<Vec<u8>>();
+        let reader = std::thread::spawn(move || {
+            let mut output = Vec::new();
+            // One bounded JSON line, never an unbounded stream.
+            let _ = stdout.take(1024 * 1024).read_to_end(&mut output);
+            let _ = tx.send(output);
+        });
+        let output = match rx.recv_timeout(Duration::from_secs(10)) {
+            Ok(bytes) => bytes,
+            Err(_) => {
+                stop_child(&mut child);
+                let _ = reader.join();
+                return Err("Local semantic search timed out.".into());
+            }
+        };
+        let _ = reader.join();
+        reap_child(&mut child);
+        let value: serde_json::Value = serde_json::from_slice(&output)
+            .map_err(|_| "The local semantic search response is invalid.".to_string())?;
+        if let Some(error) = value.get("error").and_then(|e| e.as_str()) {
+            return Err(error.to_string());
+        }
+        serde_json::from_value(value).map_err(|_| "The local semantic search response is invalid.".to_string())
+    }
+
     pub fn shutdown(&self) {
         let mut inner = self.inner.lock().unwrap();
         if inner.closing { return; }
@@ -829,32 +924,43 @@ fn background_command(node: &Path) -> Command {
     { Command::new(node) }
 }
 
+fn stop_child(child: &mut Child) {
+    // Only process groups created and retained by this manager are signaled.
+    // Never use pid files, pkill, executable names, ports, or external PIDs.
+    if matches!(child.try_wait(), Ok(Some(_))) { return; }
+    #[cfg(unix)]
+    unsafe { libc::kill(-(child.id() as i32), libc::SIGTERM); }
+    #[cfg(not(unix))]
+    let _ = child.kill();
+    let deadline = Instant::now() + Duration::from_secs(2);
+    while Instant::now() < deadline {
+        if matches!(child.try_wait(), Ok(Some(_))) { return; }
+        std::thread::sleep(Duration::from_millis(25));
+    }
+    #[cfg(unix)]
+    unsafe { libc::kill(-(child.id() as i32), libc::SIGKILL); }
+    #[cfg(not(unix))]
+    let _ = child.kill();
+    // Bound the wait even if the OS cannot immediately reap a stuck child.
+    let deadline = Instant::now() + Duration::from_millis(500);
+    while Instant::now() < deadline {
+        if matches!(child.try_wait(), Ok(Some(_))) { return; }
+        std::thread::sleep(Duration::from_millis(25));
+    }
+}
+
+fn reap_child(child: &mut Child) {
+    let deadline = Instant::now() + Duration::from_secs(2);
+    while Instant::now() < deadline {
+        if matches!(child.try_wait(), Ok(Some(_))) { return; }
+        std::thread::sleep(Duration::from_millis(25));
+    }
+    stop_child(child);
+}
+
 fn stop_children(children: Children) {
     for mut child in [children.worker, children.server].into_iter().flatten() {
-        // Only process groups created and retained by this manager are signaled.
-        // Never use pid files, pkill, executable names, ports, or external PIDs.
-        if matches!(child.try_wait(), Ok(Some(_))) { continue; }
-        #[cfg(unix)]
-        unsafe { libc::kill(-(child.id() as i32), libc::SIGTERM); }
-        #[cfg(not(unix))]
-        let _ = child.kill();
-        let deadline = Instant::now() + Duration::from_secs(2);
-        while Instant::now() < deadline {
-            if matches!(child.try_wait(), Ok(Some(_))) { break; }
-            std::thread::sleep(Duration::from_millis(25));
-        }
-        if !matches!(child.try_wait(), Ok(Some(_))) {
-            #[cfg(unix)]
-            unsafe { libc::kill(-(child.id() as i32), libc::SIGKILL); }
-            #[cfg(not(unix))]
-            let _ = child.kill();
-            // Bound quit even if the OS cannot immediately reap a stuck child.
-            let deadline = Instant::now() + Duration::from_millis(500);
-            while Instant::now() < deadline {
-                if matches!(child.try_wait(), Ok(Some(_))) { break; }
-                std::thread::sleep(Duration::from_millis(25));
-            }
-        }
+        stop_child(&mut child);
     }
 }
 
@@ -881,6 +987,14 @@ pub async fn semantic_search_download_model(manager: tauri::State<'_, Arc<Semant
     let manager = manager.inner().clone();
     tauri::async_runtime::spawn_blocking(move || manager.download_model()).await
         .map_err(|_| "Model download task could not start.".to_string())?
+}
+
+#[tauri::command]
+pub async fn semantic_search_query(manager: tauri::State<'_, Arc<SemanticSearchManager>>, query: String, limit: Option<u32>) -> Result<SearchResponse, String> {
+    let limit = limit.unwrap_or(50).clamp(1, 100);
+    let manager = manager.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || manager.query(query, limit)).await
+        .map_err(|_| "Semantic search task failed.".to_string())?
 }
 
 #[tauri::command]

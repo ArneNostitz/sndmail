@@ -4,6 +4,11 @@ import { useThreadStore } from "@/stores/threadStore";
 import { searchMessages } from "@/services/db/search";
 
 vi.mock("@/services/db/search", () => ({ searchMessages: vi.fn() }));
+const semanticState = vi.hoisted(() => ({ ready: false, search: vi.fn() }));
+vi.mock("@/services/search/semanticSearchRuntime", () => ({
+  isSemanticSearchReady: () => semanticState.ready,
+  semanticSearch: semanticState.search,
+}));
 vi.mock("@/hooks/useRouteNavigation", () => ({
   useActiveLabel: () => "inbox",
 }));
@@ -18,6 +23,8 @@ describe("SearchBar", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.clearAllMocks();
+    semanticState.ready = false;
+    semanticState.search.mockReset();
     useThreadStore.getState().clearSearch();
   });
   afterEach(() => vi.useRealTimers());
@@ -149,5 +156,97 @@ describe("SearchBar", () => {
     });
     expect(screen.getByRole("alert")).toHaveTextContent("Database unavailable");
     expect(useThreadStore.getState().searchThreadIds?.size).toBe(0);
+  });
+
+  it("merges semantic hits on top of keyword matches when the index is ready", async () => {
+    vi.mocked(searchMessages).mockResolvedValue([
+      {
+        message_id: "m1",
+        account_id: "a",
+        thread_id: "t1",
+        subject: "A subject",
+        from_name: "Mara",
+        from_address: "mara@example.com",
+        snippet: "Keyword snippet",
+        match_excerpt: "Keyword excerpt",
+        date: 1,
+        rank: 0,
+      },
+    ]);
+    semanticState.ready = true;
+    semanticState.search.mockResolvedValue({
+      hits: [
+        {
+          id: "doc-2",
+          title: "Another subject",
+          snippet: "Semantic excerpt",
+          tags: ["a", "INBOX"],
+          metadata: { account: "a", threadId: "t2", messageId: "m2" },
+          matchKind: "hybrid",
+          relevance: 0.9,
+        },
+      ],
+    });
+    render(<SearchBar />);
+    fireEvent.change(screen.getByRole("textbox"), {
+      target: { value: "invoice" },
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(250);
+    });
+    expect(semanticState.search).toHaveBeenCalledWith("invoice", 100);
+    const matches = useThreadStore.getState().searchMatches;
+    expect(matches.get("t1")).toEqual({
+      messageIds: new Set(["m1"]),
+      excerpt: "Keyword excerpt",
+    });
+    expect(matches.get("t2")).toEqual({
+      messageIds: new Set(["m2"]),
+      excerpt: "Semantic excerpt",
+    });
+  });
+
+  it("stays keyword-only when the semantic index is not ready", async () => {
+    vi.mocked(searchMessages).mockResolvedValue([]);
+    render(<SearchBar />);
+    fireEvent.change(screen.getByRole("textbox"), {
+      target: { value: "invoice" },
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(250);
+    });
+    expect(semanticState.search).not.toHaveBeenCalled();
+    expect(useThreadStore.getState().searchThreadIds?.size).toBe(0);
+  });
+
+  it("keeps keyword results when the semantic query fails", async () => {
+    vi.mocked(searchMessages).mockResolvedValue([
+      {
+        message_id: "m1",
+        account_id: "a",
+        thread_id: "t1",
+        subject: "A subject",
+        from_name: "Mara",
+        from_address: "mara@example.com",
+        snippet: "Keyword snippet",
+        match_excerpt: "Keyword excerpt",
+        date: 1,
+        rank: 0,
+      },
+    ]);
+    semanticState.ready = true;
+    semanticState.search.mockRejectedValue(new Error("Index unavailable"));
+    render(<SearchBar />);
+    fireEvent.change(screen.getByRole("textbox"), {
+      target: { value: "invoice" },
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(250);
+    });
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(useThreadStore.getState().searchMatches.get("t1")).toEqual({
+      messageIds: new Set(["m1"]),
+      excerpt: "Keyword excerpt",
+    });
   });
 });

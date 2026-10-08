@@ -55,6 +55,7 @@ import {
   Puzzle,
   Keyboard,
   Sparkles,
+  Brain,
   Check,
   Mail,
   Info,
@@ -112,6 +113,7 @@ const tabs: { id: SettingsTab; label: string; icon: LucideIcon }[] = [
   { id: "accounts", label: "Accounts", icon: UserCircle },
   { id: "shortcuts", label: "Shortcuts", icon: Keyboard },
   { id: "ai", label: "AI", icon: Sparkles },
+  { id: "semantic-search", label: "Semantic Search", icon: Brain },
   { id: "about", label: "About", icon: Info },
 ];
 
@@ -941,9 +943,10 @@ export function SettingsPage() {
                     </SettingRow>
                   </Section>
 
-                  <SemanticSearchSettings />
                 </>
               )}
+
+              {activeTab === "semantic-search" && <SemanticSearchSettings />}
 
               {activeTab === "plugins" && (
                 <>

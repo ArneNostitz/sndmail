@@ -28,6 +28,7 @@ export type SettingsTab =
   | "accounts"
   | "shortcuts"
   | "ai"
+  | "semantic-search"
   | "about";
 
 export const SETTINGS_TABS: SettingsTab[] = [
@@ -40,6 +41,7 @@ export const SETTINGS_TABS: SettingsTab[] = [
   "accounts",
   "shortcuts",
   "ai",
+  "semantic-search",
   "about",
 ];
 

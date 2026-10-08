@@ -8,7 +8,7 @@ import {
 
 const VALID_SETTINGS_TABS = [
   "general", "notifications", "composing", "mail-rules", "people",
-  "plugins", "accounts", "shortcuts", "ai", "about",
+  "plugins", "accounts", "shortcuts", "ai", "semantic-search", "about",
 ];
 
 describe("helpContent", () => {

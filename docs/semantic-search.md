@@ -1,54 +1,45 @@
 # Local semantic search runtime
 
-sndmail can own the local Typesense service used for semantic mail search. Its
-Settings controls manage the service and download the multilingual E5 Small
-embedding model. Mail and embeddings stay on the computer; downloading model
-files does not upload mail.
+sndmail can run an optional local semantic search engine. It is not a separate
+service: the engine runs inside the sndmail process itself, with no servers,
+ports, or helper processes of any kind. The controls live in Settings →
+Semantic Search, which also manages the model download. Mail and embeddings
+never leave the machine; downloading model files does not upload mail.
 
 ## Lifecycle
 
-- The feature is opt-in. An enabled runtime starts with sndmail.
-- Disabling it stops sndmail's search server and indexing worker, retaining their
-  stored model and index for later use.
-- Quitting sndmail stops the owned processes. Closing a window hides sndmail in the
-  tray and is not the same as quitting.
-- An unrelated server occupying the search port is a conflict, not permission
-  to kill or adopt that process. An existing Homebrew installation is not
-  automatically removed.
-- Model download, readiness, indexing progress, and errors are shown in Settings.
-- This runtime indexes mail, not arbitrary folders. Existing SQLite FTS search
-  remains separate; enabling the runtime does not replace sndmail's search adapter.
+- Semantic search is opt-in. The base keyword search (SQLite FTS5) is always
+  on and is never replaced; the semantic layer only adds matches on top.
+- Enabling it downloads the multilingual E5 Small model (~453 MiB ONNX, plus a
+  ~17 MB tokenizer file). An existing model from an earlier sndmail version is
+  reused; only missing files are fetched. Downloads are atomic and resumable.
+- While enabled, indexing runs inside sndmail whenever the app is open: a
+  background pass every 5 minutes by default (`SNDMAIL_SEMANTIC_INTERVAL_SECONDS`,
+  clamped to 60–3600) embeds new or changed mail in paced batches (~50% duty
+  cycle) so indexing stays a background task, never a foreground stall. An
+  initial index of a large mailbox can take a while; incremental passes are
+  short.
+- Disabling it stops indexing and unloads the model from memory. The model
+  files and the index are retained on disk, so re-enabling is quick. Nothing
+  runs while it is off: no processes, no ports, no memory held.
+- The model is loaded on demand for indexing and searches, and dropped again
+  after roughly two idle minutes, so an enabled-but-idle sndmail holds no
+  model memory.
+- Model download, readiness, indexing progress, and errors are shown in
+  Settings → Semantic Search. The engine indexes sndmail mail, not arbitrary
+  folders.
+- Supported on macOS and Linux, x64 and arm64. Other platforms report
+  unsupported.
 
-## Resources
+## Storage
 
-The model download is approximately 453 MiB. Planning estimates for the current
-mailbox of roughly 7,500 messages are 1-2 GB of total search data including the
-model and 1-2 GB of server RAM, plus the indexing worker. These are estimates,
-not limits, and exclude any older standalone search installation left on disk.
-
-Embedding imports run sequentially with background pacing and reuse unchanged
-embeddings. Initial indexing may take several hours. Low process priority and
-import pacing reduce sustained load; they do not impose a hard instantaneous
-CPU limit on Typesense's embedding threads.
-
-## Packaging
-
-`npm run semantic:prepare` prepares the worker and native runtimes in
-`src-tauri/semantic-runtime/`; the Tauri production build invokes this step.
-On macOS it provisions the pinned official Typesense release and its license,
-uses a compatible Node runtime from the build environment, and bundles the
-indexer's declared dependencies. Missing required resources fail preparation
-rather than silently producing a macOS app without semantic search.
-
-These are build resources, not dependencies users should install with Homebrew.
-The embedding model is deliberately not baked into the app bundle and is managed
-from Settings instead. Offline preparation requires previously provisioned local
-resources and must not make network requests.
-
-The initial native integration targets macOS. Other platforms report the feature
-as unsupported. Consult the preparation script's runtime instructions before
-producing a distributable build.
-
-Binary redistribution requires the corresponding Typesense, Node, model, and
-bundled dependency licenses and notices. A successful local compilation alone
-does not establish signing, notarization, or cross-machine portability.
+- Model files live under `~/Library/Application Support/com.anydaysomething.sndmail/semantic-search/models/`
+  (platform-equivalent path elsewhere), managed from Settings — never baked
+  into the app bundle.
+- Embeddings live in a sidecar SQLite database (`vectors.db` in the same
+  semantic-search directory), one row per passage, grown incrementally and
+  pruned as mail disappears. It is separate from the main sndmail database and
+  can be deleted at any time; a reindex rebuilds it.
+- Search embeds the query on demand and scans the sidecar by cosine
+  similarity, so a semantic query costs one short CPU burst — no resident
+  index in RAM.

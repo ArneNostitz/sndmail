@@ -30,7 +30,6 @@ const STATE_LABELS: Record<string, string> = {
   starting: "Starting local search",
   indexing: "Indexing mail",
   ready: "Ready",
-  conflict: "Local server cannot start",
   error: "Local search needs attention",
 };
 
@@ -173,7 +172,7 @@ export function SemanticSearchSettings() {
         <div>
           <span id={`${id}-label`} className="text-sm text-text-secondary">Enable local search</span>
           <p id={`${id}-description`} className="mt-0.5 text-xs text-text-tertiary">
-            Private, on-device search of your sndmail mail. The local server and model run as part of sndmail.
+            Private, on-device search of your sndmail mail. The search engine runs inside sndmail itself — no servers or helper processes.
           </p>
         </div>
         <button
@@ -190,8 +189,8 @@ export function SemanticSearchSettings() {
         </button>
       </div>
       <p id={`${id}-enable-help`} className="text-xs text-text-tertiary">
-        Download the model before enabling. Turning this off stops the server and indexer, retaining the model and index.
-        Quitting sndmail stops them; hiding or closing the window keeps them running.
+        Download the model before enabling. Turning this off stops indexing and unloads the model from memory, retaining the model file and index.
+        Indexing runs only while sndmail is open; nothing runs while it is off.
       </p>
 
       <div className="space-y-3 rounded-lg border border-border-primary bg-bg-secondary p-4">
@@ -287,11 +286,13 @@ export function SemanticSearchSettings() {
       </div>
 
       <p className="text-xs text-text-tertiary">
-        Initial model download: about 453 MiB. For a full mail index, plan for roughly 1-2 GB of disk space and RAM;
-        actual use depends on your mailbox and may be higher. Mail stays on your device; internet access is needed to download the model.
+        Model download: about 470 MiB in total — the multilingual embedding model plus its tokenizer; already
+        downloaded files are reused. The mail index itself is small, a few MB per thousand messages. Mail stays on
+        your device; internet access is needed once, to download the model.
       </p>
       <p className="text-xs text-text-tertiary">
-        This runtime powers Raycast for now. Search inside sndmail continues to use its existing full-text search.
+        Semantic matches are merged into normal keyword search automatically. The model is held in memory only while
+        indexing or searching, and is unloaded after a couple of idle minutes.
       </p>
       {status ? (
         <details className="text-xs text-text-tertiary">

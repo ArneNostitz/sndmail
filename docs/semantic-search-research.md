@@ -229,9 +229,49 @@ passage vectors themselves.
 - Quality claims for e5-small vs MiniLM on *email* text are untested here;
   mail has short subjects, signatures and quotes that can skew similarity.
 
+## 7a. Migration addendum (October 2026) — implemented as recommended
+
+The recommendation was executed: sndmail now embeds in-process and stores
+vectors in a SQLite sidecar — the resident Typesense/node runtime is gone.
+
+- **What shipped.** Native Rust modules: `semantic_search.rs` (manager),
+  `semantic_embed.rs` (ort ONNX Runtime + HuggingFace tokenizers,
+  multilingual-e5-small, masked mean pooling, L2 normalize),
+  `semantic_vectors.rs` (sidecar `vectors.db`, brute-force cosine top-N),
+  `semantic_documents.rs` (message collection, passage building, an exact Rust
+  port of the chat-view body trimmer). Same model files: existing ~470 MiB
+  fp32 `model.onnx` reused via MD5 skip-if-valid resume; only `tokenizer.json`
+  (~17 MB, pinned MD5) fetched from the intfloat repo. The old model got no
+  re-download.
+- **Idle budget: zero processes — the structural win.** No server, no ports,
+  no helper binaries; disabled or idle, nothing semantic runs or holds memory.
+  The embedder is loaded on demand and dropped after ~2 idle minutes.
+- **Measured on the real 7,960-message mailbox (native run):**
+  - Indexing (embedder + indexer in-process): RSS ~1.0–1.3 GB, brief ~1.9 GB
+    peak. The model is resident **while working** — by design.
+  - Unload verified live: at the first stable passage count mid-backfill, RSS
+    dropped 1.30 GB → 695 MB within one idle window, then rose again only when
+    the next 300s scan cycle resumed embedding. Backfill total on the real
+    mailbox: 51,853 passages, with the settled idle reading to be taken on the
+    installed rebuild (the dev instance was quit during the window).
+  - Backfill throughput: ~250–290 passages/min sustained (~50% duty pacing);
+    the full mailbox backfill (~51.9k passages from ~7–8k messages, with
+    restarts interrupting the run) completed across sessions.
+  - Storage: `vectors.db` 223 MB for 51,853 passages (384-d fp32 vector + text
+    per passage).
+  - Quality: English meaning query ("train ticket reservation confirmation")
+    surfaced German ÖBB/Westbahn bookings — the multilingual premise holds on
+    this mailbox.
+- **Comparison.** Typesense held ~870 MB while *idle* at 2.5k passages; the
+  native runtime holds ~1.0–1.3 GB only *while embedding* and ~0 the rest of
+  the time, with no second process and no network-facing server.
+- **Still open (same items as §6):** formal quality eval on real queries,
+  cold-start timing, backfill throughput at 10k-mail scale with int8 (int8
+  conversion remains a follow-up; this migration shipped fp32).
+
 ## Sources
 
-- Current architecture/costs: `docs/semantic-search.md`, `scripts/semantic-search/*`, `src-tauri/src/semantic_search.rs` **[verified]**
+- Current architecture/costs: `docs/semantic-search.md`, `src-tauri/src/semantic_search.rs` **[verified]** (Typesense-era `scripts/semantic-search/*` measurements are historical; that runtime has since been removed)
 - DEVONthink: https://discourse.devontechnologies.com/t/broader-ai-intelligence/82238 · /78416 · /86266 · https://www.devontechnologies.com/apps/devonthink/ai · DT FAQ (database tag)
 - Obsidian: https://github.com/brianpetro/obsidian-smart-connections · Logseq: https://github.com/twaugh/logseq-plugin-semantic-search · https://github.com/ergut/mcp-logseq/blob/main/VECTOR_SEARCH.md
 - Apple: https://developer.apple.com/documentation/naturallanguage/nlcontextualembedding · /nlembedding

@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "vite",
     "build": "eslint && tsc && vite build",
-    "build:app": "git pull --ff-only origin main && npm install --no-audit --no-fund && npm run build:signed",
+    "build:app": "node scripts/build-install.mjs",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",

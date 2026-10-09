@@ -14,6 +14,9 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 # Development — starts Tauri app with Vite dev server (port 1420)
 npm run tauri dev
 
+# Build the signed app and install it into /Applications (quits the running app, relaunches)
+npm run build:app
+
 # Build production app
 npm run tauri build
 

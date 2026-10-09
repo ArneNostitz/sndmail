@@ -14,7 +14,10 @@ mod links;
 mod net;
 mod notifications;
 mod oauth;
+mod semantic_documents;
+mod semantic_embed;
 mod semantic_search;
+mod semantic_vectors;
 mod smtp;
 #[path = "worker/login.rs"]
 mod worker_login;

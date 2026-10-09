@@ -1,12 +1,12 @@
-//! sndmail-owned local search. No PATH/Homebrew discovery, external process adoption,
-//! remote mail upload, or credentials in IPC responses. Settings poll Status.
+//! sndmail-owned local semantic search, fully in-process. No servers, helper
+//! processes, ports, remote mail upload, or credentials in IPC responses.
+//! Keyword FTS stays the always-on base; this engine only adds meaning-based
+//! matches. Settings poll Status.
 use serde::{Deserialize, Serialize};
 use std::{
     fs::{self, File, OpenOptions},
-    io::{BufRead, BufReader, Read, Write},
-    net::TcpListener,
+    io::{Read, Write},
     path::{Path, PathBuf},
-    process::{Child, ChildStdout, Command, Stdio},
     sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
@@ -14,46 +14,30 @@ use tauri::Manager;
 use tokio::io::AsyncWriteExt;
 use tokio_util::sync::CancellationToken;
 
+use sqlx::{
+    sqlite::{SqliteConnectOptions, SqlitePoolOptions},
+    SqlitePool,
+};
+
+use crate::semantic_documents::{build_passages, collect_messages, RawMessage};
+use crate::semantic_embed::Embedder;
+use crate::semantic_vectors::VectorStore;
+
 const MODEL_ID: &str = "ts/multilingual-e5-small";
 const MODEL_DIR: &str = "ts_multilingual-e5-small";
 const MODEL_MD5: &str = "59cdc138465277af7094b9b7872c6b7a";
-const VOCAB_MD5: &str = "bf25eb5120ad92ef5c7d8596b5dc4046";
-const VOCAB: &str = "sentencepiece.bpe.model";
+const TOKENIZER_MD5: &str = "5a903c8df2ed2e71ae185cd0393e1625";
+const CANCELLED: &str = "Semantic search operation cancelled.";
+// How long a loaded model stays in memory after the last use before it is
+// dropped, keeping the idle footprint at zero. The next query reloads it.
+const EMBEDDER_IDLE: Duration = Duration::from_secs(120);
+const EMBEDDER_SWEEP: Duration = Duration::from_secs(30);
+
+// model.onnx comes from the Typesense mirror set (the model identity is
+// unchanged); tokenizer.json comes from the canonical intfloat repository.
 const MODEL_ORIGIN: &str = "https://huggingface.co/typesense/models-moved/resolve/main/multilingual-e5-small";
 const MODEL_ORIGIN_FALLBACK: &str = "https://models.typesense.org/public/multilingual-e5-small";
-const URL: &str = "http://127.0.0.1:8108";
-const COLLECTION: &str = "universal-search";
-const CANCELLED: &str = "Semantic search operation cancelled.";
-const CONFLICT: &str = "Port 8108 or 8107 is already in use. Stop the other local search service yourself, then enable sndmail semantic search again. sndmail will not use or stop that service.";
-
-// The bundled Node runtime supervises each child without a shell. A crashed sndmail
-// is noticed within 2s; its child gets SIGTERM, then SIGKILL after another 2s.
-// Normal shutdown also terminates the private process group and reaps this Node
-// process. This watchdog is not a system service and does not restart anything.
-const SUPERVISOR: &str = r#"
-const {spawn} = require('node:child_process');
-const [owner, program, ...args] = process.argv.slice(1);
-let child, timer, stopping = false;
-function stop() {
-  if (stopping) return;
-  stopping = true;
-  clearInterval(timer);
-  if (!child || !child.pid) return process.exit(0);
-  child.kill('SIGTERM');
-  setTimeout(() => child.kill('SIGKILL'), 2000).unref();
-}
-process.on('SIGTERM', stop);
-process.on('SIGINT', stop);
-child = spawn(program, args, {stdio: 'inherit', env: process.env});
-child.on('error', () => process.exit(1));
-child.on('exit', code => process.exit(stopping ? 0 : (code ?? 1)));
-timer = setInterval(() => {
-  try {
-    if (process.ppid !== Number(owner)) return stop();
-    process.kill(Number(owner), 0);
-  } catch { stop(); }
-}, 2000);
-"#;
+const TOKENIZER_ORIGIN: &str = "https://huggingface.co/intfloat/multilingual-e5-small/resolve/main";
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -61,7 +45,7 @@ pub struct Status {
     supported: bool,
     enabled: bool,
     // unsupported | disabled | model_required | downloading | starting |
-    // indexing | ready | conflict | error
+    // indexing | ready | error
     state: String,
     // missing | downloading | ready | error
     model_state: String,
@@ -112,27 +96,6 @@ pub struct SearchResponse {
 #[serde(rename_all = "camelCase")]
 struct Config {
     enabled: bool,
-    api_key: String,
-}
-
-#[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct WorkerOwnership {
-    group_id: u32,
-    owner_token: String,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct WorkerLockMarker {
-    pid: u32,
-    owner_token: String,
-}
-
-#[derive(Default)]
-struct Children {
-    server: Option<Child>,
-    worker: Option<Child>,
 }
 
 struct Inner {
@@ -141,34 +104,25 @@ struct Inner {
     generation: u64,
     cancel: CancellationToken,
     closing: bool,
-    children: Children,
 }
 
 pub struct SemanticSearchManager {
     root: PathBuf,
-    resources: PathBuf,
     database: PathBuf,
-    discovery: Option<PathBuf>,
     inner: Mutex<Inner>,
-    retiring: Mutex<Vec<Arc<Mutex<Option<Children>>>>>,
-    // Serialize short mutations, launches and owned-child cleanup, never a
-    // model transfer, hashing pass, readiness request or worker lifetime.
+    // Loaded lazily on first use, dropped after EMBEDDER_IDLE so nothing stays
+    // resident while the feature is idle.
+    embedder: Mutex<Option<(Arc<Embedder>, Instant)>>,
+    reaper_cancel: CancellationToken,
+    // Serialize short mutations and model transfers, never an embedding pass
+    // or query; those run on blocking threads and only touch the embedder slot.
     transition: Mutex<()>,
 }
 
 fn random_hex() -> Result<String, String> {
     let mut bytes = [0u8; 32];
-    getrandom::getrandom(&mut bytes).map_err(|_| "Cannot generate a private search key.".to_string())?;
+    getrandom::getrandom(&mut bytes).map_err(|_| "Cannot generate a private identifier.".to_string())?;
     Ok(bytes.iter().map(|b| format!("{b:02x}")).collect())
-}
-
-fn worker_lock_token() -> Result<String, String> {
-    let mut bytes = [0u8; 16];
-    getrandom::getrandom(&mut bytes).map_err(|_| "Cannot generate a private worker ownership token.".to_string())?;
-    bytes[6] = (bytes[6] & 0x0f) | 0x40;
-    bytes[8] = (bytes[8] & 0x3f) | 0x80;
-    let hex: String = bytes.iter().map(|b| format!("{b:02x}")).collect();
-    Ok(format!("{}-{}-{}-{}-{}", &hex[..8], &hex[8..12], &hex[12..16], &hex[16..20], &hex[20..]))
 }
 
 fn confirmed_absent(id: i32) -> bool {
@@ -219,15 +173,6 @@ fn encode<T: Serialize>(value: &T) -> Result<Vec<u8>, String> {
     serde_json::to_vec(value).map_err(|_| "Cannot encode semantic search configuration.".to_string())
 }
 
-fn model_config_valid(value: &serde_json::Value) -> bool {
-    // Pin the complete official configuration as well as both file checksums.
-    *value == serde_json::json!({
-        "model_md5": MODEL_MD5, "vocab_file_name": VOCAB,
-        "vocab_md5": VOCAB_MD5, "model_type": "xlm_roberta",
-        "indexing_prefix": "passage:", "query_prefix": "query:"
-    })
-}
-
 fn hash_file(path: &Path, token: &CancellationToken) -> Result<String, String> {
     let mut input = File::open(path).map_err(|_| "Model file is missing or unreadable.".to_string())?;
     let mut hash = md5::Context::new();
@@ -242,33 +187,111 @@ fn hash_file(path: &Path, token: &CancellationToken) -> Result<String, String> {
 }
 
 fn cache_valid(path: &Path, token: &CancellationToken) -> bool {
-    let config = fs::read(path.join("config.json")).ok()
-        .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok());
-    config.as_ref().is_some_and(model_config_valid)
-        && hash_file(&path.join("model.onnx"), token).is_ok_and(|hash| hash == MODEL_MD5)
-        && hash_file(&path.join(VOCAB), token).is_ok_and(|hash| hash == VOCAB_MD5)
+    hash_file(&path.join("model.onnx"), token).is_ok_and(|hash| hash == MODEL_MD5)
+        && hash_file(&path.join("tokenizer.json"), token).is_ok_and(|hash| hash == TOKENIZER_MD5)
+}
+
+fn file_valid(path: &Path, expected_md5: &str, token: &CancellationToken) -> bool {
+    hash_file(path, token).is_ok_and(|hash| hash == expected_md5)
+}
+
+fn semantic_interval() -> Duration {
+    let seconds = std::env::var("SNDMAIL_SEMANTIC_INTERVAL_SECONDS")
+        .ok()
+        .and_then(|value| value.trim().parse::<u64>().ok())
+        .unwrap_or(300)
+        .clamp(60, 3600);
+    Duration::from_secs(seconds)
+}
+
+// One-time cleanup of the retired Typesense-era files inside the private
+// root. Exact names only; a lock directory is only removed when its owning
+// worker is confirmed dead, and an unknown marker is never touched.
+fn clean_legacy(root: &Path, discovery: Option<&Path>) {
+    if let Err(error) = recover_worker_lock(root) {
+        log::warn!("semantic legacy worker lock kept: {}", error);
+    }
+    for name in ["db", "meta", "typesense.ini", "worker.json", "worker-owner.json", "searcher.json"] {
+        let path = root.join(name);
+        let removed = match fs::symlink_metadata(&path) {
+            Ok(metadata) if metadata.file_type().is_dir() => fs::remove_dir_all(&path),
+            Ok(_) => fs::remove_file(&path),
+            Err(_) => Ok(()),
+        };
+        if let Err(error) = removed { log::warn!("semantic legacy file {} kept: {}", name, error); }
+    }
+    if let Some(path) = discovery {
+        // Only our own discovery file is ever removed; anything else is left
+        // untouched for whichever installation owns it.
+        let ours = fs::read(path).ok()
+            .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
+            .is_some_and(|value| value["managedBy"] == "sndmail");
+        if ours {
+            if let Err(error) = fs::remove_file(path) { log::warn!("semantic discovery file kept: {}", error); }
+        }
+    }
+}
+
+fn recover_worker_lock(root: &Path) -> Result<(), String> {
+    const BUSY: &str = "The managed mail indexer lock cannot be safely recovered. Another worker may still be running, or its ownership cannot be confirmed. sndmail left the lock untouched.";
+    let directory = root.join("sndmail-worker-v1.lock");
+    match fs::symlink_metadata(&directory) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Ok(metadata) if metadata.file_type().is_dir() => {},
+        _ => return Err(BUSY.into()),
+    }
+    let ownership_path = root.join("worker-owner.json");
+    let marker_path = directory.join("owner.json");
+    for path in [&ownership_path, &marker_path] {
+        let regular = fs::symlink_metadata(path)
+            .is_ok_and(|metadata| metadata.file_type().is_file() && metadata.len() <= 4096);
+        if !regular { return Err(BUSY.into()); }
+    }
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct WorkerOwnership { group_id: u32, owner_token: String }
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct WorkerLockMarker { pid: u32, owner_token: String }
+    let ownership: WorkerOwnership = serde_json::from_slice(
+        &fs::read(&ownership_path).map_err(|_| BUSY.to_string())?
+    ).map_err(|_| BUSY.to_string())?;
+    let marker: WorkerLockMarker = serde_json::from_slice(
+        &fs::read(&marker_path).map_err(|_| BUSY.to_string())?
+    ).map_err(|_| BUSY.to_string())?;
+    if ownership.owner_token.len() != 36 || marker.owner_token != ownership.owner_token
+        || !(2..=i32::MAX as u32).contains(&ownership.group_id)
+        || !(2..=i32::MAX as u32).contains(&marker.pid)
+        || !confirmed_absent(-(ownership.group_id as i32))
+        || !confirmed_absent(marker.pid as i32)
+    {
+        return Err(BUSY.into());
+    }
+    fs::remove_file(&marker_path).map_err(|_| "Cannot remove the confirmed stopped worker's lock marker.".to_string())?;
+    fs::remove_dir(&directory).map_err(|_| "The managed worker lock directory contains other entries; sndmail preserved them.".to_string())?;
+    Ok(())
 }
 
 impl SemanticSearchManager {
     fn new(app: &tauri::AppHandle) -> Self {
         let data = app.path().app_data_dir().ok();
-        let resources = app.path().resource_dir().ok().map(|p| p.join("semantic-runtime"));
         let root = data.as_ref().map(|p| p.join("semantic-search")).unwrap_or_default();
         let supported = cfg!(all(any(target_os = "macos", target_os = "linux"), any(target_arch = "aarch64", target_arch = "x86_64")))
-            && data.is_some()
-            && resources.as_ref().is_some_and(|p| {
-                ["node", "typesense-server", "indexer.cjs", "searcher.cjs"].iter().all(|name| p.join(name).is_file())
-            });
+            && data.is_some();
         #[cfg(target_os = "macos")]
         let discovery = app.path().home_dir().ok().map(|p| p.join("Library/Application Support/universal-search/sndmail-runtime.json"));
         #[cfg(not(target_os = "macos"))]
         let discovery: Option<PathBuf> = None;
+        if supported {
+            let _ = private_dir(&root);
+            clean_legacy(&root, discovery.as_deref());
+        }
         let mut status = Status {
             supported, enabled: false,
             state: if supported { "disabled" } else { "unsupported" }.into(),
             model_state: "missing".into(), downloaded_bytes: 0, total_bytes: None,
             indexed_documents: None,
-            message: (!supported).then(|| "Local semantic search is unavailable on this platform or the bundled runtime is missing. Install a sndmail build with the semantic runtime included.".into()),
+            message: (!supported).then(|| "Local semantic search is unavailable on this platform.".into()),
             data_path: root.to_string_lossy().into_owned(), model_id: MODEL_ID.into(),
         };
         let mut config = None;
@@ -276,15 +299,14 @@ impl SemanticSearchManager {
             let loaded = (|| {
                 private_dir(&root)?;
                 let path = root.join("config.json");
+                // The old configuration carried an api_key for the retired
+                // local server; unknown fields are ignored here and the file
+                // is rewritten without it on the next change.
                 let cfg: Config = match fs::read(&path) {
                     Ok(bytes) => serde_json::from_slice(&bytes).map_err(|_| "Private semantic search configuration is invalid. Restore config.json before retrying.".to_string())?,
-                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => Config { enabled: false, api_key: random_hex()? },
+                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => Config { enabled: false },
                     Err(_) => return Err("Cannot read private semantic search configuration.".into()),
                 };
-                if cfg.api_key.len() != 64 || !cfg.api_key.bytes().all(|b| b.is_ascii_hexdigit()) {
-                    return Err("Private semantic search key is invalid. Restore config.json before retrying.".into());
-                }
-                private_write(&path, &encode(&cfg)?)?;
                 Ok::<_, String>(cfg)
             })();
             match loaded {
@@ -297,10 +319,11 @@ impl SemanticSearchManager {
             }
         }
         Self {
-            root, resources: resources.unwrap_or_default(),
-            database: data.map(|p| p.join("sndmail.db")).unwrap_or_default(), discovery,
-            inner: Mutex::new(Inner { status, config, generation: 0, cancel: CancellationToken::new(), closing: false, children: Children::default() }),
-            retiring: Mutex::new(Vec::new()),
+            root,
+            database: data.map(|p| p.join("sndmail.db")).unwrap_or_default(),
+            inner: Mutex::new(Inner { status, config, generation: 0, cancel: CancellationToken::new(), closing: false }),
+            embedder: Mutex::new(None),
+            reaper_cancel: CancellationToken::new(),
             transition: Mutex::new(()),
         }
     }
@@ -313,111 +336,48 @@ impl SemanticSearchManager {
 
     fn require(inner: &Inner) -> Result<(), String> {
         if inner.closing { return Err("sndmail is quitting.".into()); }
-        if !inner.status.supported { return Err("This sndmail build does not contain a supported semantic runtime.".into()); }
+        if !inner.status.supported { return Err("Local semantic search is not supported on this platform.".into()); }
         if inner.config.is_none() { return Err("Private semantic search configuration is unavailable.".into()); }
         Ok(())
-    }
-
-    fn discovery(&self, inner: &Inner, state: &str) -> Result<(), String> {
-        let (Some(path), Some(config)) = (&self.discovery, &inner.config) else { return Ok(()); };
-        match fs::read(path) {
-            Ok(bytes) => {
-                let existing: serde_json::Value = serde_json::from_slice(&bytes)
-                    .map_err(|_| "Cannot update the existing sndmail Raycast discovery file.".to_string())?;
-                if existing["managedBy"] != "sndmail" || existing["dataPath"].as_str() != Some(inner.status.data_path.as_str()) {
-                    return Err("Another installation owns the sndmail Raycast discovery file.".into());
-                }
-            }
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound && !config.enabled => return Ok(()),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {},
-            Err(_) => return Err("Cannot read the private Raycast discovery file.".into()),
-        }
-        private_write(path, &encode(&serde_json::json!({
-            "url": URL, "apiKey": config.api_key, "collection": COLLECTION,
-            "managedBy": "sndmail", "dataPath": inner.status.data_path,
-            "enabled": config.enabled, "state": state, "modelId": MODEL_ID
-        }))?)
     }
 
     fn publish(&self, generation: u64, update: impl FnOnce(&mut Status)) {
         let mut inner = self.inner.lock().unwrap();
         if !Self::current(&inner, generation) { return; }
-        let old_state = inner.status.state.clone();
         update(&mut inner.status);
-        if old_state != inner.status.state {
-            // No child output or API response is ever copied to status/discovery.
-            if self.discovery(&inner, &inner.status.state).is_err() {
-                inner.status.message = Some("Search status could not be saved to the private Raycast discovery file.".into());
-            }
-        }
     }
 
-    fn cancel(inner: &mut Inner) -> (u64, CancellationToken, Children) {
+    fn cancel(inner: &mut Inner) -> (u64, CancellationToken) {
         inner.cancel.cancel();
         inner.generation += 1;
         inner.cancel = CancellationToken::new();
-        (inner.generation, inner.cancel.clone(), std::mem::take(&mut inner.children))
+        (inner.generation, inner.cancel.clone())
     }
 
-    // Register retiring handles before releasing Inner. Quit can therefore
-    // synchronously join every cleanup even when a settings command returned.
-    fn retire(self: &Arc<Self>, children: Children) {
-        if children.server.is_none() && children.worker.is_none() { return; }
-        let slot = Arc::new(Mutex::new(Some(children)));
-        self.retiring.lock().unwrap().push(slot.clone());
-        let manager = self.clone();
-        tauri::async_runtime::spawn_blocking(move || {
-            {
-                let mut pending = slot.lock().unwrap();
-                if let Some(children) = pending.take() { stop_children(children); }
-            }
-            manager.retiring.lock().unwrap().retain(|entry| !Arc::ptr_eq(entry, &slot));
-        });
+    // Blocking: may load the model. Called only from blocking threads.
+    fn embedder_handle(self: &Arc<Self>) -> Result<Arc<Embedder>, String> {
+        let mut slot = self.embedder.lock().unwrap();
+        if slot.is_none() {
+            let embedder = Arc::new(Embedder::load(&self.root.join("models").join(MODEL_DIR))?);
+            *slot = Some((embedder, Instant::now()));
+        }
+        let (embedder, last_used) = slot.as_mut().expect("embedder slot was just filled");
+        *last_used = Instant::now();
+        Ok(embedder.clone())
     }
 
-    async fn await_retired(&self) {
-        loop {
-            let slots = self.retiring.lock().unwrap().clone();
-            if slots.iter().all(|slot| slot.try_lock().is_ok_and(|pending| pending.is_none())) { return; }
-            tokio::time::sleep(Duration::from_millis(50)).await;
-        }
+    fn drop_embedder(&self) {
+        *self.embedder.lock().unwrap() = None;
     }
 
-    fn recover_worker_lock(&self) -> Result<(), String> {
-        const BUSY: &str = "The managed mail indexer lock cannot be safely recovered. Another worker may still be running, or its ownership cannot be confirmed. sndmail left the lock untouched.";
-        let directory = self.root.join("sndmail-worker-v1.lock");
-        match fs::symlink_metadata(&directory) {
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
-            Ok(metadata) if metadata.file_type().is_dir() => {},
-            _ => return Err(BUSY.into()),
-        }
-        let ownership_path = self.root.join("worker-owner.json");
-        let marker_path = directory.join("owner.json");
-        for path in [&ownership_path, &marker_path] {
-            let regular = fs::symlink_metadata(path)
-                .is_ok_and(|metadata| metadata.file_type().is_file() && metadata.len() <= 4096);
-            if !regular { return Err(BUSY.into()); }
-        }
-        let ownership: WorkerOwnership = serde_json::from_slice(
-            &fs::read(&ownership_path).map_err(|_| BUSY.to_string())?
-        ).map_err(|_| BUSY.to_string())?;
-        let marker: WorkerLockMarker = serde_json::from_slice(
-            &fs::read(&marker_path).map_err(|_| BUSY.to_string())?
-        ).map_err(|_| BUSY.to_string())?;
-        if ownership.owner_token.len() != 36 || marker.owner_token != ownership.owner_token
-            || !(2..=i32::MAX as u32).contains(&ownership.group_id)
-            || !(2..=i32::MAX as u32).contains(&marker.pid)
-            || !confirmed_absent(-(ownership.group_id as i32))
-            || !confirmed_absent(marker.pid as i32)
-        {
-            return Err(BUSY.into());
-        }
-        // An exact token and confirmed dead owned group are both required.
-        // A reused/live worker PID also refuses recovery. Never remove an
-        // unknown marker, recursively delete a lock, or touch standalone locks.
-        fs::remove_file(&marker_path).map_err(|_| "Cannot remove the confirmed stopped worker's lock marker.".to_string())?;
-        fs::remove_dir(&directory).map_err(|_| "The managed worker lock directory contains other entries; sndmail preserved them.".to_string())?;
-        Ok(())
+    async fn read_database_pool(&self) -> Result<SqlitePool, String> {
+        let options = SqliteConnectOptions::new()
+            .filename(&self.database)
+            .read_only(true)
+            .create_if_missing(false)
+            .busy_timeout(Duration::from_secs(5));
+        SqlitePoolOptions::new().max_connections(1).connect_with(options).await
+            .map_err(|_| "Cannot open the local mail database for semantic indexing.".into())
     }
 
     fn resume(self: &Arc<Self>) {
@@ -441,7 +401,7 @@ impl SemanticSearchManager {
                 s.state = if !s.enabled { "disabled" } else if valid { "starting" } else { "model_required" }.into();
                 s.message = if s.enabled && !valid { Some("Download the multilingual model to enable local semantic search.".into()) } else { None };
             });
-            if valid && manager.is_enabled(generation) { manager.run(generation, token, false).await; }
+            if valid && manager.is_enabled(generation) { manager.run(generation, token).await; }
         });
     }
 
@@ -459,16 +419,15 @@ impl SemanticSearchManager {
         }
         let mut config = inner.config.clone().unwrap();
         config.enabled = enabled;
-        // Failure to persist disabling must not leave an owned service running.
+        // Failure to persist disabling must not leave the engine running.
         let saved = private_write(&self.root.join("config.json"), &encode(&config)?);
         if enabled { saved.as_ref().map_err(Clone::clone)?; }
         inner.config = Some(config);
         inner.status.enabled = enabled;
         if enabled && inner.status.model_state == "downloading" {
-            self.discovery(&inner, "downloading")?;
             return Ok(inner.status.clone());
         }
-        let (generation, token, children) = Self::cancel(&mut inner);
+        let (generation, token) = Self::cancel(&mut inner);
         if inner.status.model_state == "downloading" {
             inner.status.model_state = "missing".into();
             inner.status.downloaded_bytes = 0;
@@ -478,10 +437,9 @@ impl SemanticSearchManager {
             if inner.status.model_state == "ready" { "starting" } else { "model_required" }
         } else { "disabled" }.into();
         inner.status.message = None;
-        let discovered = self.discovery(&inner, &inner.status.state);
-        self.retire(children);
+        self.drop_embedder();
         drop(inner);
-        if let Err(error) = saved.and(discovered) {
+        if let Err(error) = saved {
             let mut inner = self.inner.lock().unwrap();
             inner.status.state = "error".into();
             inner.status.message = Some(error.clone());
@@ -496,14 +454,12 @@ impl SemanticSearchManager {
         let mut inner = self.inner.lock().unwrap();
         Self::require(&inner)?;
         if matches!(inner.status.model_state.as_str(), "ready" | "downloading") { return Ok(inner.status.clone()); }
-        let (generation, token, children) = Self::cancel(&mut inner);
+        let (generation, token) = Self::cancel(&mut inner);
         inner.status.model_state = "downloading".into();
         inner.status.state = "downloading".into();
         inner.status.downloaded_bytes = 0;
         inner.status.total_bytes = None;
-        inner.status.message = Some("Downloading the multilingual model (about 453 MiB).".into());
-        let _ = self.discovery(&inner, "downloading");
-        self.retire(children);
+        inner.status.message = Some("Downloading the multilingual model files (about 465 MiB in total; existing files are reused).".into());
         drop(inner);
         let manager = self.clone();
         tauri::async_runtime::spawn(async move { manager.download(generation, token).await; });
@@ -517,21 +473,36 @@ impl SemanticSearchManager {
         if !inner.status.enabled || inner.status.model_state != "ready" {
             return Err("Enable semantic search and finish downloading the model before reindexing.".into());
         }
-        let reuse_server = inner.children.server.as_mut()
-            .is_some_and(|child| matches!(child.try_wait(), Ok(None)));
-        let (generation, token, mut children) = Self::cancel(&mut inner);
-        if reuse_server { inner.children.server = children.server.take(); }
-        inner.status.state = if reuse_server { "indexing" } else { "starting" }.into();
-        inner.status.message = Some("Updating the local mail index; existing embeddings are retained.".into());
-        let _ = self.discovery(&inner, &inner.status.state);
-        self.retire(children);
+        let (generation, token) = Self::cancel(&mut inner);
+        inner.status.state = "indexing".into();
+        inner.status.message = Some("Rebuilding the local mail index from scratch.".into());
         drop(inner);
         let manager = self.clone();
-        tauri::async_runtime::spawn(async move { manager.run(generation, token, reuse_server).await; });
+        tauri::async_runtime::spawn(async move {
+            match VectorStore::open(&manager.root).await {
+                Err(error) => { manager.fail(generation, error, false); }
+                Ok(store) => {
+                    if let Err(error) = store.clear().await { manager.fail(generation, error, false); return; }
+                    manager.run(generation, token).await;
+                }
+            }
+        });
         Ok(self.status())
     }
 
     async fn download(self: Arc<Self>, generation: u64, token: CancellationToken) {
+        let destination = self.root.join("models").join(MODEL_DIR);
+        let check_token = token.clone();
+        let already_valid = tauri::async_runtime::spawn_blocking(move || cache_valid(&destination, &check_token)).await.unwrap_or(false);
+        if already_valid && !token.is_cancelled() {
+            self.publish(generation, |s| {
+                s.model_state = "ready".into();
+                s.state = if s.enabled { "starting" } else { "disabled" }.into();
+                s.message = None;
+            });
+            if self.is_enabled(generation) { self.clone().run(generation, token).await; }
+            return;
+        }
         let stage = self.root.join("models").join(format!(".download-{}-{generation}", std::process::id()));
         let result = tokio::select! {
             biased;
@@ -544,16 +515,16 @@ impl SemanticSearchManager {
             let promoted = tauri::async_runtime::spawn_blocking(move || {
                 let inner = manager.inner.lock().unwrap();
                 if !Self::current(&inner, generation) { return Err(CANCELLED.into()); }
-                let destination = manager.root.join("models").join(MODEL_DIR);
                 // Only a verified, fully staged directory becomes the public cache.
                 // A previous invalid cache is renamed out of the way, never exposed
                 // as a partly updated model. A failed promotion restores it.
+                let destination = manager.root.join("models").join(MODEL_DIR);
                 let old = manager.root.join("models").join(format!(".replaced-{}-{generation}", std::process::id()));
                 let had_old = destination.exists();
                 if had_old { fs::rename(&destination, &old).map_err(|_| "Cannot replace the previous model cache.".to_string())?; }
                 if fs::rename(&stage_copy, &destination).is_err() {
                     if had_old { let _ = fs::rename(&old, &destination); }
-                    return Err("Cannot install the verified model cache.".into());
+                    return Err("Cannot install the verified model cache.".to_string());
                 }
                 drop(inner);
                 if had_old { let _ = fs::remove_dir_all(old); }
@@ -567,7 +538,7 @@ impl SemanticSearchManager {
                     s.total_bytes = Some(s.downloaded_bytes);
                     s.message = None;
                 });
-                if self.is_enabled(generation) { self.clone().run(generation, token.clone(), false).await; }
+                if self.is_enabled(generation) { self.clone().run(generation, token.clone()).await; }
             }
         } else if let Err(error) = result {
             if !token.is_cancelled() { self.fail_async(generation, error, true).await; }
@@ -580,251 +551,214 @@ impl SemanticSearchManager {
         let client = reqwest::Client::builder().https_only(true).no_proxy()
             .connect_timeout(Duration::from_secs(15))
             .build().map_err(|_| "Cannot initialize model downloads.".to_string())?;
-        let files = [("config.json", None), ("model.onnx", Some(MODEL_MD5)), (VOCAB, Some(VOCAB_MD5))];
-        // Try the primary origin first; fall back if the canonical Typesense
-        // mirror changes or is unreachable. Redirects are followed by default.
-        let origins: [&str; 2] = [MODEL_ORIGIN, MODEL_ORIGIN_FALLBACK];
-        let mut last_origin_error: Option<String> = None;
-        let mut resolved_origin: &str = MODEL_ORIGIN;
-        for origin in origins {
-            let mut ok = true;
-            for (name, _) in files {
-                let response = client.head(format!("{origin}/{name}")).timeout(Duration::from_secs(15)).send().await;
-                if response.ok().filter(|r| r.status().is_success()).is_none() { ok = false; break; }
+        let destination = self.root.join("models").join(MODEL_DIR);
+        #[derive(Clone, Copy)]
+        struct ModelFile { name: &'static str, md5: &'static str, origins: [&'static str; 2], max_bytes: u64 }
+        let files = [
+            ModelFile { name: "model.onnx", md5: MODEL_MD5, origins: [MODEL_ORIGIN, MODEL_ORIGIN_FALLBACK], max_bytes: 600 * 1024 * 1024 },
+            ModelFile { name: "tokenizer.json", md5: TOKENIZER_MD5, origins: [TOKENIZER_ORIGIN, TOKENIZER_ORIGIN], max_bytes: 32 * 1024 * 1024 },
+        ];
+        let mut plan = Vec::new();
+        for file in &files {
+            // Resume: an already-valid file is copied into the stage instead of
+            // being downloaded again, so adding the tokenizer only fetches it.
+            let source = destination.join(file.name);
+            let expected = file.md5;
+            let reusable = tauri::async_runtime::spawn_blocking(move || {
+                let token = CancellationToken::new();
+                file_valid(&source, expected, &token)
+            }).await.unwrap_or(false);
+            if reusable {
+                let size = fs::metadata(&destination.join(file.name)).map_err(|_| "Cannot reuse the existing model file.".to_string())?.len();
+                plan.push((*file, None, Some(size)));
+            } else {
+                plan.push((*file, Some(client.clone()), None));
             }
-            if ok { resolved_origin = origin; last_origin_error = None; break; }
-            last_origin_error = Some(format!("{origin} did not report all model files."));
-        }
-        if let Some(err) = last_origin_error {
-            log::warn!("semantic model origin probe failed: {}", err);
         }
         // Content-Length is optional; never substitute an estimate for measured bytes.
         let mut total = Some(0u64);
-        for (name, _) in files {
-            let response = client.head(format!("{resolved_origin}/{name}")).timeout(Duration::from_secs(15)).send().await;
-            let length = response.ok().filter(|r| r.status().is_success()).and_then(|r| r.content_length());
+        let mut downloaded = 0u64;
+        for (file, client_slot, local_size) in &plan {
+            let length = match (client_slot, local_size) {
+                (None, Some(size)) => Some(*size),
+                (Some(client), None) => {
+                    let mut resolved: Option<u64> = None;
+                    for origin in file.origins {
+                        let response = client.head(format!("{origin}/{}", file.name)).timeout(Duration::from_secs(15)).send().await;
+                        if let Some(length) = response.ok().filter(|r| r.status().is_success()).and_then(|r| r.content_length()) {
+                            resolved = Some(length);
+                            break;
+                        }
+                    }
+                    resolved
+                }
+                _ => None,
+            };
             total = total.zip(length).and_then(|(a, b)| a.checked_add(b));
         }
         self.publish(generation, |s| s.total_bytes = total);
-        let mut downloaded = 0u64;
-        for (name, checksum) in files {
-            // The outer download cancellation select also covers this header
-            // deadline; a server that accepts a socket cannot stall it forever.
-            let mut response = tokio::time::timeout(
-                Duration::from_secs(30), client.get(format!("{resolved_origin}/{name}")).send()
-            ).await.map_err(|_| "The model server did not send response headers within 30 seconds. Retry the download.".to_string())?
-                .map_err(|_| "Model download failed. Check your connection and retry.".to_string())?
-                .error_for_status().map_err(|_| "The official model download is unavailable. Retry later.".to_string())?;
-            if !response.status().is_success() { return Err("The official model URL redirected unexpectedly.".into()); }
-            let mut file = tokio::fs::File::create(stage.join(name)).await.map_err(|_| "Cannot create a staged model file.".to_string())?;
-            let mut hash = md5::Context::new();
-            let mut file_size = 0u64;
-            loop {
-                let chunk = tokio::time::timeout(Duration::from_secs(30), response.chunk()).await
-                    .map_err(|_| "Model download stalled. Retry the download.".to_string())?
-                    .map_err(|_| "Model download was interrupted. Retry the download.".to_string())?;
-                let Some(chunk) = chunk else { break; };
-                file_size += chunk.len() as u64;
-                downloaded += chunk.len() as u64;
-                if downloaded > 600 * 1024 * 1024 || (name == "config.json" && file_size > 16 * 1024) {
-                    return Err("The official model download exceeds the expected size.".into());
-                }
-                file.write_all(&chunk).await.map_err(|_| "Cannot save the model download. Check available disk space.".to_string())?;
-                hash.consume(&chunk);
-                self.publish(generation, |s| {
-                    s.downloaded_bytes = downloaded;
-                    if s.total_bytes.is_some_and(|total| downloaded > total) { s.total_bytes = None; }
-                });
-            }
-            file.sync_all().await.map_err(|_| "Cannot finish saving the downloaded model.".to_string())?;
-            drop(file);
-            if let Some(expected) = checksum {
-                if format!("{:x}", hash.compute()) != expected { return Err("Model checksum mismatch. The incomplete model was discarded; retry the download.".into()); }
-            } else {
-                let bytes = tokio::fs::read(stage.join(name)).await.map_err(|_| "Cannot read the downloaded model configuration.".to_string())?;
-                let config = serde_json::from_slice(&bytes).map_err(|_| "The official model configuration is invalid.".to_string())?;
-                if !model_config_valid(&config) { return Err("The official model configuration changed. Update sndmail before downloading this model.".into()); }
-            }
-        }
-        Ok(())
-    }
-
-    fn launch(&self, generation: u64, worker: bool) -> Result<Option<ChildStdout>, String> {
-        let _transition = self.transition.lock().unwrap();
-        let mut inner = self.inner.lock().unwrap();
-        if !Self::current(&inner, generation) || !inner.status.enabled { return Err(CANCELLED.into()); }
-        let config = inner.config.as_ref().ok_or("Private search configuration is unavailable.")?;
-        let node = self.resources.join("node");
-        let mut lock_owner_token = None;
-        let program;
-        let args: Vec<String>;
-        if worker {
-            if !self.database.is_file() { return Err("The local sndmail database is not available yet. Retry after sndmail finishes starting.".into()); }
-            // launch runs only after retired children finish cleanup. Persisted
-            // ownership also permits conservative recovery after an app crash.
-            self.recover_worker_lock()?;
-            let token = worker_lock_token()?;
-            let path = self.root.join("worker.json");
-            private_write(&path, &encode(&serde_json::json!({
-                "url": URL, "apiKey": config.api_key, "collection": COLLECTION,
-                "sndmailDatabasePath": self.database,
-                "lockPath": self.root.join("sndmail-worker-v1.lock"),
-                "lockOwnerToken": token
-            }))?)?;
-            lock_owner_token = Some(token);
-            program = node.clone();
-            args = vec![self.resources.join("indexer.cjs").to_string_lossy().into_owned(), path.to_string_lossy().into_owned()];
-        } else {
-            // Bind probes detect external listeners without talking to or killing
-            // them. Authenticated /debug plus live-child checks below close the
-            // common bind/start race before any collection is modified.
-            let api = TcpListener::bind("127.0.0.1:8108").map_err(|_| CONFLICT.to_string())?;
-            let peer = TcpListener::bind("127.0.0.1:8107").map_err(|_| CONFLICT.to_string())?;
-            let ini = self.root.join("typesense.ini");
-            private_write(&ini, format!("[server]\napi-key = {}\n", config.api_key).as_bytes())?;
-            program = self.resources.join("typesense-server");
-            args = vec![
-                format!("--config={}", ini.display()), format!("--data-dir={}", self.root.display()),
-                "--api-address=127.0.0.1".into(), "--api-port=8108".into(),
-                "--peering-address=127.0.0.1".into(), "--peering-port=8107".into(),
-                "--thread-pool-size=2".into(), "--num-collections-parallel-load=1".into(),
-                "--num-documents-parallel-load=1".into(), "--max-indexing-concurrency=1".into(),
-            ];
-            drop((api, peer));
-        }
-        let mut command = background_command(&node);
-        command.arg("-e").arg(SUPERVISOR).arg(std::process::id().to_string()).arg(program).args(args)
-            .current_dir(&self.root).env_clear()
-            .stdin(Stdio::null()).stderr(Stdio::null())
-            .stdout(if worker { Stdio::piped() } else { Stdio::null() });
-        #[cfg(unix)]
-        {
-            use std::os::unix::process::CommandExt;
-            command.process_group(0);
-        }
-        // Children inherit background priority. ONNX thread counts themselves
-        // are NOT capped by Typesense's request-pool-size setting.
-        let mut child = command.spawn().map_err(|e| format!("Cannot launch the bundled semantic runtime: {e}"))?;
-        let stdout = child.stdout.take();
-        if worker {
-            let group_id = child.id();
-            // Retain the child before fallible persistence so failure follows
-            // the normal owned-child cleanup path, never leaving an orphan.
-            inner.children.worker = Some(child);
-            private_write(&self.root.join("worker-owner.json"), &encode(&WorkerOwnership {
-                group_id,
-                owner_token: lock_owner_token.ok_or("Worker ownership token is unavailable.")?,
-            })?)?;
-        }
-        else { inner.children.server = Some(child); }
-        Ok(stdout)
-    }
-
-    fn alive(&self, generation: u64) -> Result<(), String> {
-        let mut inner = self.inner.lock().unwrap();
-        if !Self::current(&inner, generation) { return Err(CANCELLED.into()); }
-        let Children { server, worker } = &mut inner.children;
-        for child in [server, worker].into_iter().flatten() {
-            match child.try_wait() {
-                Ok(None) => {},
-                Ok(Some(_)) => return Err("The bundled semantic search process stopped. Disable and enable semantic search to retry.".into()),
-                Err(_) => return Err("Cannot read the bundled semantic search process status.".into()),
-            }
-        }
-        Ok(())
-    }
-
-    async fn run(self: Arc<Self>, generation: u64, token: CancellationToken, reuse_server: bool) {
-        let result = tokio::select! {
-            biased;
-            _ = token.cancelled() => Err(CANCELLED.to_string()),
-            result = self.start_and_monitor(generation, reuse_server) => result,
-        };
-        if let Err(error) = result {
-            if !token.is_cancelled() { self.fail_async(generation, error, false).await; }
-        }
-    }
-
-    async fn start_and_monitor(self: &Arc<Self>, generation: u64, reuse_server: bool) -> Result<(), String> {
-        self.await_retired().await;
-        if !reuse_server {
-            self.publish(generation, |s| { s.state = "starting".into(); s.message = Some("Starting sndmail's local semantic search service.".into()); });
-            let manager = self.clone();
-            tauri::async_runtime::spawn_blocking(move || manager.launch(generation, false)).await
-                .map_err(|_| "Semantic runtime startup task failed.".to_string())??;
-        }
-        let key = self.inner.lock().unwrap().config.as_ref().ok_or("Private search configuration is unavailable.")?.api_key.clone();
-        let client = reqwest::Client::builder().no_proxy()
-            .timeout(Duration::from_secs(2)).build().map_err(|_| "Cannot initialize the local search connection.".to_string())?;
-        let deadline = Instant::now() + Duration::from_secs(45);
-        loop {
-            self.alive(generation)?;
-            if Instant::now() >= deadline { return Err("The bundled search service did not become ready within 45 seconds. Disable and enable it to retry.".into()); }
-            if let Ok(response) = client.get(format!("{URL}/debug")).header("X-TYPESENSE-API-KEY", &key).send().await {
-                if response.status() == reqwest::StatusCode::UNAUTHORIZED || response.status() == reqwest::StatusCode::FORBIDDEN { return Err(CONFLICT.into()); }
-                if response.status().is_success() {
-                    let debug: serde_json::Value = response.json().await.map_err(|_| "The bundled search service returned invalid readiness data.".to_string())?;
-                    if !matches!(debug["version"].as_str(), Some("30.2" | "v30.2")) { return Err("sndmail requires the bundled Typesense 30.2 runtime. Update this sndmail installation.".into()); }
-                    let health: serde_json::Value = client.get(format!("{URL}/health")).send().await
-                        .map_err(|_| "Cannot check local search readiness.".to_string())?
-                        .json().await.map_err(|_| "The local search readiness response is invalid.".to_string())?;
-                    if health["ok"] == true { self.alive(generation)?; break; }
-                }
-            }
-            tokio::time::sleep(Duration::from_millis(500)).await;
-        }
-        // An explicit update restarts only the incremental worker. Never drop
-        // the collection: unchanged documents must retain their embeddings and
-        // remain searchable while the worker scans and prunes stale mail.
-        self.publish(generation, |s| { s.state = "indexing".into(); s.message = Some("Indexing local sndmail messages.".into()); });
-        let manager = self.clone();
-        let stdout = tauri::async_runtime::spawn_blocking(move || manager.launch(generation, true)).await
-            .map_err(|_| "Mail indexer startup task failed.".to_string())??.ok_or("Mail indexer progress stream is unavailable.")?;
-        let manager = self.clone();
-        tauri::async_runtime::spawn_blocking(move || manager.worker_progress(generation, stdout));
-        loop {
-            tokio::time::sleep(Duration::from_secs(5)).await;
-            self.alive(generation)?;
-        }
-    }
-
-    fn worker_progress(self: Arc<Self>, generation: u64, stdout: ChildStdout) {
-        let mut reader = BufReader::new(stdout);
-        loop {
-            let mut line = Vec::new();
-            let result = reader.by_ref().take(64 * 1024).read_until(b'\n', &mut line);
-            if !matches!(result, Ok(n) if n > 0) { break; }
-            if line.len() >= 64 * 1024 {
-                self.fail(generation, "The mail indexer emitted invalid progress data.".into(), false);
-                break;
-            }
-            let Ok(value) = serde_json::from_slice::<serde_json::Value>(&line) else { continue; };
-            // Waiting/status snapshots can retain state=error during backoff
-            // without repeating retryable. Only an actual error event decides
-            // whether to stop the owned runtime.
-            if value["type"] == "error" {
-                if value["retryable"] == true {
-                    // The worker owns its retry/backoff loop. Preserve both
-                    // processes and the last complete index while it retries;
-                    // subsequent indexing/ready progress clears this status.
+        for (file, client_slot, local_size) in &plan {
+            match (client_slot, local_size) {
+                (None, Some(_)) => {
+                    // Reuse the verified local copy.
+                    let size = fs::copy(destination.join(file.name), stage.join(file.name))
+                        .map_err(|_| "Cannot reuse the existing model file.".to_string())?;
+                    downloaded += size;
                     self.publish(generation, |s| {
-                        s.state = "error".into();
-                        s.message = Some("Local mail indexing failed temporarily. The indexer will retry automatically; existing indexed mail remains available.".into());
+                        s.downloaded_bytes = downloaded;
+                        if s.total_bytes.is_some_and(|total| downloaded > total) { s.total_bytes = None; }
                     });
-                    continue;
                 }
-                self.fail(generation, "Local mail indexing failed. Retry reindexing after checking the mail database and available disk space.".into(), false);
-                break;
+                (Some(client), None) => {
+                    // The outer download cancellation select also covers the
+                    // header deadline; a server that accepts a socket cannot
+                    // stall it forever.
+                    let mut resolved_origin: Option<&str> = None;
+                    let mut last_error = "No model origin is reachable.".to_string();
+                    for origin in file.origins {
+                        let response = client.head(format!("{origin}/{}", file.name)).timeout(Duration::from_secs(15)).send().await;
+                        if response.ok().filter(|r| r.status().is_success()).is_some() { resolved_origin = Some(origin); break; }
+                        last_error = format!("{origin} did not report the model file.");
+                    }
+                    let origin = resolved_origin.ok_or(last_error)?;
+                    let mut response = tokio::time::timeout(
+                        Duration::from_secs(30), client.get(format!("{origin}/{}", file.name)).send()
+                    ).await.map_err(|_| "The model server did not send response headers within 30 seconds. Retry the download.".to_string())?
+                        .map_err(|_| "Model download failed. Check your connection and retry.".to_string())?
+                        .error_for_status().map_err(|_| "The official model download is unavailable. Retry later.".to_string())?;
+                    if !response.status().is_success() { return Err("The official model URL redirected unexpectedly.".into()); }
+                    let mut file_handle = tokio::fs::File::create(stage.join(file.name)).await.map_err(|_| "Cannot create a staged model file.".to_string())?;
+                    let mut hash = md5::Context::new();
+                    let mut file_size = 0u64;
+                    loop {
+                        let chunk = tokio::time::timeout(Duration::from_secs(30), response.chunk()).await
+                            .map_err(|_| "Model download stalled. Retry the download.".to_string())?
+                            .map_err(|_| "Model download was interrupted. Retry the download.".to_string())?;
+                        let Some(chunk) = chunk else { break; };
+                        file_size += chunk.len() as u64;
+                        downloaded += chunk.len() as u64;
+                        if downloaded > 600 * 1024 * 1024 || file_size > file.max_bytes {
+                            return Err("The official model download exceeds the expected size.".into());
+                        }
+                        file_handle.write_all(&chunk).await.map_err(|_| "Cannot save the model download. Check available disk space.".to_string())?;
+                        hash.consume(&chunk);
+                        self.publish(generation, |s| {
+                            s.downloaded_bytes = downloaded;
+                            if s.total_bytes.is_some_and(|total| downloaded > total) { s.total_bytes = None; }
+                        });
+                    }
+                    file_handle.sync_all().await.map_err(|_| "Cannot finish saving the downloaded model.".to_string())?;
+                    drop(file_handle);
+                    if format!("{:x}", hash.compute()) != file.md5 {
+                        return Err("Model checksum mismatch. The incomplete model was discarded; retry the download.".into());
+                    }
+                }
+                _ => return Err("Model download plan is invalid.".to_string()),
             }
-            self.publish(generation, |s| {
-                if let Some(count) = value["indexedDocuments"].as_u64() { s.indexed_documents = Some(count); }
-                match value["state"].as_str() {
-                    Some("ready") => { s.state = "ready".into(); s.message = None; },
-                    Some("indexing") => { s.state = "indexing".into(); s.message = Some("Indexing local sndmail messages.".into()); },
-                    _ => {},
-                }
-            });
         }
+        Ok(())
+    }
+
+    // The indexing loop: one immediate pass, then incremental passes on the
+    // configured interval. All embedding runs on blocking threads, paced to
+    // roughly half duty cycle so foreground work keeps the machine.
+    async fn run(self: Arc<Self>, generation: u64, token: CancellationToken) {
+        let mut first = true;
+        loop {
+            if !self.is_enabled(generation) { return; }
+            if first {
+                self.publish(generation, |s| s.state = "indexing".into());
+            }
+            match self.index_pass(generation, &token).await {
+                Ok(()) => {
+                    self.publish(generation, |s| { s.state = "ready".into(); s.message = None; });
+                    first = false;
+                }
+                Err(error) if error == CANCELLED => return,
+                Err(error) => { self.fail(generation, error, false); return; }
+            }
+            let interval = semantic_interval();
+            tokio::select! {
+                biased;
+                _ = token.cancelled() => return,
+                _ = tokio::time::sleep(interval) => {}
+            }
+        }
+    }
+
+    async fn index_pass(self: &Arc<Self>, generation: u64, token: &CancellationToken) -> Result<(), String> {
+        let pool = self.read_database_pool().await?;
+        let store = VectorStore::open(&self.root).await?;
+        let messages: Vec<RawMessage> = collect_messages(&pool).await?;
+        let stored = store.message_fingerprints().await?;
+        let live: Vec<String> = messages.iter().map(|message| message.message_id.clone()).collect();
+        store.prune_messages(&live).await?;
+        for message in messages {
+            if token.is_cancelled() { return Err(CANCELLED.into()); }
+            let passages = build_passages(&message);
+            let fresh = passages.first().map(|passage| passage.message_fingerprint.clone());
+            let unchanged = fresh.as_ref().is_some_and(|fingerprint| {
+                stored.get(&message.message_id).is_some_and(|known| known == fingerprint)
+            });
+            if unchanged { continue; }
+            let texts: Vec<String> = passages.iter().map(|passage| passage.content.clone()).collect();
+            let vectors = if texts.is_empty() { Vec::new() } else {
+                let manager = self.clone();
+                let started = Instant::now();
+                let embedded = tauri::async_runtime::spawn_blocking(move || {
+                    let embedder = manager.embedder_handle()?;
+                    embedder.embed_passages(&texts)
+                }).await.map_err(|_| "Semantic indexing task failed.".to_string())??;
+                // Pace to about half duty cycle: sleep as long as the batch took.
+                tokio::time::sleep(started.elapsed()).await;
+                embedded
+            };
+            store.replace_message_passages(&message.message_id, &passages, &vectors).await?;
+            let indexed = store.count_passages().await?;
+            self.publish(generation, |s| s.indexed_documents = Some(indexed));
+        }
+        let indexed = store.count_passages().await?;
+        self.publish(generation, |s| s.indexed_documents = Some(indexed));
+        Ok(())
+    }
+
+    // In-process query: embed the query, cosine-search the vector store, and
+    // map the passages onto the searcher contract.
+    async fn query(self: &Arc<Self>, query: String, limit: u32) -> Result<SearchResponse, String> {
+        if query.trim().is_empty() { return Ok(SearchResponse { hits: Vec::new() }); }
+        {
+            let inner = self.inner.lock().unwrap();
+            if inner.closing { return Err("sndmail is quitting.".into()); }
+            if !inner.status.supported { return Err("Local semantic search is not supported on this platform.".into()); }
+            if !inner.status.enabled { return Err("Local semantic search is disabled.".into()); }
+            if !matches!(inner.status.state.as_str(), "ready" | "indexing") {
+                return Err("Local semantic search is still starting up or indexing.".into());
+            }
+        }
+        let manager = self.clone();
+        let query_text = query;
+        let vector = tauri::async_runtime::spawn_blocking(move || {
+            let embedder = manager.embedder_handle()?;
+            embedder.embed_query(&query_text)
+        }).await.map_err(|_| "Semantic search task failed.".to_string())??;
+        let store = VectorStore::open(&self.root).await?;
+        let scored = store.search(&vector, limit as usize).await?;
+        let hits = scored.into_iter().map(|passage| SearcherHit {
+            id: passage.doc.id,
+            title: passage.doc.title.clone(),
+            subtitle: passage.doc.subtitle,
+            snippet: Some(passage.doc.snippet),
+            tags: passage.doc.tags,
+            metadata: passage.doc.metadata,
+            match_kind: Some("semantic".into()),
+            relevance: Some(passage.score as f64),
+            semantic_evidence: Some(SemanticEvidence {
+                passage: passage.doc.content,
+                title_context: Some(passage.doc.title),
+                distance: 1.0 - passage.score as f64,
+            }),
+        }).collect();
+        Ok(SearchResponse { hits })
     }
 
     async fn fail_async(self: &Arc<Self>, generation: u64, message: String, model_error: bool) {
@@ -837,72 +771,12 @@ impl SemanticSearchManager {
         let mut inner = self.inner.lock().unwrap();
         if !Self::current(&inner, generation) { return; }
         inner.cancel.cancel();
-        inner.status.state = if message == CONFLICT { "conflict" } else { "error" }.into();
+        inner.status.state = "error".into();
         inner.status.message = Some(message);
         if model_error { inner.status.model_state = "error".into(); }
-        let _ = self.discovery(&inner, &inner.status.state);
-        let children = std::mem::take(&mut inner.children);
-        self.retire(children);
-    }
-
-    // A short-lived read-only searcher spawn. It needs neither the worker lock
-    // nor the supervisor: the process is its own lifetime and is always killed
-    // and reaped by this method, success or failure.
-    fn query(&self, query: String, limit: u32) -> Result<SearchResponse, String> {
-        if query.trim().is_empty() { return Ok(SearchResponse { hits: Vec::new() }); }
-        let inner = self.inner.lock().unwrap();
-        if inner.closing { return Err("sndmail is quitting.".into()); }
-        if !inner.status.supported { return Err("This sndmail build does not contain a supported semantic runtime.".into()); }
-        if !inner.status.enabled { return Err("Local semantic search is disabled.".into()); }
-        if !matches!(inner.status.state.as_str(), "ready" | "indexing") {
-            return Err("Local semantic search is still starting up or indexing.".into());
-        }
-        let api_key = inner.config.as_ref().ok_or("Private search configuration is unavailable.")?.api_key.clone();
         drop(inner);
-        // A dedicated minimal config file: the worker's worker.json is rewritten
-        // by every indexer launch and carries lock fields the searcher ignores.
-        let config_path = self.root.join("searcher.json");
-        private_write(&config_path, &encode(&serde_json::json!({
-            "url": URL, "apiKey": api_key, "collection": COLLECTION
-        }))?)?;
-        let node = self.resources.join("node");
-        let mut command = background_command(&node);
-        command.arg(self.resources.join("searcher.cjs")).arg(&config_path)
-            .arg("--query").arg(&query)
-            .arg("--source").arg("sndmail")
-            .arg("--limit").arg(limit.to_string())
-            .current_dir(&self.root).env_clear()
-            .stdin(Stdio::null()).stderr(Stdio::null()).stdout(Stdio::piped());
-        #[cfg(unix)]
-        {
-            use std::os::unix::process::CommandExt;
-            command.process_group(0);
-        }
-        let mut child = command.spawn().map_err(|_| "Cannot launch the bundled semantic searcher. Check that this sndmail installation contains executable, signed runtime files.".to_string())?;
-        let stdout = child.stdout.take().ok_or("Semantic searcher output is unavailable.")?;
-        let (tx, rx) = std::sync::mpsc::channel::<Vec<u8>>();
-        let reader = std::thread::spawn(move || {
-            let mut output = Vec::new();
-            // One bounded JSON line, never an unbounded stream.
-            let _ = stdout.take(1024 * 1024).read_to_end(&mut output);
-            let _ = tx.send(output);
-        });
-        let output = match rx.recv_timeout(Duration::from_secs(10)) {
-            Ok(bytes) => bytes,
-            Err(_) => {
-                stop_child(&mut child);
-                let _ = reader.join();
-                return Err("Local semantic search timed out.".into());
-            }
-        };
-        let _ = reader.join();
-        reap_child(&mut child);
-        let value: serde_json::Value = serde_json::from_slice(&output)
-            .map_err(|_| "The local semantic search response is invalid.".to_string())?;
-        if let Some(error) = value.get("error").and_then(|e| e.as_str()) {
-            return Err(error.to_string());
-        }
-        serde_json::from_value(value).map_err(|_| "The local semantic search response is invalid.".to_string())
+        // A broken model never survives the failure that reported it.
+        self.drop_embedder();
     }
 
     pub fn shutdown(&self) {
@@ -911,91 +785,32 @@ impl SemanticSearchManager {
         inner.closing = true;
         inner.cancel.cancel();
         inner.generation += 1;
-        let children = std::mem::take(&mut inner.children);
-        // Keep this authoritative discovery file: stopped/disabled must never
-        // cause a Raycast client to fall back to an unrelated Homebrew server.
-        let _ = self.discovery(&inner, "stopped");
         drop(inner);
-        stop_children(children);
-        let retiring = self.retiring.lock().unwrap().clone();
-        for slot in retiring {
-            let mut pending = slot.lock().unwrap();
-            if let Some(children) = pending.take() { stop_children(children); }
-        }
-    }
-}
-
-fn background_command(node: &Path) -> Command {
-    #[cfg(target_os = "macos")]
-    {
-        // taskpolicy is only available on some macOS configurations; fall back
-        // to nice or a plain node launch so development and TestFlight builds
-        // do not fail with "No such file or directory" on this path.
-        if Path::new("/usr/bin/taskpolicy").is_file() {
-            let mut command = Command::new("/usr/bin/taskpolicy");
-            command.args(["-b", "/usr/bin/nice", "-n", "15"]).arg(node);
-            command
-        } else if Path::new("/usr/bin/nice").is_file() {
-            let mut command = Command::new("/usr/bin/nice");
-            command.args(["-n", "15"]).arg(node);
-            command
-        } else {
-            Command::new(node)
-        }
-    }
-    #[cfg(target_os = "linux")]
-    {
-        let mut command = Command::new("/usr/bin/nice");
-        command.args(["-n", "15"]).arg(node);
-        command
-    }
-    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
-    { Command::new(node) }
-}
-
-fn stop_child(child: &mut Child) {
-    // Only process groups created and retained by this manager are signaled.
-    // Never use pid files, pkill, executable names, ports, or external PIDs.
-    if matches!(child.try_wait(), Ok(Some(_))) { return; }
-    #[cfg(unix)]
-    unsafe { libc::kill(-(child.id() as i32), libc::SIGTERM); }
-    #[cfg(not(unix))]
-    let _ = child.kill();
-    let deadline = Instant::now() + Duration::from_secs(2);
-    while Instant::now() < deadline {
-        if matches!(child.try_wait(), Ok(Some(_))) { return; }
-        std::thread::sleep(Duration::from_millis(25));
-    }
-    #[cfg(unix)]
-    unsafe { libc::kill(-(child.id() as i32), libc::SIGKILL); }
-    #[cfg(not(unix))]
-    let _ = child.kill();
-    // Bound the wait even if the OS cannot immediately reap a stuck child.
-    let deadline = Instant::now() + Duration::from_millis(500);
-    while Instant::now() < deadline {
-        if matches!(child.try_wait(), Ok(Some(_))) { return; }
-        std::thread::sleep(Duration::from_millis(25));
-    }
-}
-
-fn reap_child(child: &mut Child) {
-    let deadline = Instant::now() + Duration::from_secs(2);
-    while Instant::now() < deadline {
-        if matches!(child.try_wait(), Ok(Some(_))) { return; }
-        std::thread::sleep(Duration::from_millis(25));
-    }
-    stop_child(child);
-}
-
-fn stop_children(children: Children) {
-    for mut child in [children.worker, children.server].into_iter().flatten() {
-        stop_child(&mut child);
+        self.reaper_cancel.cancel();
+        self.drop_embedder();
     }
 }
 
 pub fn install(app: &tauri::AppHandle) {
     let manager = Arc::new(SemanticSearchManager::new(app));
     app.manage(manager.clone());
+    // Unload the model after an idle window so nothing stays resident.
+    let sweep_token = manager.reaper_cancel.clone();
+    let sweeper = manager.clone();
+    tauri::async_runtime::spawn(async move {
+        loop {
+            tokio::select! {
+                biased;
+                _ = sweep_token.cancelled() => break,
+                _ = tokio::time::sleep(EMBEDDER_SWEEP) => {
+                    let mut slot = sweeper.embedder.lock().unwrap();
+                    if slot.as_ref().is_some_and(|(_, last_used)| last_used.elapsed() >= EMBEDDER_IDLE) {
+                        *slot = None;
+                    }
+                }
+            }
+        }
+    });
     manager.resume();
 }
 
@@ -1022,8 +837,7 @@ pub async fn semantic_search_download_model(manager: tauri::State<'_, Arc<Semant
 pub async fn semantic_search_query(manager: tauri::State<'_, Arc<SemanticSearchManager>>, query: String, limit: Option<u32>) -> Result<SearchResponse, String> {
     let limit = limit.unwrap_or(50).clamp(1, 100);
     let manager = manager.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || manager.query(query, limit)).await
-        .map_err(|_| "Semantic search task failed.".to_string())?
+    manager.query(query, limit).await
 }
 
 #[tauri::command]

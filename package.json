@@ -13,7 +13,6 @@
     "test:watch": "vitest",
     "lint": "eslint",
     "tauri": "tauri",
-    "semantic:prepare": "node scripts/prepare-semantic-search.mjs",
     "worker:prepare": "node scripts/prepare-mail-worker.mjs",
     "dev:landing": "npm run dev --prefix landing",
     "flatpak": "flatpak-builder --force-clean --user --install --install-deps-from=flathub build-dir com.anydaysomething.sndmail.yml",

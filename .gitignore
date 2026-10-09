@@ -10,13 +10,6 @@ test-buildroot/
 # Tauri
 src-tauri/target/
 src-tauri/gen/schemas
-src-tauri/semantic-runtime/node
-src-tauri/semantic-runtime/typesense-server
-src-tauri/semantic-runtime/indexer.cjs
-src-tauri/semantic-runtime/searcher.cjs
-src-tauri/semantic-runtime/*.license.txt
-src-tauri/semantic-runtime/typesense-server.source.txt
-src-tauri/semantic-runtime/runtime-manifest.json
 
 # Environment variables & secrets
 .env

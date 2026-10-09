@@ -15,7 +15,9 @@ import {
   type NotificationBackend,
 } from "@/services/notifications/notificationManager";
 import { PROVIDER_MODELS, resolveModelId } from "@/services/ai/types";
-import { FIX_NUMBER } from "@/constants/build";
+import { FIX_NUMBER, BUILD_INFO, formatBuildLabel, buildWebUrl } from "@/constants/build";
+import { formatDateTime } from "@/utils/date";
+import { useTimeFormat } from "@/hooks/useTimeFormat";
 import { UPDATE_SOURCE_CONFIGURED } from "@/services/updateManager";
 import { accountColor } from "@/constants/accountColors";
 import { validateClientId, validateClientSecret } from "@/services/gmail/clientCredentials";
@@ -1962,10 +1964,17 @@ function SyncOfflineSection() {
 }
 
 function DeveloperTab() {
+  useTimeFormat();
   const [appVersion, setAppVersion] = useState("");
   const [tauriVersion, setTauriVersion] = useState("");
   const [webviewVersion, setWebviewVersion] = useState("");
   const [platformLabel, setPlatformLabel] = useState("...");
+  const buildUrl = buildWebUrl(BUILD_INFO);
+  const openBuildUrl = async () => {
+    if (!buildUrl) return;
+    const { openUrl } = await import("@tauri-apps/plugin-opener");
+    await openUrl(buildUrl);
+  };
 
   useEffect(() => {
     async function load() {
@@ -2003,6 +2012,20 @@ function DeveloperTab() {
     <>
       <Section title="App Info">
         <InfoRow label="App version" value={appVersion ? `${appVersion} (${FIX_NUMBER})` : "..."} />
+        <InfoRow
+          label="Build"
+          value={formatBuildLabel(BUILD_INFO)}
+          onClick={buildUrl ? openBuildUrl : undefined}
+          hint={buildUrl ? "Open on GitHub" : undefined}
+        />
+        <InfoRow
+          label="Built"
+          value={
+            BUILD_INFO.builtAt
+              ? formatDateTime(BUILD_INFO.builtAt) + (BUILD_INFO.dirty ? " · modified" : "")
+              : "unknown"
+          }
+        />
         <InfoRow label="Tauri version" value={tauriVersion || "..."} />
         <InfoRow label="WebView version" value={webviewVersion || "..."} />
         <InfoRow label="Platform" value={platformLabel} />
@@ -2063,7 +2086,9 @@ function AboutTab() {
           <div>
             <h3 className="text-base font-semibold text-text-primary">sndmail</h3>
             <p className="text-sm text-text-tertiary">
-              {appVersion ? `Version ${appVersion}` : "Loading..."}
+              {appVersion
+                ? `Version ${appVersion}${BUILD_INFO.shortSha !== "unknown" ? ` · ${BUILD_INFO.shortSha}` : ""}`
+                : "Loading..."}
             </p>
           </div>
         </div>
@@ -2125,11 +2150,32 @@ function AboutTab() {
 }
 
 
-function InfoRow({ label, value }: { label: string; value: string }) {
+function InfoRow({
+  label,
+  value,
+  onClick,
+  hint,
+}: {
+  label: string;
+  value: string;
+  onClick?: () => void;
+  hint?: string;
+}) {
+  const content = onClick ? (
+    <button
+      type="button"
+      onClick={onClick}
+      className="text-sm text-text-primary font-mono hover:text-accent transition-colors"
+    >
+      {value}
+    </button>
+  ) : (
+    <span className="text-sm text-text-primary font-mono">{value}</span>
+  );
   return (
     <div className="flex items-center justify-between">
       <span className="text-sm text-text-secondary">{label}</span>
-      <span className="text-sm text-text-primary font-mono">{value}</span>
+      {hint ? <Tooltip content={hint}>{content}</Tooltip> : content}
     </div>
   );
 }

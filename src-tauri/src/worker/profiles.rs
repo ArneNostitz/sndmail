@@ -21,6 +21,15 @@ pub(crate) struct Profile {
     pub(crate) scopes: Vec<String>,
 }
 
+/// Secret-free view of a stored grant — safe to hand to the frontend.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProfileSummary {
+    pub profile_id: String,
+    pub account_ids: Vec<String>,
+    pub scopes: Vec<String>,
+}
+
 pub(crate) fn load_profiles() -> Result<Vec<Profile>, String> {
     let path = profile_path()?;
     if !path.exists() {
@@ -105,6 +114,40 @@ pub fn revoke_profile(profile_id: &str) -> Result<(), String> {
     validate_profile_id(profile_id)?;
     let mut profiles = load_profiles()?;
     profiles.retain(|profile| profile.profile_id != profile_id);
+    save_profiles(&profiles)
+}
+
+/// Secret-free list of stored grants, for settings UIs that show which
+/// accounts a share currently covers.
+pub fn list_profiles() -> Result<Vec<ProfileSummary>, String> {
+    Ok(load_profiles()?
+        .into_iter()
+        .map(|profile| ProfileSummary {
+            profile_id: profile.profile_id,
+            account_ids: profile.account_ids,
+            scopes: profile.scopes,
+        })
+        .collect())
+}
+
+/// Change which accounts a profile grants without rotating its token.
+/// Clearing the list leaves the profile without any account to grant, so it
+/// is revoked like an explicit `revoke_profile`.
+pub fn update_profile_accounts(
+    profile_id: &str,
+    account_ids: Vec<String>,
+) -> Result<(), String> {
+    validate_profile_id(profile_id)?;
+    let account_ids = normalize_account_ids(account_ids)?;
+    if account_ids.is_empty() {
+        return revoke_profile(profile_id);
+    }
+    let mut profiles = load_profiles()?;
+    let profile = profiles
+        .iter_mut()
+        .find(|profile| profile.profile_id == profile_id)
+        .ok_or_else(|| "no such worker profile".to_string())?;
+    profile.account_ids = account_ids;
     save_profiles(&profiles)
 }
 
@@ -274,4 +317,67 @@ fn normalize_account_ids(mut account_ids: Vec<String>) -> Result<Vec<String>, St
     account_ids.sort();
     account_ids.dedup();
     Ok(account_ids)
+}
+
+/// Serializes tests that set the process-global worker fixture env vars.
+/// Held by the crypto test in `worker::mail` too — parallel tests would
+/// otherwise point each other at a temp dir that gets deleted.
+#[cfg(test)]
+pub(crate) static FIXTURE_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn with_fixture_profile_dir<T>(run: impl FnOnce(&std::path::Path) -> T) -> T {
+        let _guard = FIXTURE_ENV_LOCK.lock().unwrap_or_else(|poison| poison.into_inner());
+        let dir = std::env::temp_dir().join(format!(
+            "sndmail-worker-profiles-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let old_fixture = std::env::var_os("SNDMAIL_WORKER_FIXTURE");
+        let old_data = std::env::var_os("SNDMAIL_WORKER_DATA_DIR");
+        std::env::set_var("SNDMAIL_WORKER_FIXTURE", "1");
+        std::env::set_var("SNDMAIL_WORKER_DATA_DIR", &dir);
+        let result = run(&dir);
+        let _ = fs::remove_dir_all(&dir);
+        if let Some(value) = old_fixture {
+            std::env::set_var("SNDMAIL_WORKER_FIXTURE", value);
+        } else {
+            std::env::remove_var("SNDMAIL_WORKER_FIXTURE");
+        }
+        if let Some(value) = old_data {
+            std::env::set_var("SNDMAIL_WORKER_DATA_DIR", value);
+        } else {
+            std::env::remove_var("SNDMAIL_WORKER_DATA_DIR");
+        }
+        result
+    }
+
+    // One test: the fixture directory is process-global env state.
+    #[test]
+    fn update_profile_accounts_edits_grants_without_rotating_the_token() {
+        with_fixture_profile_dir(|_| {
+            let token = create_profile("commonplace", vec!["a1".into()], true).unwrap();
+            update_profile_accounts("commonplace", vec!["a2".into(), "a1".into()]).unwrap();
+            let profiles = load_profiles().unwrap();
+            let profile = &profiles[0];
+            assert_eq!(profile.account_ids, vec!["a1".to_string(), "a2".to_string()]);
+            assert!(profile.verify_token(&token));
+            let summary = list_profiles().unwrap();
+            assert_eq!(summary[0].profile_id, "commonplace");
+            assert_eq!(summary[0].account_ids, vec!["a1".to_string(), "a2".to_string()]);
+            assert_eq!(
+                summary[0].scopes,
+                vec!["metadata".to_string(), "read_content".to_string()]
+            );
+
+            assert!(update_profile_accounts("missing", vec!["a1".into()]).is_err());
+
+            update_profile_accounts("commonplace", Vec::new()).unwrap();
+            assert!(load_profiles().unwrap().is_empty());
+        });
+    }
 }

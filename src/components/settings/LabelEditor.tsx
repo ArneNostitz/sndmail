@@ -5,8 +5,10 @@ import { useLabelStore, type Label } from "@/stores/labelStore";
 import { LabelForm } from "@/components/labels/LabelForm";
 
 import { Tooltip } from "@/components/ui/Tooltip";
-export function LabelEditor() {
-  const activeAccountId = useAccountStore((s) => s.activeAccountId);
+export function LabelEditor({ accountId }: { accountId?: string } = {}) {
+  const storeAccountId = useAccountStore((s) => s.activeAccountId);
+  // Explicit prop (account settings) or the active mailbox (mail rules tab)
+  const activeAccountId = accountId ?? storeAccountId;
   const { labels, loadLabels, deleteLabel, reorderLabels } = useLabelStore();
 
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -19,6 +21,18 @@ export function LabelEditor() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- loadLabels is a stable store function, only re-run on activeAccountId change
   }, [activeAccountId]);
+
+  // When editing another account's labels (account settings), the shared
+  // label store must not leave the sidebar with the wrong mailbox's labels.
+  useEffect(() => {
+    if (!accountId) return;
+    return () => {
+      const active = useAccountStore.getState().activeAccountId;
+      if (active && active !== accountId) {
+        void useLabelStore.getState().loadLabels(active);
+      }
+    };
+  }, [accountId]);
 
   const resetForm = useCallback(() => {
     setEditingId(null);
@@ -98,6 +112,7 @@ export function LabelEditor() {
             </div>
             <div className="flex items-center gap-0.5">
               <Tooltip content="Move up"><button
+                aria-label="Move up"
                 onClick={() => handleMoveUp(index)}
                 disabled={index === 0}
                 className="p-1 text-text-tertiary hover:text-text-primary disabled:opacity-30 disabled:cursor-not-allowed"
@@ -106,6 +121,7 @@ export function LabelEditor() {
                 <ChevronUp size={13} />
               </button></Tooltip>
               <Tooltip content="Move down"><button
+                aria-label="Move down"
                 onClick={() => handleMoveDown(index)}
                 disabled={index === labels.length - 1}
                 className="p-1 text-text-tertiary hover:text-text-primary disabled:opacity-30 disabled:cursor-not-allowed"
@@ -114,6 +130,7 @@ export function LabelEditor() {
                 <ChevronDown size={13} />
               </button></Tooltip>
               <Tooltip content="Edit"><button
+                aria-label="Edit"
                 onClick={() => handleEdit(label)}
                 className="p-1 text-text-tertiary hover:text-text-primary"
 
@@ -121,6 +138,7 @@ export function LabelEditor() {
                 <Pencil size={13} />
               </button></Tooltip>
               <Tooltip content="Delete"><button
+                aria-label="Delete"
                 onClick={() => handleDelete(label)}
                 className="p-1 text-text-tertiary hover:text-danger"
 

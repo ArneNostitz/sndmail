@@ -3,12 +3,16 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 vi.mock("@/services/db/sendAsAliases", () => ({
   getAliasesForAccount: vi.fn(async () => []),
+  getAllAliases: vi.fn(async () => []),
   mapDbAlias: vi.fn((alias) => alias),
   setDefaultAlias: vi.fn(),
   upsertAlias: vi.fn(async () => "alias-id"),
   deleteAlias: vi.fn(async () => {}),
 }));
-vi.mock("@/services/gmail/tokenManager", () => ({ getGmailClient: vi.fn(async () => ({})) }));
+vi.mock("@/services/gmail/tokenManager", () => ({
+  getGmailClient: vi.fn(async () => ({})),
+  reauthorizeAccount: vi.fn(async () => {}),
+}));
 vi.mock("@/services/gmail/sendAs", () => ({
   fetchSendAsAliases: vi.fn(),
   createSendAsAlias: vi.fn(async () => {}),
@@ -28,7 +32,9 @@ import { fetchSendAsAliases, createSendAsAlias } from "@/services/gmail/sendAs";
 import { getGmailClient } from "@/services/gmail/tokenManager";
 import { getAliasesForAccount, upsertAlias } from "@/services/db/sendAsAliases";
 import { findAliasSuggestions } from "@/services/accounts/aliasSuggestions";
-import { SendAsAliasesSection } from "./SettingsPage";
+import { getAllAliases } from "@/services/db/sendAsAliases";
+import { reauthorizeAccount } from "@/services/gmail/tokenManager";
+import { SendAsAliasesSection } from "./SendAsAliasesSection";
 
 const baseAccount = {
   id: "gmail-1",
@@ -47,7 +53,7 @@ describe("SendAsAliasesSection", () => {
   });
 
   it("refreshes Gmail's alias list", async () => {
-    render(<SendAsAliasesSection />);
+    render(<SendAsAliasesSection accountId="gmail-1" />);
     fireEvent.click(screen.getByRole("button", { name: "Refresh aliases" }));
     await waitFor(() => expect(fetchSendAsAliases).toHaveBeenCalledWith({}, "gmail-1"));
     expect(getGmailClient).toHaveBeenCalledWith("gmail-1");
@@ -55,7 +61,7 @@ describe("SendAsAliasesSection", () => {
   });
 
   it("adds a Gmail alias through the Gmail API", async () => {
-    render(<SendAsAliasesSection />);
+    render(<SendAsAliasesSection accountId="gmail-1" />);
     fireEvent.change(screen.getByLabelText("New alias address"), {
       target: { value: "hello@reimedy.com" },
     });
@@ -67,7 +73,7 @@ describe("SendAsAliasesSection", () => {
   });
 
   it("rejects an incomplete address", async () => {
-    render(<SendAsAliasesSection />);
+    render(<SendAsAliasesSection accountId="gmail-1" />);
     fireEvent.change(screen.getByLabelText("New alias address"), {
       target: { value: "not-an-address" },
     });
@@ -82,7 +88,7 @@ describe("SendAsAliasesSection", () => {
     vi.mocked(findAliasSuggestions).mockResolvedValue([
       { email: "hello@reimedy.com", occurrences: 4, lastSeen: 100 },
     ]);
-    render(<SendAsAliasesSection />);
+    render(<SendAsAliasesSection accountId="gmail-1" />);
     await screen.findByText("hello@reimedy.com");
     fireEvent.click(screen.getByRole("button", { name: "Add" }));
     await waitFor(() =>
@@ -94,7 +100,7 @@ describe("SendAsAliasesSection", () => {
     useAccountStore.setState({
       accounts: [{ ...baseAccount, id: "imap-1", provider: "imap" }],
     });
-    render(<SendAsAliasesSection />);
+    render(<SendAsAliasesSection accountId="imap-1" />);
     expect(screen.queryByRole("button", { name: "Refresh aliases" })).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("New alias address"), {
       target: { value: "hello@reimedy.com" },
@@ -113,10 +119,45 @@ describe("SendAsAliasesSection", () => {
     useAccountStore.setState({
       accounts: [{ ...baseAccount, id: "cal-1", provider: "caldav" }],
     });
-    render(<SendAsAliasesSection />);
+    render(<SendAsAliasesSection accountId="cal-1" />);
     expect(
       screen.getByText("Send-as aliases are available for mail accounts."),
     ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Add alias" })).not.toBeInTheDocument();
+  });
+
+  it("offers to connect aliases already used on another account", async () => {
+    useAccountStore.setState({
+      accounts: [
+        { ...baseAccount, provider: "gmail_api" },
+        { ...baseAccount, id: "other-1", email: "other@reimedy.com", displayName: "Reimedy", isActive: false },
+      ],
+    });
+    vi.mocked(getAllAliases).mockResolvedValue([
+      { id: "a1", account_id: "other-1", email: "hello@reimedy.com", display_name: null, reply_to_address: null, signature_id: null, is_primary: 0, is_default: 0, treat_as_alias: 1, verification_status: "accepted", created_at: 1 },
+    ]);
+    render(<SendAsAliasesSection accountId="gmail-1" />);
+    await screen.findByText("Connected to your other accounts");
+    expect(screen.getByText("Also on Reimedy")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Connect" }));
+    await waitFor(() =>
+      expect(createSendAsAlias).toHaveBeenCalledWith({}, "gmail-1", "hello@reimedy.com"),
+    );
+  });
+
+  it("offers to re-authorize when Gmail refuses send-as management", async () => {
+    vi.mocked(createSendAsAlias).mockRejectedValueOnce(
+      new Error("sndmail is not authorized to change your send-as addresses. (403)"),
+    );
+    render(<SendAsAliasesSection accountId="gmail-1" />);
+    fireEvent.change(screen.getByLabelText("New alias address"), {
+      target: { value: "hello@reimedy.com" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add alias" }));
+    await screen.findByRole("button", { name: "Re-authorize" });
+    fireEvent.click(screen.getByRole("button", { name: "Re-authorize" }));
+    await waitFor(() =>
+      expect(reauthorizeAccount).toHaveBeenCalledWith("gmail-1", "user@example.com"),
+    );
   });
 });

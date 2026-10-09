@@ -1,10 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useUIStore, type SettingsTab } from "@/stores/uiStore";
-import { useIdleStatusStore, describeIdleState, explainIdleFailure } from "@/stores/idleStatusStore";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { reportError, notify } from "@/stores/toastStore";
-import { Spinner } from "@/components/ui/Spinner";
 import { useAccountStore } from "@/stores/accountStore";
 import { useComposerStore } from "@/stores/composerStore";
 import { getSetting, setSetting, getSecureSetting, setSecureSetting } from "@/services/db/settings";
@@ -19,16 +17,9 @@ import {
 import { PROVIDER_MODELS, resolveModelId } from "@/services/ai/types";
 import { FIX_NUMBER } from "@/constants/build";
 import { UPDATE_SOURCE_CONFIGURED } from "@/services/updateManager";
-import { deleteAccount, updateAccountColor } from "@/services/db/accounts";
-import { ACCOUNT_COLORS, accountColor } from "@/constants/accountColors";
-import { removeClient, reauthorizeAccount, getGmailClient } from "@/services/gmail/tokenManager";
-import {
-  fetchSendAsAliases,
-  createSendAsAlias,
-  deleteSendAsAlias,
-} from "@/services/gmail/sendAs";
+import { accountColor } from "@/constants/accountColors";
 import { validateClientId, validateClientSecret } from "@/services/gmail/clientCredentials";
-import { triggerSync, forceFullSync, resyncAccount } from "@/services/gmail/syncManager";
+import { triggerSync, forceFullSync } from "@/services/gmail/syncManager";
 import { backgroundWorkerOwnsSync, reconfigureBackgroundWorkerRelay, requestWorkerResync, wakeBackgroundWorkerAndWait } from "@/services/worker/workerClient";
 import {
   getGmailPushRelayStatus,
@@ -65,6 +56,7 @@ import {
   Scale,
   ChevronUp,
   ChevronDown,
+  ChevronRight,
   RotateCcw,
   type LucideIcon,
 } from "lucide-react";
@@ -72,6 +64,8 @@ import { SignatureEditor } from "./SignatureEditor";
 import { TemplateEditor } from "./TemplateEditor";
 import { FilterEditor } from "./FilterEditor";
 import { LabelEditor } from "./LabelEditor";
+import { AccountDetail, PROVIDER_LABELS } from "./AccountDetail";
+import { Section } from "./SettingsSection";
 import { ContactEditor } from "./ContactEditor";
 import { SubscriptionManager } from "./SubscriptionManager";
 import { SemanticSearchSettings } from "./SemanticSearchSettings";
@@ -82,19 +76,6 @@ import { SHORTCUTS, getDefaultKeyMap } from "@/constants/shortcuts";
 import { useShortcutStore } from "@/stores/shortcutStore";
 import { useShortcutRecorder } from "@/hooks/useShortcutRecorder";
 import { COLOR_THEMES } from "@/constants/themes";
-import {
-  getAliasesForAccount,
-  setDefaultAlias,
-  mapDbAlias,
-  upsertAlias,
-  deleteAlias,
-  type SendAsAlias,
-} from "@/services/db/sendAsAliases";
-import { collectOwnAddresses } from "@/services/accounts/ownAddresses";
-import {
-  findAliasSuggestions,
-  type AliasSuggestion,
-} from "@/services/accounts/aliasSuggestions";
 import { ALL_NAV_ITEMS } from "@/components/layout/Sidebar";
 import type { SidebarNavItem } from "@/stores/uiStore";
 import { Button } from "@/components/ui/Button";
@@ -123,9 +104,6 @@ export function SettingsPage() {
   const readingPanePosition = useUIStore((s) => s.readingPanePosition);
   const setReadingPanePosition = useUIStore((s) => s.setReadingPanePosition);
   const [imapIdle, setImapIdle] = useState(true);
-  const idleStatuses = useIdleStatusStore((s) => s.statuses);
-  const idleReasons = useIdleStatusStore((s) => s.reasons);
-  const [reconnecting, setReconnecting] = useState<Record<string, boolean>>({});
   const [otpDetection, setOtpDetection] = useState(true);
   const [notifyAccounts, setNotifyAccounts] = useState<Set<string>>(() => new Set());
   const emailDensity = useUIStore((s) => s.emailDensity);
@@ -149,7 +127,6 @@ export function SettingsPage() {
   const setTimeFormat = useUIStore((s) => s.setTimeFormat);
   const setReduceMotion = useUIStore((s) => s.setReduceMotion);
   const accounts = useAccountStore((s) => s.accounts);
-  const removeAccountFromStore = useAccountStore((s) => s.removeAccount);
   const activeTab = useUIStore((s) => s.settingsTab);
   const setActiveTab = useUIStore((s) => s.setSettingsTab);
   const closeSettings = useUIStore((s) => s.closeSettings);
@@ -157,6 +134,9 @@ export function SettingsPage() {
   const addAccountPending = useUIStore((s) => s.settingsAddAccountPending);
   const clearAddAccountRequest = useUIStore((s) => s.clearAddAccountRequest);
   const [showAddAccount, setShowAddAccount] = useState(false);
+  // Master–detail: the accounts list opens a per-account detail pane
+  const [detailAccountId, setDetailAccountId] = useState<string | null>(null);
+  const detailAccount = accounts.find((a) => a.id === detailAccountId) ?? null;
 
   // Something outside settings (command palette, sidebar) asked to add an account
   useEffect(() => {
@@ -209,8 +189,6 @@ export function SettingsPage() {
   const [cacheMaxMb, setCacheMaxMb] = useState("500");
   const [cacheSizeMb, setCacheSizeMb] = useState<number | null>(null);
   const [clearingCache, setClearingCache] = useState(false);
-  const [reauthStatus, setReauthStatus] = useState<Record<string, "idle" | "authorizing" | "done" | "error">>({});
-  const [resyncStatus, setResyncStatus] = useState<Record<string, "idle" | "syncing" | "done" | "error">>({});
   const [autoArchiveCategories, setAutoArchiveCategories] = useState<Set<string>>(() => new Set());
   const [smartNotifications, setSmartNotifications] = useState(true);
   const [notifyCategories, setNotifyCategories] = useState<Set<string>>(() => new Set(["Primary"]));
@@ -530,75 +508,6 @@ export function SettingsPage() {
       reportError("Could not revoke Commonplace mail access", error);
     }
   }, []);
-
-  const handleRemoveAccount = useCallback(
-    async (accountId: string) => {
-      removeClient(accountId);
-      await deleteAccount(accountId);
-      removeAccountFromStore(accountId);
-      if (backgroundWorkerOwnsSync()) {
-        void reconfigureBackgroundWorkerRelay().catch((error) =>
-          console.warn("Could not refresh background worker account configuration:", error),
-        );
-      }
-    },
-    [removeAccountFromStore],
-  );
-
-  const handleReauthorizeAccount = useCallback(
-    async (accountId: string, email: string) => {
-      setReauthStatus((prev) => ({ ...prev, [accountId]: "authorizing" }));
-      try {
-        await reauthorizeAccount(accountId, email);
-        setReauthStatus((prev) => ({ ...prev, [accountId]: "done" }));
-        notify("success", `${email} re-authorised`, "Starting instant delivery with the new permissions.");
-        // The new token carries the IMAP scope — use it now rather than
-        // waiting for the next launch or a manual Reconnect
-        try {
-          const { reconnectAccount } = await import("@/services/imap/idleManager");
-          await reconnectAccount(accountId);
-        } catch (err) {
-          reportError(`Could not start instant delivery for ${email}`, err);
-        }
-        setTimeout(() => {
-          setReauthStatus((prev) => ({ ...prev, [accountId]: "idle" }));
-        }, 3000);
-      } catch (err) {
-        // The browser can crash mid sign-in, the tab can be closed, the
-        // wrong account can be picked — say which, and offer the retry
-        reportError(`Re-authorisation failed for ${email}`, err, {
-          label: "Try again",
-          run: () => handleReauthorizeAccount(accountId, email),
-        });
-        setReauthStatus((prev) => ({ ...prev, [accountId]: "error" }));
-        setTimeout(() => {
-          setReauthStatus((prev) => ({ ...prev, [accountId]: "idle" }));
-        }, 3000);
-      }
-    },
-    [],
-  );
-
-  const handleResyncAccount = useCallback(
-    async (accountId: string) => {
-      setResyncStatus((prev) => ({ ...prev, [accountId]: "syncing" }));
-      try {
-        if (backgroundWorkerOwnsSync()) await requestWorkerResync([accountId]);
-        else await resyncAccount(accountId);
-        setResyncStatus((prev) => ({ ...prev, [accountId]: "done" }));
-        setTimeout(() => {
-          setResyncStatus((prev) => ({ ...prev, [accountId]: "idle" }));
-        }, 3000);
-      } catch (err) {
-        reportError("Resync failed", err);
-        setResyncStatus((prev) => ({ ...prev, [accountId]: "error" }));
-        setTimeout(() => {
-          setResyncStatus((prev) => ({ ...prev, [accountId]: "idle" }));
-        }, 3000);
-      }
-    },
-    [],
-  );
 
   const activeTabDef = tabs.find((t) => t.id === activeTab);
 
@@ -1320,170 +1229,83 @@ export function SettingsPage() {
 
               {activeTab === "accounts" && (
                 <>
-                  <Section
-                    title="Mail Accounts"
-                    action={
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        icon={<Plus size={14} />}
-                        onClick={() => setShowAddAccount(true)}
+                  {detailAccount ? (
+                    <AccountDetail
+                      account={detailAccount}
+                      onBack={() => setDetailAccountId(null)}
+                    />
+                  ) : (
+                    <>
+                      <Section
+                        title="Accounts"
+                        action={
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            icon={<Plus size={14} />}
+                            onClick={() => setShowAddAccount(true)}
+                          >
+                            Add account
+                          </Button>
+                        }
                       >
-                        Add account
-                      </Button>
-                    }
-                  >
-                    {accounts.filter((a) => a.provider !== "caldav").length === 0 ? (
-                      <button
-                        onClick={() => setShowAddAccount(true)}
-                        className="w-full flex flex-col items-center gap-2 px-4 py-8 rounded-lg border border-dashed border-border-primary text-center hover:border-accent hover:bg-bg-hover transition-colors"
-                      >
-                        <Mail className="w-6 h-6 text-text-tertiary" />
-                        <span className="text-sm font-medium text-text-primary">
-                          Connect your first mailbox
-                        </span>
-                        <span className="text-xs text-text-tertiary">
-                          Sign in with Google, or set up any IMAP/SMTP provider
-                        </span>
-                      </button>
-                    ) : (
-                      <div className="space-y-2">
-                        {accounts.filter((a) => a.provider !== "caldav").map((account, accountIndex) => {
-                          const providerLabel = account.provider === "imap" ? "IMAP" : "Gmail";
-                          const current = accountColor(account.color, accountIndex);
-                          return (
-                            <div
-                              key={account.id}
-                              className="flex items-center justify-between py-2.5 px-4 bg-bg-secondary rounded-lg"
-                            >
-                              <div className="flex items-center gap-3 min-w-0">
-                                <span
-                                  className="w-2.5 h-2.5 rounded-full shrink-0"
-                                  style={{ backgroundColor: current.hex }}
-                                  aria-hidden="true"
-                                />
-                              <div className="min-w-0">
-                                <div className="text-sm font-medium text-text-primary flex items-center gap-2">
-                                  {account.displayName ?? account.email}
-                                  <span className="text-[0.6rem] font-medium px-1.5 py-0.5 rounded-full bg-bg-tertiary text-text-tertiary">
-                                    {providerLabel}
+                        {accounts.length === 0 ? (
+                          <button
+                            onClick={() => setShowAddAccount(true)}
+                            className="w-full flex flex-col items-center gap-2 px-4 py-8 rounded-lg border border-dashed border-border-primary text-center hover:border-accent hover:bg-bg-hover transition-colors"
+                          >
+                            <Mail className="w-6 h-6 text-text-tertiary" />
+                            <span className="text-sm font-medium text-text-primary">
+                              Connect your first mailbox
+                            </span>
+                            <span className="text-xs text-text-tertiary">
+                              Sign in with Google, or set up any IMAP/SMTP provider
+                            </span>
+                          </button>
+                        ) : (
+                          <div className="space-y-2">
+                            {accounts.map((account, accountIndex) => {
+                              const providerLabel = PROVIDER_LABELS[account.provider ?? ""] ?? "Account";
+                              const current = accountColor(account.color, accountIndex);
+                              return (
+                                <button
+                                  key={account.id}
+                                  onClick={() => setDetailAccountId(account.id)}
+                                  className="w-full flex items-center gap-3 py-2.5 px-4 bg-bg-secondary rounded-lg text-left hover:bg-bg-hover transition-colors group"
+                                >
+                                  <span
+                                    className="w-2.5 h-2.5 rounded-full shrink-0"
+                                    style={{ backgroundColor: current.hex }}
+                                    aria-hidden="true"
+                                  />
+                                  <span className="min-w-0 flex-1">
+                                    <span className="text-sm font-medium text-text-primary flex items-center gap-2">
+                                      {account.displayName ?? account.email}
+                                      <span className="text-[0.6rem] font-medium px-1.5 py-0.5 rounded-full bg-bg-tertiary text-text-tertiary">
+                                        {providerLabel}
+                                      </span>
+                                    </span>
+                                    <span className="block text-xs text-text-tertiary truncate">
+                                      {account.email}
+                                    </span>
                                   </span>
-                                </div>
-                                <div className="text-xs text-text-tertiary">
-                                  {account.email}
-                                </div>
-                                <AccountColorPicker
-                                  accountId={account.id}
-                                  selectedId={current.id}
-                                />
-                                {/* Whether this server is pushing to us right now — the
-                                    setting only says it was asked to */}
-                                {imapIdle && (() => {
-                                  const state = idleStatuses[account.id] ?? "off";
-                                  const reason = idleReasons[account.id];
-                                  const explanation =
-                                    state === "connected"
-                                      ? "The server is holding a connection open and will say the moment mail arrives."
-                                      : state === "connecting"
-                                        ? "Asking the server to hold a connection. Usually a few seconds."
-                                        : state === "failed"
-                                          ? explainIdleFailure(reason)
-                                          : "Not being watched. This account still syncs on the timer.";
-                                  return (
-                                    <Tooltip content={explanation} placement="bottom">
-                                      <div className="mt-1 flex items-center gap-1.5 text-[0.6875rem] cursor-default w-fit">
-                                        {state === "connecting" ? (
-                                          <Spinner size={11} label="Connecting" className="text-accent" />
-                                        ) : (
-                                          <span
-                                            aria-hidden="true"
-                                            className={`inline-block w-2 h-2 rounded-full ${
-                                              state === "connected" ? "bg-success"
-                                              : state === "failed" ? "bg-warning"
-                                              : "bg-text-tertiary"
-                                            }`}
-                                          />
-                                        )}
-                                        <span className={
-                                          state === "connected" ? "text-success"
-                                          : state === "failed" ? "text-warning"
-                                          : "text-text-tertiary"
-                                        }>
-                                          {describeIdleState(state)}
-                                        </span>
-                                      </div>
-                                    </Tooltip>
-                                  );
-                                })()}
-                              </div>
-                              </div>
-                              <div className="flex items-center gap-3">
-                                {imapIdle && (
-                                  <button
-                                    onClick={async () => {
-                                      setReconnecting((prev) => ({ ...prev, [account.id]: true }));
-                                      try {
-                                        const { reconnectAccount } = await import("@/services/imap/idleManager");
-                                        await reconnectAccount(account.id);
-                                      } finally {
-                                        setReconnecting((prev) => ({ ...prev, [account.id]: false }));
-                                      }
-                                    }}
-                                    disabled={reconnecting[account.id] || idleStatuses[account.id] === "connecting"}
-                                    className="flex items-center gap-1 text-xs text-accent hover:text-accent-hover transition-colors disabled:opacity-50"
-                                  >
-                                    {(reconnecting[account.id] || idleStatuses[account.id] === "connecting") && (
-                                      <Spinner size={11} label="Reconnecting" />
-                                    )}
-                                    Reconnect
-                                  </button>
-                                )}
-                                <Tooltip
-                                  content={
-                                    reauthStatus[account.id] === "authorizing"
-                                      ? "Waiting for the sign-in to finish in your browser. If the tab is gone, click again to start over."
-                                      : "Sign in again to grant new permissions — needed once for instant delivery."
-                                  }
-                                  placement="bottom"
-                                >
-                                <button
-                                  onClick={() => handleReauthorizeAccount(account.id, account.email)}
-                                  className="flex items-center gap-1 text-xs text-accent hover:text-accent-hover transition-colors"
-                                >
-                                  {reauthStatus[account.id] === "authorizing" && <><Spinner size={11} label="Waiting for Google" />Waiting…</>}
-                                  {reauthStatus[account.id] === "done" && "Done!"}
-                                  {reauthStatus[account.id] === "error" && "Failed"}
-                                  {(!reauthStatus[account.id] || reauthStatus[account.id] === "idle") && "Re-authorize"}
+                                  <ChevronRight
+                                    size={15}
+                                    className="text-text-tertiary shrink-0 group-hover:text-text-secondary"
+                                  />
                                 </button>
-                                </Tooltip>
-                                <button
-                                  onClick={() => handleResyncAccount(account.id)}
-                                  disabled={resyncStatus[account.id] === "syncing"}
-                                  className="flex items-center gap-1 text-xs text-accent hover:text-accent-hover transition-colors disabled:opacity-50"
-                                >
-                                  {resyncStatus[account.id] === "syncing" && <><Spinner size={11} label="Resyncing" />Resyncing…</>}
-                                  {resyncStatus[account.id] === "done" && "Done!"}
-                                  {resyncStatus[account.id] === "error" && "Failed"}
-                                  {(!resyncStatus[account.id] || resyncStatus[account.id] === "idle") && "Resync"}
-                                </button>
-                                <button
-                                  onClick={() => handleRemoveAccount(account.id)}
-                                  className="text-xs text-danger hover:text-danger/80 transition-colors"
-                                >
-                                  Remove
-                                </button>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </Section>
-
+                              );
+                            })}
+                          </div>
+                        )}
+                        <p className="text-xs text-text-tertiary">
+                          Select an account to manage its aliases, signatures, folders, calendar and sharing.
+                        </p>
+                      </Section>
                   <Section title="Instant delivery">
                     <ToggleRow
                       label="Let servers push new mail"
-                      description="Hold a connection open so the server says the moment something arrives, instead of being asked every minute. Falls back to the timer wherever a server refuses. Status is shown on each account above."
+                      description="Hold a connection open so the server says the moment something arrives, instead of being asked every minute. Falls back to the timer wherever a server refuses. Status is shown in each account's detail."
                       checked={imapIdle}
                       onToggle={async () => {
                         const next = !imapIdle;
@@ -1496,41 +1318,6 @@ export function SettingsPage() {
                       }}
                     />
                   </Section>
-
-                  {accounts.some((a) => a.provider === "caldav") && (
-                    <Section title="Calendar Accounts">
-                      <div className="space-y-2">
-                        {accounts.filter((a) => a.provider === "caldav").map((account) => (
-                          <div
-                            key={account.id}
-                            className="flex items-center justify-between py-2.5 px-4 bg-bg-secondary rounded-lg"
-                          >
-                            <div>
-                              <div className="text-sm font-medium text-text-primary flex items-center gap-2">
-                                {account.displayName ?? account.email}
-                                <span className="text-[0.6rem] font-medium px-1.5 py-0.5 rounded-full bg-accent/10 text-accent">
-                                  CalDAV
-                                </span>
-                              </div>
-                              <div className="text-xs text-text-tertiary">
-                                {account.email}
-                              </div>
-                            </div>
-                            <button
-                              onClick={() => handleRemoveAccount(account.id)}
-                              className="text-xs text-danger hover:text-danger/80 transition-colors"
-                            >
-                              Remove
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    </Section>
-                  )}
-
-                  <SendAsAliasesSection />
-
-                  <ImapCalDavSection />
 
                   <Section title="Google API">
                     <div className="space-y-3">
@@ -1705,6 +1492,8 @@ export function SettingsPage() {
                   </Section>
 
                   <SyncOfflineSection />
+                    </>
+                  )}
                 </>
               )}
 
@@ -2088,327 +1877,6 @@ export function SettingsPage() {
  * Colour swatches for one account. The colour identifies the mailbox in the
  * unified inbox, where every thread otherwise looks alike.
  */
-function AccountColorPicker({
-  accountId,
-  selectedId,
-}: {
-  accountId: string;
-  selectedId: string;
-}) {
-  const setAccountColor = useAccountStore((s) => s.setAccountColor);
-
-  const pick = async (colorId: string) => {
-    setAccountColor(accountId, colorId);
-    await updateAccountColor(accountId, colorId);
-  };
-
-  return (
-    <div className="flex items-center gap-1.5 mt-1.5">
-      {ACCOUNT_COLORS.map((color) => {
-        const isSelected = color.id === selectedId;
-        return (
-          <Tooltip content={color.label}><button
-            key={color.id}
-            onClick={() => pick(color.id)}
-
-            aria-label={`Use ${color.label} for this account`}
-            aria-pressed={isSelected}
-            className={`w-4 h-4 rounded-full transition-transform hover:scale-110 ${
-              isSelected ? "ring-2 ring-offset-2 ring-offset-bg-secondary ring-text-tertiary" : ""
-            }`}
-            style={{ backgroundColor: color.hex }}
-          /></Tooltip>
-        );
-      })}
-    </div>
-  );
-}
-
-export function SendAsAliasesSection() {
-  const accounts = useAccountStore((s) => s.accounts);
-  const [aliases, setAliases] = useState<SendAsAlias[]>([]);
-  const [suggestions, setSuggestions] = useState<AliasSuggestion[]>([]);
-  const [newAliasEmail, setNewAliasEmail] = useState("");
-  const [aliasBusy, setAliasBusy] = useState(false);
-  const [aliasError, setAliasError] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
-
-  const reload = useCallback(async (accountId: string) => {
-    const dbAliases = await getAliasesForAccount(accountId);
-    setAliases(dbAliases.map(mapDbAlias));
-    const own = await collectOwnAddresses(
-      useAccountStore.getState().accounts,
-      [accountId],
-    );
-    setSuggestions(await findAliasSuggestions(accountId, own));
-  }, []);
-
-  const activeAccount = accounts.find((a) => a.isActive);
-  const isMailAccount = !!activeAccount && activeAccount.provider !== "caldav";
-  const isGmail = activeAccount?.provider === "gmail_api";
-
-  useEffect(() => {
-    const account = accounts.find((a) => a.isActive);
-    if (!account || account.provider === "caldav") {
-      setAliases([]);
-      setSuggestions([]);
-      return;
-    }
-    let cancelled = false;
-    (async () => {
-      try {
-        const dbAliases = await getAliasesForAccount(account.id);
-        if (cancelled) return;
-        setAliases(dbAliases.map(mapDbAlias));
-        const own = await collectOwnAddresses(accounts, [account.id]);
-        if (cancelled) return;
-        setSuggestions(await findAliasSuggestions(account.id, own));
-      } catch {
-        // Suggested aliases are optional decoration; the stored list is the truth.
-        if (!cancelled) setSuggestions([]);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [accounts]);
-
-  const handleRefresh = async () => {
-    if (!activeAccount || !isGmail) return;
-    setRefreshing(true);
-    setLoadError(null);
-    try {
-      const client = await getGmailClient(activeAccount.id);
-      await fetchSendAsAliases(client, activeAccount.id);
-      await reload(activeAccount.id);
-      notify("success", "Aliases refreshed");
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      setLoadError(message);
-      reportError("Could not refresh Gmail aliases", error);
-    } finally {
-      setRefreshing(false);
-    }
-  };
-
-  const handleAddAlias = async (email: string): Promise<boolean> => {
-    if (!activeAccount || !isMailAccount) return false;
-    const normalized = email.trim().toLowerCase();
-    if (!normalized.includes("@") || normalized.split("@").some((part) => !part.trim())) {
-      setAliasError("Enter a full email address, e.g. hello@reimedy.com.");
-      return false;
-    }
-    if (aliases.some((a) => a.email.toLowerCase() === normalized)) {
-      setAliasError("That address is already listed.");
-      return false;
-    }
-    setAliasBusy(true);
-    setAliasError(null);
-    try {
-      if (isGmail) {
-        const client = await getGmailClient(activeAccount.id);
-        await createSendAsAlias(client, activeAccount.id, normalized);
-      } else {
-        await upsertAlias({ accountId: activeAccount.id, email: normalized });
-      }
-      await reload(activeAccount.id);
-      notify("success", `Alias ${normalized} added`);
-      return true;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      setAliasError(message);
-      reportError("Could not add alias", error);
-      return false;
-    } finally {
-      setAliasBusy(false);
-    }
-  };
-
-  const handleRemoveAlias = async (alias: SendAsAlias) => {
-    if (!activeAccount || alias.isPrimary) return;
-    setAliasBusy(true);
-    try {
-      if (isGmail) {
-        const client = await getGmailClient(activeAccount.id);
-        await deleteSendAsAlias(client, activeAccount.id, alias.email);
-      } else {
-        await deleteAlias(alias.id);
-      }
-      await reload(activeAccount.id);
-      notify("success", "Alias removed");
-    } catch (error) {
-      reportError("Could not remove alias", error);
-    } finally {
-      setAliasBusy(false);
-    }
-  };
-
-  const handleSetDefault = async (alias: SendAsAlias) => {
-    if (!activeAccount) return;
-    await setDefaultAlias(activeAccount.id, alias.id);
-    setAliases((prev) =>
-      prev.map((a) => ({
-        ...a,
-        isDefault: a.id === alias.id,
-      })),
-    );
-  };
-
-  return (
-    <Section title="Send-As Aliases">
-      {!isMailAccount ? (
-        <p className="text-xs text-text-tertiary mb-3">Send-as aliases are available for mail accounts.</p>
-      ) : (
-        <>
-          <p className="text-xs text-text-tertiary mb-3">
-            {isGmail
-              ? "Addresses this account can send from. Workspace domain aliases (e.g. hello@reimedy.com for an account on diracting.com) are accepted without verification; any other address gets Gmail's verification mail. Replies automatically use the address the original email was sent to."
-              : "Addresses this account can send from. Your SMTP server decides which From addresses it accepts; replies automatically use the address the original email was sent to."}
-          </p>
-          <div className="flex gap-2 mb-3">
-            <input
-              type="email"
-              value={newAliasEmail}
-              onChange={(e) => setNewAliasEmail(e.target.value)}
-              placeholder="hello@reimedy.com"
-              aria-label="New alias address"
-              disabled={aliasBusy}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  void handleAddAlias(newAliasEmail).then((added) => {
-                    if (added) setNewAliasEmail("");
-                  });
-                }
-              }}
-              className="flex-1 min-w-0 bg-bg-tertiary text-text-primary text-sm px-3 py-1.5 rounded-md border border-border-primary focus:border-accent outline-none disabled:opacity-50"
-            />
-            <Button
-              variant="secondary"
-              size="md"
-              disabled={aliasBusy || !newAliasEmail.trim()}
-              onClick={() =>
-                void handleAddAlias(newAliasEmail).then((added) => {
-                  if (added) setNewAliasEmail("");
-                })
-              }
-            >
-              Add alias
-            </Button>
-          </div>
-          {aliasError && (
-            <p role="alert" className="text-xs text-warning mb-3">{aliasError}</p>
-          )}
-          {suggestions.length > 0 && (
-            <div className="mb-3 space-y-1.5">
-              <p className="text-xs font-medium text-text-secondary">
-                Suggested — addresses your mail was sent to
-              </p>
-              {suggestions.map((s) => (
-                <div
-                  key={s.email}
-                  className="flex items-center justify-between gap-3 py-2 px-4 bg-bg-secondary rounded-lg"
-                >
-                  <span className="text-sm text-text-primary truncate">{s.email}</span>
-                  <span className="text-xs text-text-tertiary shrink-0">
-                    {s.occurrences} message{s.occurrences === 1 ? "" : "s"}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => void handleAddAlias(s.email)}
-                    disabled={aliasBusy}
-                    className="text-xs text-accent hover:text-accent-hover transition-colors shrink-0 disabled:opacity-50"
-                  >
-                    Add
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-          {isGmail && (
-            <>
-              <button
-                type="button"
-                onClick={handleRefresh}
-                disabled={refreshing}
-                className="mb-3 flex items-center gap-1.5 text-xs text-accent hover:text-accent-hover disabled:opacity-50"
-              >
-                <RefreshCw size={13} className={refreshing ? "animate-spin" : ""} />
-                {refreshing ? "Refreshing…" : "Refresh aliases"}
-              </button>
-              {loadError && (loadError.includes("403") || loadError.toLowerCase().includes("reauthorize")) && (
-                <p role="alert" className="text-xs text-warning mb-3">
-                  Gmail denied access to send-as settings. Re-authorize this Gmail account in Settings → Accounts, then try again. ({loadError})
-                </p>
-              )}
-            </>
-          )}
-        </>
-      )}
-      {aliases.length === 0 ? (
-        <p className="text-sm text-text-tertiary">
-          {isMailAccount
-            ? "No aliases yet. Add one above, or add it from the suggestions when your mail was sent to another of your domains."
-            : "No mail account selected."}
-        </p>
-      ) : (
-        <div className="space-y-2">
-          {aliases.map((alias) => (
-            <div
-              key={alias.id}
-              className="flex items-center justify-between py-2.5 px-4 bg-bg-secondary rounded-lg"
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <Mail size={15} className="text-text-tertiary shrink-0" />
-                <div className="min-w-0">
-                  <div className="text-sm font-medium text-text-primary truncate">
-                    {alias.displayName ? `${alias.displayName} <${alias.email}>` : alias.email}
-                  </div>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    {alias.isPrimary && (
-                      <span className="text-[0.625rem] bg-accent/15 text-accent px-1.5 py-0.5 rounded-full">
-                        Primary
-                      </span>
-                    )}
-                    {alias.isDefault && (
-                      <span className="text-[0.625rem] bg-success/15 text-success px-1.5 py-0.5 rounded-full">
-                        Default
-                      </span>
-                    )}
-                    {alias.verificationStatus !== "accepted" && (
-                      <span className="text-[0.625rem] bg-warning/15 text-warning px-1.5 py-0.5 rounded-full">
-                        {alias.verificationStatus}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center gap-3 shrink-0 ml-3">
-                {!alias.isDefault && (
-                  <button
-                    onClick={() => handleSetDefault(alias)}
-                    className="text-xs text-accent hover:text-accent-hover transition-colors"
-                  >
-                    Set as default
-                  </button>
-                )}
-                {!alias.isPrimary && (
-                  <button
-                    onClick={() => handleRemoveAlias(alias)}
-                    disabled={aliasBusy}
-                    className="text-xs text-danger hover:opacity-80 transition-colors disabled:opacity-50"
-                  >
-                    Remove
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </Section>
-  );
-}
-
 function SyncOfflineSection() {
   const [pendingCount, setPendingCount] = useState(0);
   const [failedCount, setFailedCount] = useState(0);
@@ -2796,47 +2264,6 @@ function ShortcutsTab() {
   );
 }
 
-function ImapCalDavSection() {
-  const accounts = useAccountStore((s) => s.accounts);
-  const activeAccountId = useAccountStore((s) => s.activeAccountId);
-  const [account, setAccount] = useState<import("@/services/db/accounts").DbAccount | null>(null);
-
-  useEffect(() => {
-    if (!activeAccountId) return;
-    import("@/services/db/accounts").then(({ getAccount }) => {
-      getAccount(activeAccountId).then(setAccount);
-    });
-  }, [activeAccountId]);
-
-  const activeUiAccount = accounts.find((a) => a.id === activeAccountId);
-  const isImap = activeUiAccount?.provider === "imap";
-
-  if (!isImap || !account) return null;
-
-  return (
-    <Section title="Calendar (CalDAV)">
-      <CalDavSettingsInline account={account} onSaved={() => {
-        // Reload account
-        import("@/services/db/accounts").then(({ getAccount }) => {
-          getAccount(account.id).then(setAccount);
-        });
-      }} />
-    </Section>
-  );
-}
-
-function CalDavSettingsInline({ account, onSaved }: { account: import("@/services/db/accounts").DbAccount; onSaved: () => void }) {
-  const [CalDav, setCalDav] = useState<typeof import("@/components/settings/CalDavSettings").CalDavSettings | null>(null);
-
-  useEffect(() => {
-    import("@/components/settings/CalDavSettings").then((m) => setCalDav(() => m.CalDavSettings));
-  }, []);
-
-  if (!CalDav) return <div className="text-xs text-text-tertiary">Loading...</div>;
-
-  return <CalDav account={account} onSaved={onSaved} />;
-}
-
 function SidebarNavEditor() {
   const sidebarNavConfig = useUIStore((s) => s.sidebarNavConfig);
   const setSidebarNavConfig = useUIStore((s) => s.setSidebarNavConfig);
@@ -2945,29 +2372,6 @@ function SidebarNavEditor() {
         </button>
       )}
     </Section>
-  );
-}
-
-function Section({
-  title,
-  children,
-  action,
-}: {
-  title: string;
-  children: React.ReactNode;
-  /** Optional control rendered on the right of the section heading */
-  action?: React.ReactNode;
-}) {
-  return (
-    <div>
-      <div className="flex items-center justify-between gap-3 mb-3">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-text-tertiary">
-          {title}
-        </h3>
-        {action}
-      </div>
-      <div className="space-y-3">{children}</div>
-    </div>
   );
 }
 

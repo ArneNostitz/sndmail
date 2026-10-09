@@ -509,12 +509,12 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         title: "From aliases",
         summary: "Send from different email addresses.",
         description:
-          "Every address registered under Settings > Accounts > Send-As Aliases appears in the composer's \"From\" selector. Gmail aliases are synced from Gmail's send-as settings; workspace domain aliases (e.g. hello@reimedy.com for an account on diracting.com) can be added directly, and sndmail suggests addresses it spots in your incoming mail. The default alias is used for new compose; replies use the address the original email was sent to. IMAP accounts can add aliases too — your SMTP server decides which From addresses it accepts.",
+          "Every address registered under Settings > Accounts, pick the account → Aliases appears in the composer's \"From\" selector. Gmail aliases are synced from Gmail's send-as settings; workspace domain aliases (e.g. hello@reimedy.com for an account on diracting.com) can be added directly, and sndmail suggests addresses it spots in your incoming mail. The default alias is used for new compose; replies use the address the original email was sent to. IMAP accounts can add aliases too — your SMTP server decides which From addresses it accepts.",
         tips: [
-          { text: "Add an alias in Settings > Accounts > Send-As Aliases, or accept a suggested one." },
+          { text: "Add an alias in Settings > Accounts, pick the account → Aliases, or accept a suggested one." },
           { text: "The From selector only appears when your account has multiple aliases." },
           { text: "Replies use the address the email was originally sent to." },
-          { text: "Set a default alias for new compose in Settings > Accounts > Send-As Aliases." },
+          { text: "Set a default alias for new compose in Settings > Accounts, pick the account → Aliases." },
         ],
         relatedSettingsTab: "accounts",
       },

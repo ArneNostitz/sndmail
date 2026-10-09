@@ -55,6 +55,17 @@ sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio",
 ring = "0.17"
 chrono = "0.4"
 regex = "1"
+# JavaScript-semantics regexes (lookbehind for the trimTextBody port) and
+# sha256 for the semantic-search document/fingerprint ids.
+fancy-regex = "0.14"
+sha2 = "0.10"
+# In-process ONNX embedding (multilingual-e5-small) for semantic search. ort must
+# stay on this exact rc (2.0.0-rc.13) so its ndarray version matches ours, and
+# tokenizers drops its default onig feature (C dependency we do not ship);
+# fancy-regex is its pure-Rust regex engine and an existing direct dependency.
+ort = "=2.0.0-rc.13"
+tokenizers = { version = "0.23", default-features = false, features = ["fancy-regex"] }
+ndarray = "0.17"
 
 [[bin]]
 name = "sndmail-worker"

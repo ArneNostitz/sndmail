@@ -15,8 +15,6 @@ vi.mock("@/services/gmail/tokenManager", () => ({
 }));
 vi.mock("@/services/gmail/sendAs", () => ({
   fetchSendAsAliases: vi.fn(),
-  createSendAsAlias: vi.fn(async () => {}),
-  deleteSendAsAlias: vi.fn(async () => {}),
 }));
 vi.mock("@/services/accounts/ownAddresses", () => ({
   collectOwnAddresses: vi.fn(async (_accounts, accountIds) =>
@@ -26,14 +24,20 @@ vi.mock("@/services/accounts/aliasSuggestions", () => ({
   findAliasSuggestions: vi.fn(async () => []),
 }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn(async () => {}) }));
+vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: vi.fn(async () => {}) }));
 
 import { useAccountStore } from "@/stores/accountStore";
-import { fetchSendAsAliases, createSendAsAlias } from "@/services/gmail/sendAs";
+import { fetchSendAsAliases } from "@/services/gmail/sendAs";
 import { getGmailClient } from "@/services/gmail/tokenManager";
-import { getAliasesForAccount, upsertAlias } from "@/services/db/sendAsAliases";
+import {
+  getAliasesForAccount,
+  upsertAlias,
+  deleteAlias,
+  getAllAliases,
+} from "@/services/db/sendAsAliases";
 import { findAliasSuggestions } from "@/services/accounts/aliasSuggestions";
-import { getAllAliases } from "@/services/db/sendAsAliases";
 import { reauthorizeAccount } from "@/services/gmail/tokenManager";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { SendAsAliasesSection } from "./SendAsAliasesSection";
 
 const baseAccount = {
@@ -60,39 +64,53 @@ describe("SendAsAliasesSection", () => {
     expect(getAliasesForAccount).toHaveBeenCalledWith("gmail-1");
   });
 
-  it("adds a Gmail alias through the Gmail API", async () => {
+  it("does not offer local alias edits for Gmail — manages them Google-side", async () => {
     render(<SendAsAliasesSection accountId="gmail-1" />);
-    fireEvent.change(screen.getByLabelText("New alias address"), {
-      target: { value: "hello@reimedy.com" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Add alias" }));
+    expect(screen.queryByLabelText("New alias address")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Add alias" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Open Gmail settings/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Open Gmail settings/ }));
     await waitFor(() =>
-      expect(createSendAsAlias).toHaveBeenCalledWith({}, "gmail-1", "hello@reimedy.com"),
+      expect(openUrl).toHaveBeenCalledWith("https://mail.google.com/mail/u/0/#settings/accounts"),
     );
-    expect(upsertAlias).not.toHaveBeenCalled();
   });
 
-  it("rejects an incomplete address", async () => {
-    render(<SendAsAliasesSection accountId="gmail-1" />);
-    fireEvent.change(screen.getByLabelText("New alias address"), {
-      target: { value: "not-an-address" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Add alias" }));
-    await waitFor(() =>
-      expect(screen.getByRole("alert")).toHaveTextContent("Enter a full email address"),
-    );
-    expect(createSendAsAlias).not.toHaveBeenCalled();
-  });
-
-  it("offers and adds suggested aliases from received mail", async () => {
+  it("shows Google-side suggestions without an Add action for Gmail", async () => {
     vi.mocked(findAliasSuggestions).mockResolvedValue([
       { email: "hello@reimedy.com", occurrences: 4, lastSeen: 100 },
     ]);
     render(<SendAsAliasesSection accountId="gmail-1" />);
     await screen.findByText("hello@reimedy.com");
-    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    expect(screen.queryByRole("button", { name: "Add" })).not.toBeInTheDocument();
+    expect(upsertAlias).not.toHaveBeenCalled();
+  });
+
+  it("shows cross-account aliases without a Connect action for Gmail", async () => {
+    useAccountStore.setState({
+      accounts: [
+        { ...baseAccount, provider: "gmail_api" },
+        { ...baseAccount, id: "other-1", email: "other@reimedy.com", displayName: "Reimedy", isActive: false },
+      ],
+    });
+    vi.mocked(getAllAliases).mockResolvedValue([
+      { id: "a1", account_id: "other-1", email: "hello@reimedy.com", display_name: null, reply_to_address: null, signature_id: null, is_primary: 0, is_default: 0, treat_as_alias: 1, verification_status: "accepted", created_at: 1 },
+    ]);
+    render(<SendAsAliasesSection accountId="gmail-1" />);
+    await screen.findByText("Connected to your other accounts");
+    expect(screen.getByText("Also on Reimedy")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Connect" })).not.toBeInTheDocument();
+  });
+
+  it("offers to re-authorize when Gmail refuses send-as access on refresh", async () => {
+    vi.mocked(fetchSendAsAliases).mockRejectedValueOnce(
+      new Error("sndmail is not authorized to read your send-as addresses. (403)"),
+    );
+    render(<SendAsAliasesSection accountId="gmail-1" />);
+    fireEvent.click(screen.getByRole("button", { name: "Refresh aliases" }));
+    await screen.findByRole("button", { name: "Re-authorize" });
+    fireEvent.click(screen.getByRole("button", { name: "Re-authorize" }));
     await waitFor(() =>
-      expect(createSendAsAlias).toHaveBeenCalledWith({}, "gmail-1", "hello@reimedy.com"),
+      expect(reauthorizeAccount).toHaveBeenCalledWith("gmail-1", "user@example.com"),
     );
   });
 
@@ -112,7 +130,16 @@ describe("SendAsAliasesSection", () => {
         email: "hello@reimedy.com",
       }),
     );
-    expect(createSendAsAlias).not.toHaveBeenCalled();
+  });
+
+  it("does not offer removing aliases for Gmail accounts", async () => {
+    vi.mocked(getAliasesForAccount).mockResolvedValue([
+      { id: "a1", account_id: "gmail-1", email: "hello@reimedy.com", display_name: null, reply_to_address: null, signature_id: null, is_primary: 0, is_default: 0, treat_as_alias: 1, verification_status: "accepted", created_at: 1 },
+    ]);
+    render(<SendAsAliasesSection accountId="gmail-1" />);
+    await waitFor(() => expect(screen.getAllByText("hello@reimedy.com").length).toBeGreaterThan(0));
+    expect(screen.queryByRole("button", { name: "Remove" })).not.toBeInTheDocument();
+    expect(deleteAlias).not.toHaveBeenCalled();
   });
 
   it("shows no alias management for non-mail accounts", () => {
@@ -124,40 +151,5 @@ describe("SendAsAliasesSection", () => {
       screen.getByText("Send-as aliases are available for mail accounts."),
     ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Add alias" })).not.toBeInTheDocument();
-  });
-
-  it("offers to connect aliases already used on another account", async () => {
-    useAccountStore.setState({
-      accounts: [
-        { ...baseAccount, provider: "gmail_api" },
-        { ...baseAccount, id: "other-1", email: "other@reimedy.com", displayName: "Reimedy", isActive: false },
-      ],
-    });
-    vi.mocked(getAllAliases).mockResolvedValue([
-      { id: "a1", account_id: "other-1", email: "hello@reimedy.com", display_name: null, reply_to_address: null, signature_id: null, is_primary: 0, is_default: 0, treat_as_alias: 1, verification_status: "accepted", created_at: 1 },
-    ]);
-    render(<SendAsAliasesSection accountId="gmail-1" />);
-    await screen.findByText("Connected to your other accounts");
-    expect(screen.getByText("Also on Reimedy")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Connect" }));
-    await waitFor(() =>
-      expect(createSendAsAlias).toHaveBeenCalledWith({}, "gmail-1", "hello@reimedy.com"),
-    );
-  });
-
-  it("offers to re-authorize when Gmail refuses send-as management", async () => {
-    vi.mocked(createSendAsAlias).mockRejectedValueOnce(
-      new Error("sndmail is not authorized to change your send-as addresses. (403)"),
-    );
-    render(<SendAsAliasesSection accountId="gmail-1" />);
-    fireEvent.change(screen.getByLabelText("New alias address"), {
-      target: { value: "hello@reimedy.com" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Add alias" }));
-    await screen.findByRole("button", { name: "Re-authorize" });
-    fireEvent.click(screen.getByRole("button", { name: "Re-authorize" }));
-    await waitFor(() =>
-      expect(reauthorizeAccount).toHaveBeenCalledWith("gmail-1", "user@example.com"),
-    );
   });
 });

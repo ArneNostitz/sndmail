@@ -2,10 +2,12 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 
 vi.mock("@/services/db/sendAsAliases", () => ({
   upsertAlias: vi.fn(() => Promise.resolve("mock-id")),
+  getAliasesForAccount: vi.fn(() => Promise.resolve([])),
+  deleteAlias: vi.fn(() => Promise.resolve()),
 }));
 
-import { upsertAlias } from "@/services/db/sendAsAliases";
-import { createSendAsAlias, deleteSendAsAlias, fetchSendAsAliases } from "./sendAs";
+import { upsertAlias, deleteAlias, getAliasesForAccount } from "@/services/db/sendAsAliases";
+import { fetchSendAsAliases } from "./sendAs";
 
 describe("fetchSendAsAliases", () => {
   const mockClient = {
@@ -14,6 +16,7 @@ describe("fetchSendAsAliases", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(getAliasesForAccount).mockResolvedValue([]);
   });
 
   it("fetches aliases and upserts each one", async () => {
@@ -100,42 +103,25 @@ describe("fetchSendAsAliases", () => {
       verificationStatus: "accepted",
     });
   });
-});
 
-describe("createSendAsAlias", () => {
-  const mockClient = {
-    request: vi.fn(),
-  };
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockClient.request.mockResolvedValue({ sendAs: [] });
-  });
-
-  it("posts the alias and re-syncs the stored list", async () => {
-    await createSendAsAlias(mockClient as never, "acc-1", "hello@reimedy.com", "Reimedy");
-
-    expect(mockClient.request).toHaveBeenNthCalledWith(1, "/settings/sendAs", {
-      method: "POST",
-      body: JSON.stringify({
-        sendAsEmail: "hello@reimedy.com",
-        treatAsAlias: true,
-        displayName: "Reimedy",
-      }),
+  it("reconciles away local rows no longer on Google", async () => {
+    mockClient.request.mockResolvedValue({
+      sendAs: [
+        {
+          sendAsEmail: "primary@example.com",
+          isPrimary: true,
+        },
+      ],
     });
-    expect(mockClient.request).toHaveBeenNthCalledWith(2, "/settings/sendAs");
-  });
+    vi.mocked(getAliasesForAccount).mockResolvedValue([
+      { id: "row-1", account_id: "acc-1", email: "removed@example.com" },
+      { id: "row-2", account_id: "acc-1", email: "primary@example.com" },
+    ] as never);
 
-  it("omits displayName when not provided", async () => {
-    await createSendAsAlias(mockClient as never, "acc-1", "hello@reimedy.com");
+    await fetchSendAsAliases(mockClient as never, "acc-1");
 
-    expect(mockClient.request).toHaveBeenNthCalledWith(1, "/settings/sendAs", {
-      method: "POST",
-      body: JSON.stringify({
-        sendAsEmail: "hello@reimedy.com",
-        treatAsAlias: true,
-      }),
-    });
+    expect(deleteAlias).toHaveBeenCalledWith("row-1");
+    expect(deleteAlias).not.toHaveBeenCalledWith("row-2");
   });
 
   it("rethrows 403 with a reauthorize message", async () => {
@@ -144,39 +130,7 @@ describe("createSendAsAlias", () => {
     );
 
     await expect(
-      createSendAsAlias(mockClient as never, "acc-1", "hello@reimedy.com"),
-    ).rejects.toThrow(/not authorized to change your send-as addresses/);
-  });
-});
-
-describe("deleteSendAsAlias", () => {
-  const mockClient = {
-    request: vi.fn(),
-  };
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockClient.request.mockResolvedValue({ sendAs: [] });
-  });
-
-  it("deletes the URL-encoded alias and re-syncs the stored list", async () => {
-    await deleteSendAsAlias(mockClient as never, "acc-1", "hello@reimedy.com");
-
-    expect(mockClient.request).toHaveBeenNthCalledWith(
-      1,
-      "/settings/sendAs/hello%40reimedy.com",
-      { method: "DELETE" },
-    );
-    expect(mockClient.request).toHaveBeenNthCalledWith(2, "/settings/sendAs");
-  });
-
-  it("rethrows 403 with a reauthorize message", async () => {
-    mockClient.request.mockRejectedValue(
-      new Error("Gmail API error: 403 insufficient permissions"),
-    );
-
-    await expect(
-      deleteSendAsAlias(mockClient as never, "acc-1", "hello@reimedy.com"),
-    ).rejects.toThrow(/not authorized to change your send-as addresses/);
+      fetchSendAsAliases(mockClient as never, "acc-1"),
+    ).rejects.toThrow(/not authorized to read your send-as addresses/);
   });
 });

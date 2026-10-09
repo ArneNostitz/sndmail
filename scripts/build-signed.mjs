@@ -20,6 +20,12 @@
  *
  * The rung is reported before the build starts, so a release never quietly
  * goes out one step below what was intended.
+ *
+ * Identities are picked and passed by certificate SHA-1 hash, never by name:
+ * two certificates can share one common name (a renewal and the original live
+ * side by side), and `codesign --sign <name>` fails with "ambiguous" then.
+ * The hash selects exactly one certificate. The first match wins, so when a
+ * short-lived certificate expires the next one in the list takes over.
  */
 import { execFileSync, spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
@@ -39,7 +45,12 @@ function identities() {
 }
 
 const found = identities()
-const pick = (needle) => found.split('\n').find((l) => l.includes(needle))?.match(/"(.+)"/)?.[1]
+// Each identity line is: `  N) <40-hex SHA-1> "<common name>"`. Return both:
+// the hash signs, the name is only for the report.
+const pick = (needle) => {
+  const m = found.split('\n').find((l) => l.includes(needle))?.match(/([0-9A-F]{40})\s+"(.+)"/)
+  return m ? { hash: m[1], name: m[2] } : undefined
+}
 
 const developerId = pick('Developer ID Application')
 const development = pick('Apple Development')
@@ -48,8 +59,8 @@ const env = { ...process.env }
 let rung
 
 if (developerId) {
-  rung = `Developer ID — ${developerId}`
-  env.APPLE_SIGNING_IDENTITY = developerId
+  rung = `Developer ID — ${developerId.name} [${developerId.hash.slice(0, 8)}]`
+  env.APPLE_SIGNING_IDENTITY = developerId.hash
 
   // Notarisation credentials, named the way the Tauri bundler expects them.
   // The App Store Connect key doubles as the notarytool key.
@@ -63,8 +74,8 @@ if (developerId) {
     rung += ' (not notarised — source ~/.config/matchmii/apple.env for that)'
   }
 } else if (development) {
-  rung = `Apple Development — ${development}`
-  env.APPLE_SIGNING_IDENTITY = development
+  rung = `Apple Development — ${development.name} [${development.hash.slice(0, 8)}]`
+  env.APPLE_SIGNING_IDENTITY = development.hash
 } else {
   rung = 'ad-hoc — no signing identity on this machine'
   console.log('  run `node scripts/macos-signing.mjs` to set up a Developer ID')

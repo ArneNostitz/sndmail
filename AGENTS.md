@@ -191,6 +191,7 @@ Key tables (35 total): `accounts` (with `provider` "gmail_api"|"imap", IMAP/SMTP
 
 ## Key Gotchas
 
+- **Signing identity ambiguity**: the keychain can hold two certificates with the SAME common name (a renewal next to the original — e.g. two "Developer ID Application: … (UB5KKAR9DA)" certs with different expiry), and `codesign --sign "<name>"` then fails with "ambiguous". Sign by certificate SHA-1 hash (`security find-identity -v -p codesigning` prints `N) <sha1> "<name>"`) — `scripts/build-signed.mjs` and `scripts/run-signed-dev.sh` do this and pass the hash via `APPLE_SIGNING_IDENTITY`, which `prepare-mail-worker.mjs` inherits. Never sign by name
 - **Tauri SQL plugin config**: `preload` in tauri.conf.json must be an array `["sqlite:sndmail.db"]` — NOT an object/map
 - **Tauri Emitter trait**: Must `use tauri::Emitter;` to call `.emit()` on windows
 - **Tauri capabilities**: Any new plugin needs explicit permissions added to `src-tauri/capabilities/default.json`. Windows allow `"main"`, `"splashscreen"`, and `"thread-*"` wildcard

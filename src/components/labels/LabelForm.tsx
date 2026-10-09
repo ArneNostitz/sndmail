@@ -122,6 +122,7 @@ export function LabelForm({ accountId, label, onDone, variant = "settings" }: La
       <div>
         <div className={`flex flex-wrap gap-1 ${isSidebar ? "gap-1" : "gap-1.5"}`}>
           <Tooltip content="No color"><button
+            aria-label="No color"
             onClick={() => setSelectedColor(null)}
             className={`${isSidebar ? "w-4 h-4" : "w-5 h-5"} rounded-full border-2 transition-colors ${
               selectedColor === null
@@ -135,6 +136,7 @@ export function LabelForm({ accountId, label, onDone, variant = "settings" }: La
           {GMAIL_LABEL_COLORS.map((color) => (
             <Tooltip content={color.bg}><button
               key={color.bg}
+              aria-label={color.bg}
               onClick={() => setSelectedColor(color)}
               className={`${isSidebar ? "w-4 h-4" : "w-5 h-5"} rounded-full border-2 transition-colors ${
                 selectedColor?.bg === color.bg

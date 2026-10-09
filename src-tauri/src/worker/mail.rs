@@ -2033,6 +2033,11 @@ mod tests {
 
     #[test]
     fn frontend_aes_gcm_credential_format_roundtrips_and_rejects_wrong_key() {
+        // Same lock the worker-profiles fixture tests take: these env vars
+        // are process-global and parallel tests would delete each other's dir.
+        let _guard = crate::worker::profiles::FIXTURE_ENV_LOCK
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner());
         let dir = std::env::temp_dir().join(format!("sndmail-worker-crypto-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let old_fixture = std::env::var_os("SNDMAIL_WORKER_FIXTURE");

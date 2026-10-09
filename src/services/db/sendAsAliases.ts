@@ -52,6 +52,14 @@ export async function getAliasesForAccount(
   );
 }
 
+/** Every alias row across accounts — the same address may be connected to several mailboxes. */
+export async function getAllAliases(): Promise<DbSendAsAlias[]> {
+  const db = await getDb();
+  return db.select<DbSendAsAlias[]>(
+    "SELECT * FROM send_as_aliases ORDER BY email, is_primary DESC",
+  );
+}
+
 export async function upsertAlias(alias: {
   accountId: string;
   email: string;

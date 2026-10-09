@@ -50,6 +50,19 @@ fn worker_revoke_relay_profile(profile_id: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn worker_list_relay_profiles() -> Result<Vec<worker_profiles::ProfileSummary>, String> {
+    worker_profiles::list_profiles()
+}
+
+#[tauri::command]
+fn worker_update_relay_accounts(
+    profile_id: String,
+    account_ids: Vec<String>,
+) -> Result<(), String> {
+    worker_profiles::update_profile_accounts(&profile_id, account_ids)
+}
+
+#[tauri::command]
 fn worker_wake() -> Result<(), String> {
     worker_send_control("wake")
 }
@@ -284,6 +297,8 @@ pub fn run() {
             worker_disable,
             worker_create_relay_profile,
             worker_revoke_relay_profile,
+            worker_list_relay_profiles,
+            worker_update_relay_accounts,
             worker_wake,
             worker_reconfigure_relay,
             semantic_search::semantic_search_status,

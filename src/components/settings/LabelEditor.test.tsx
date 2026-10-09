@@ -84,7 +84,7 @@ describe("LabelEditor", () => {
     render(<LabelEditor />);
 
     // Click the edit button (pencil icon)
-    const editButtons = screen.getAllByTitle("Edit");
+    const editButtons = screen.getAllByRole("button", { name: "Edit" });
     fireEvent.click(editButtons[0]!);
 
     const input = screen.getByPlaceholderText("Label name") as HTMLInputElement;
@@ -99,7 +99,7 @@ describe("LabelEditor", () => {
     ]);
     render(<LabelEditor />);
 
-    fireEvent.click(screen.getAllByTitle("Edit")[0]!);
+    fireEvent.click(screen.getAllByRole("button", { name: "Edit" })[0]!);
     fireEvent.change(screen.getByPlaceholderText("Label name"), { target: { value: "Updated" } });
     fireEvent.click(screen.getByText("Update"));
 
@@ -118,7 +118,7 @@ describe("LabelEditor", () => {
     ]);
     render(<LabelEditor />);
 
-    fireEvent.click(screen.getAllByTitle("Delete")[0]!);
+    fireEvent.click(screen.getAllByRole("button", { name: "Delete" })[0]!);
 
     await waitFor(() => {
       expect(mockDeleteLabel).toHaveBeenCalledWith("acc1", "L1");
@@ -132,8 +132,8 @@ describe("LabelEditor", () => {
     ]);
     render(<LabelEditor />);
 
-    const moveUpButtons = screen.getAllByTitle("Move up");
-    const moveDownButtons = screen.getAllByTitle("Move down");
+    const moveUpButtons = screen.getAllByRole("button", { name: "Move up" });
+    const moveDownButtons = screen.getAllByRole("button", { name: "Move down" });
 
     expect(moveUpButtons[0]!).toBeDisabled();
     expect(moveDownButtons[1]!).toBeDisabled();
@@ -149,7 +149,7 @@ describe("LabelEditor", () => {
     ]);
     render(<LabelEditor />);
 
-    const moveDownButtons = screen.getAllByTitle("Move down");
+    const moveDownButtons = screen.getAllByRole("button", { name: "Move down" });
     fireEvent.click(moveDownButtons[0]!);
 
     await waitFor(() => {
@@ -163,7 +163,7 @@ describe("LabelEditor", () => {
       { id: "L1", accountId: "acc1", name: "Work", type: "user", colorBg: null, colorFg: null, sortOrder: 0 },
     ]);
     render(<LabelEditor />);
-    fireEvent.click(screen.getAllByTitle("Delete")[0]!);
+    fireEvent.click(screen.getAllByRole("button", { name: "Delete" })[0]!);
 
     await waitFor(() => {
       expect(screen.getByText("API error")).toBeInTheDocument();
@@ -181,7 +181,7 @@ describe("LabelEditor", () => {
     fireEvent.click(screen.getByText("+ Add label"));
 
     // Click a color swatch (the red one #fb4c2f)
-    const colorButton = screen.getByTitle("#fb4c2f");
+    const colorButton = screen.getByRole("button", { name: "#fb4c2f" });
     fireEvent.click(colorButton);
 
     // The button should now have a ring indicating selection
@@ -196,7 +196,7 @@ describe("LabelEditor", () => {
     render(<LabelEditor />);
 
     // Click edit on the first label
-    fireEvent.click(screen.getAllByTitle("Edit")[0]!);
+    fireEvent.click(screen.getAllByRole("button", { name: "Edit" })[0]!);
 
     // Form should be visible
     const input = screen.getByPlaceholderText("Label name") as HTMLInputElement;

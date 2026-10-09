@@ -16,8 +16,10 @@ import {
   type DbSignature,
 } from "@/services/db/signatures";
 
-export function SignatureEditor() {
-  const activeAccountId = useAccountStore((s) => s.activeAccountId);
+export function SignatureEditor({ accountId }: { accountId?: string } = {}) {
+  const storeAccountId = useAccountStore((s) => s.activeAccountId);
+  // Explicit prop (account settings) or the active mailbox (composing tab)
+  const activeAccountId = accountId ?? storeAccountId;
   const [signatures, setSignatures] = useState<DbSignature[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState("");
@@ -158,6 +160,7 @@ export function SignatureEditor() {
               )}
               <Tooltip content={isHtmlMode ? "Switch to visual editor" : "Edit HTML source"}><button
                 type="button"
+                aria-label={isHtmlMode ? "Switch to visual editor" : "Edit HTML source"}
                 onClick={toggleHtmlMode}
                 className={`p-1.5 mr-1 rounded transition-colors ${isHtmlMode ? "text-accent bg-accent/10" : "text-text-tertiary hover:text-text-primary"}`}
 

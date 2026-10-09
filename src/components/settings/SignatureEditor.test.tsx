@@ -78,7 +78,7 @@ describe("SignatureEditor", () => {
 
     expect(screen.getByTestId("editor-content")).toBeInTheDocument();
     expect(screen.getByTestId("editor-toolbar")).toBeInTheDocument();
-    expect(screen.getByTitle("Edit HTML source")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Edit HTML source" })).toBeInTheDocument();
   });
 
   it("switches to HTML textarea when toggle is clicked", () => {
@@ -86,13 +86,13 @@ describe("SignatureEditor", () => {
     fireEvent.click(screen.getByText("+ Add signature"));
 
     // Click the toggle to switch to HTML mode
-    fireEvent.click(screen.getByTitle("Edit HTML source"));
+    fireEvent.click(screen.getByRole("button", { name: "Edit HTML source" }));
 
     // Should show textarea, not editor
     expect(screen.queryByTestId("editor-content")).not.toBeInTheDocument();
     expect(screen.queryByTestId("editor-toolbar")).not.toBeInTheDocument();
     expect(screen.getByText("HTML source")).toBeInTheDocument();
-    expect(screen.getByTitle("Switch to visual editor")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Switch to visual editor" })).toBeInTheDocument();
 
     // Textarea should have the editor's HTML content
     const textarea = document.querySelector("textarea")!;
@@ -105,14 +105,14 @@ describe("SignatureEditor", () => {
     fireEvent.click(screen.getByText("+ Add signature"));
 
     // Toggle to HTML mode
-    fireEvent.click(screen.getByTitle("Edit HTML source"));
+    fireEvent.click(screen.getByRole("button", { name: "Edit HTML source" }));
 
     // Edit the raw HTML
     const textarea = document.querySelector("textarea")!;
     fireEvent.change(textarea, { target: { value: "<b>custom html</b>" } });
 
     // Toggle back to WYSIWYG
-    fireEvent.click(screen.getByTitle("Switch to visual editor"));
+    fireEvent.click(screen.getByRole("button", { name: "Switch to visual editor" }));
 
     expect(screen.getByTestId("editor-content")).toBeInTheDocument();
     expect(screen.getByTestId("editor-toolbar")).toBeInTheDocument();
@@ -129,7 +129,7 @@ describe("SignatureEditor", () => {
     });
 
     // Toggle to HTML mode
-    fireEvent.click(screen.getByTitle("Edit HTML source"));
+    fireEvent.click(screen.getByRole("button", { name: "Edit HTML source" }));
 
     // Edit the raw HTML
     const textarea = document.querySelector("textarea")!;
@@ -175,7 +175,7 @@ describe("SignatureEditor", () => {
     fireEvent.click(screen.getByText("+ Add signature"));
 
     // Toggle to HTML mode
-    fireEvent.click(screen.getByTitle("Edit HTML source"));
+    fireEvent.click(screen.getByRole("button", { name: "Edit HTML source" }));
     expect(document.querySelector("textarea")).toBeInTheDocument();
 
     // Cancel

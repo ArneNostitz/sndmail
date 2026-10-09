@@ -61,7 +61,7 @@
       "files": {
         "Helpers/SndmailWorker.app": "binaries/SndmailWorker.app"
       },
-      "bundleVersion": "015"
+      "bundleVersion": "016"
     },
     "resources": {
       "../LICENSE": "LICENSE",

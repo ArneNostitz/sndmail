@@ -1,6 +1,6 @@
 {
   "name": "sndmail",
-  "version": "0.4.21+015",
+  "version": "0.4.21+016",
   "private": true,
   "license": "Apache-2.0",
   "type": "module",

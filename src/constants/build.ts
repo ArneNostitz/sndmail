@@ -9,7 +9,7 @@
  * (what Finder's Get Info shows) and onto `package.json`'s version as
  * `0.4.21+016` (what every `npm run` prints) — a test keeps the three in step.
  */
-export const FIX_NUMBER = "016";
+export const FIX_NUMBER = "017";
 
 export type BuildInfo = {
   shortSha: string;

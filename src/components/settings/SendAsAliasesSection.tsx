@@ -5,11 +5,8 @@ import { Spinner } from "@/components/ui/Spinner";
 import { reportError, notify } from "@/stores/toastStore";
 import { useAccountStore } from "@/stores/accountStore";
 import { getGmailClient, reauthorizeAccount } from "@/services/gmail/tokenManager";
-import {
-  fetchSendAsAliases,
-  createSendAsAlias,
-  deleteSendAsAlias,
-} from "@/services/gmail/sendAs";
+import { fetchSendAsAliases } from "@/services/gmail/sendAs";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   getAliasesForAccount,
   getAllAliases,
@@ -115,7 +112,7 @@ export function SendAsAliasesSection({ accountId }: { accountId: string }) {
   };
 
   const handleAddAlias = async (email: string): Promise<boolean> => {
-    if (!account || !isMailAccount) return false;
+    if (!account || !isMailAccount || isGmail) return false;
     const normalized = email.trim().toLowerCase();
     if (!normalized.includes("@") || normalized.split("@").some((part) => !part.trim())) {
       setAliasError("Enter a full email address, e.g. hello@reimedy.com.");
@@ -128,19 +125,13 @@ export function SendAsAliasesSection({ accountId }: { accountId: string }) {
     setAliasBusy(true);
     setAliasError(null);
     try {
-      if (isGmail) {
-        const client = await getGmailClient(account.id);
-        await createSendAsAlias(client, account.id, normalized);
-      } else {
-        await upsertAlias({ accountId: account.id, email: normalized });
-      }
+      await upsertAlias({ accountId: account.id, email: normalized });
       await reload();
       notify("success", `Alias ${normalized} added`);
       return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setAliasError(message);
-      if (isAuthRefusal(message)) setNeedsReauth(true);
       reportError("Could not add alias", error);
       return false;
     } finally {
@@ -149,21 +140,25 @@ export function SendAsAliasesSection({ accountId }: { accountId: string }) {
   };
 
   const handleRemoveAlias = async (alias: SendAsAlias) => {
-    if (!account || alias.isPrimary) return;
+    if (!account || alias.isPrimary || isGmail) return;
     setAliasBusy(true);
     try {
-      if (isGmail) {
-        const client = await getGmailClient(account.id);
-        await deleteSendAsAlias(client, account.id, alias.email);
-      } else {
-        await deleteAlias(alias.id);
-      }
+      await deleteAlias(alias.id);
       await reload();
       notify("success", "Alias removed");
     } catch (error) {
       reportError("Could not remove alias", error);
     } finally {
       setAliasBusy(false);
+    }
+  };
+
+  const handleOpenGmailSettings = async () => {
+    if (!account) return;
+    try {
+      await openUrl("https://mail.google.com/mail/u/0/#settings/accounts");
+    } catch (error) {
+      reportError("Could not open Gmail settings", error);
     }
   };
 
@@ -187,7 +182,7 @@ export function SendAsAliasesSection({ accountId }: { accountId: string }) {
       notify(
         "success",
         `${account.email} re-authorised`,
-        "Adding and refreshing aliases should work now.",
+        "Refreshing aliases should work now.",
       );
     } catch (error) {
       reportError(`Re-authorisation failed for ${account.email}`, error);
@@ -210,47 +205,60 @@ export function SendAsAliasesSection({ accountId }: { accountId: string }) {
         <>
           <p className="text-xs text-text-tertiary mb-3">
             {isGmail
-              ? "Addresses this account can send from. Workspace domain aliases (e.g. hello@reimedy.com for an account on diracting.com) are accepted without verification; any other address gets Gmail's verification mail. Replies automatically use the address the original email was sent to."
+              ? "Addresses this account can send from, as registered on your Google account. sndmail can only read this list — Google reserves adding and removing send-as addresses for Gmail itself. Add or remove a domain alias in Gmail's settings (or your Workspace admin), then press Refresh."
               : "Addresses this account can send from. Your SMTP server decides which From addresses it accepts; replies automatically use the address the original email was sent to."}
           </p>
-          <div className="flex gap-2 mb-3">
-            <input
-              type="email"
-              value={newAliasEmail}
-              onChange={(e) => setNewAliasEmail(e.target.value)}
-              placeholder="hello@reimedy.com"
-              aria-label="New alias address"
-              disabled={aliasBusy}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  void handleAddAlias(newAliasEmail).then((added) => {
-                    if (added) setNewAliasEmail("");
-                  });
-                }
-              }}
-              className="flex-1 min-w-0 bg-bg-tertiary text-text-primary text-sm px-3 py-1.5 rounded-md border border-border-primary focus:border-accent outline-none disabled:opacity-50"
-            />
-            <Button
-              variant="secondary"
-              size="md"
-              disabled={aliasBusy || !newAliasEmail.trim()}
-              onClick={() =>
-                void handleAddAlias(newAliasEmail).then((added) => {
-                  if (added) setNewAliasEmail("");
-                })
-              }
+          {isGmail ? (
+            <button
+              type="button"
+              onClick={() => void handleOpenGmailSettings()}
+              className="mb-3 text-xs text-accent hover:text-accent-hover transition-colors inline-flex items-center gap-1"
             >
-              Add alias
-            </Button>
-          </div>
-          {aliasError && (
-            <p role="alert" className="text-xs text-warning mb-3">{aliasError}</p>
+              <Mail size={13} />
+              Open Gmail settings to manage send-as addresses
+            </button>
+          ) : (
+            <>
+              <div className="flex gap-2 mb-3">
+                <input
+                  type="email"
+                  value={newAliasEmail}
+                  onChange={(e) => setNewAliasEmail(e.target.value)}
+                  placeholder="hello@reimedy.com"
+                  aria-label="New alias address"
+                  disabled={aliasBusy}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      void handleAddAlias(newAliasEmail).then((added) => {
+                        if (added) setNewAliasEmail("");
+                      });
+                    }
+                  }}
+                  className="flex-1 min-w-0 bg-bg-tertiary text-text-primary text-sm px-3 py-1.5 rounded-md border border-border-primary focus:border-accent outline-none disabled:opacity-50"
+                />
+                <Button
+                  variant="secondary"
+                  size="md"
+                  disabled={aliasBusy || !newAliasEmail.trim()}
+                  onClick={() =>
+                    void handleAddAlias(newAliasEmail).then((added) => {
+                      if (added) setNewAliasEmail("");
+                    })
+                  }
+                >
+                  Add alias
+                </Button>
+              </div>
+              {aliasError && (
+                <p role="alert" className="text-xs text-warning mb-3">{aliasError}</p>
+              )}
+            </>
           )}
           {needsReauth && account && (
             <div className="flex items-center justify-between gap-3 mb-3 px-3 py-2 rounded-md border border-warning/40 bg-warning/10">
               <p role="alert" className="text-xs text-warning">
-                Gmail has not granted sndmail permission to manage send-as addresses for this account. Re-authorize it to fix this.
+                Gmail has not granted sndmail permission to read send-as addresses for this account. Re-authorize it to fix this.
               </p>
               <Button
                 variant="secondary"
@@ -274,17 +282,21 @@ export function SendAsAliasesSection({ accountId }: { accountId: string }) {
                   className="flex items-center justify-between gap-3 py-2 px-4 bg-bg-secondary rounded-lg"
                 >
                   <span className="text-sm text-text-primary truncate">{s.email}</span>
-                  <span className="text-xs text-text-tertiary shrink-0">
-                    {s.occurrences} message{s.occurrences === 1 ? "" : "s"}
+                  <span className="text-xs text-text-tertiary truncate">
+                    {isGmail
+                      ? `${s.occurrences} message${s.occurrences === 1 ? "" : "s"} — set up in Gmail`
+                      : `${s.occurrences} message${s.occurrences === 1 ? "" : "s"}`}
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => void handleAddAlias(s.email)}
-                    disabled={aliasBusy}
-                    className="text-xs text-accent hover:text-accent-hover transition-colors shrink-0 disabled:opacity-50"
-                  >
-                    Add
-                  </button>
+                  {!isGmail && (
+                    <button
+                      type="button"
+                      onClick={() => void handleAddAlias(s.email)}
+                      disabled={aliasBusy}
+                      className="text-xs text-accent hover:text-accent-hover transition-colors shrink-0 disabled:opacity-50"
+                    >
+                      Add
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
@@ -305,14 +317,16 @@ export function SendAsAliasesSection({ accountId }: { accountId: string }) {
                       Also on {s.names.join(", ")}
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => void handleAddAlias(s.email)}
-                    disabled={aliasBusy}
-                    className="text-xs text-accent hover:text-accent-hover transition-colors shrink-0 disabled:opacity-50"
-                  >
-                    Connect
-                  </button>
+                  {!isGmail && (
+                    <button
+                      type="button"
+                      onClick={() => void handleAddAlias(s.email)}
+                      disabled={aliasBusy}
+                      className="text-xs text-accent hover:text-accent-hover transition-colors shrink-0 disabled:opacity-50"
+                    >
+                      Connect
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
@@ -339,9 +353,11 @@ export function SendAsAliasesSection({ accountId }: { accountId: string }) {
       )}
       {aliases.length === 0 ? (
         <p className="text-sm text-text-tertiary">
-          {isMailAccount
-            ? "No aliases yet. Add one above, or add it from the suggestions when your mail was sent to another of your domains."
-            : "No mail account selected."}
+          {isGmail
+            ? "No send-as addresses on your Google account yet. Add one in Gmail's settings (or your Workspace admin), then press Refresh."
+            : isMailAccount
+              ? "No aliases yet. Add one above, or add it from the suggestions when your mail was sent to another of your domains."
+              : "No mail account selected."}
         </p>
       ) : (
         <div className="space-y-2">
@@ -389,7 +405,7 @@ export function SendAsAliasesSection({ accountId }: { accountId: string }) {
                     Set as default
                   </button>
                 )}
-                {!alias.isPrimary && (
+                {!alias.isPrimary && !isGmail && (
                   <button
                     onClick={() => handleRemoveAlias(alias)}
                     disabled={aliasBusy}

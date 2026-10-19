@@ -315,6 +315,7 @@ export function ContactSidebar({ email, name, accountId, threadId, ownAddresses,
         <div className="flex items-center justify-center gap-3 mb-4">
           <Tooltip content="Send email"><button
             onClick={handleCompose}
+            aria-label="Send email"
 
             className="p-2 text-text-secondary hover:text-accent hover:bg-bg-hover rounded-lg transition-colors"
           >
@@ -322,6 +323,7 @@ export function ContactSidebar({ email, name, accountId, threadId, ownAddresses,
           </button></Tooltip>
           <Tooltip content={copyFeedback ? "Copied!" : "Copy email"}><button
             onClick={handleCopyEmail}
+            aria-label="Copy email"
 
             className="p-2 text-text-secondary hover:text-accent hover:bg-bg-hover rounded-lg transition-colors"
           >
@@ -329,6 +331,7 @@ export function ContactSidebar({ email, name, accountId, threadId, ownAddresses,
           </button></Tooltip>
           <Tooltip content={isVip ? "Remove VIP" : "Mark as VIP"}><button
             onClick={handleToggleVip}
+            aria-label={isVip ? "Remove VIP" : "Mark as VIP"}
 
             className={`p-2 rounded-lg transition-colors ${
               isVip

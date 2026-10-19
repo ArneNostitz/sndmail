@@ -57,6 +57,7 @@ export function AttachmentSaveButton({
     <Tooltip content="Save to Downloads — ⌘-click to choose a folder"><button
       onClick={handleSave}
       disabled={!attachment.gmail_attachment_id}
+      aria-label="Save to Downloads — ⌘-click to choose a folder"
 
       className={`shrink-0 transition-colors disabled:opacity-40 ${
         state === "saved"

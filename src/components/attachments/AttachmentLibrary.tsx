@@ -272,6 +272,7 @@ export function AttachmentLibrary() {
           <div className="flex border border-border-primary rounded-md overflow-hidden">
             <Tooltip content="Grid view"><button
               onClick={() => setViewMode("grid")}
+              aria-label="Grid view"
               className={`p-1.5 ${viewMode === "grid" ? "bg-accent/10 text-accent" : "text-text-tertiary hover:text-text-primary"}`}
 
             >
@@ -279,6 +280,7 @@ export function AttachmentLibrary() {
             </button></Tooltip>
             <Tooltip content="List view"><button
               onClick={() => setViewMode("list")}
+              aria-label="List view"
               className={`p-1.5 ${viewMode === "list" ? "bg-accent/10 text-accent" : "text-text-tertiary hover:text-text-primary"}`}
 
             >

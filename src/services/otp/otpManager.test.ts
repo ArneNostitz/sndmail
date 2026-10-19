@@ -71,7 +71,8 @@ describe("processIncomingCodes", () => {
   it("acts on a message only once, however often it re-syncs", async () => {
     await processIncomingCodes([codeMail()], NOW);
     await processIncomingCodes([codeMail()], NOW);
-    expect(mockWriteText).not.toHaveBeenCalled();
+    // The first sync copies; the re-sync of the same message stays quiet
+    expect(mockWriteText).toHaveBeenCalledTimes(1);
     expect(mockNotify).toHaveBeenCalledTimes(1);
   });
 
@@ -103,7 +104,7 @@ describe("processIncomingCodes", () => {
     const toast = useToastStore.getState().toasts[0];
     expect(toast?.title).toBe("Code copied: 271260");
     expect(toast?.ttlMs).toBeNull();
-    expect(toast?.actions?.map((a) => a.label)).toEqual(["Copy code", "Open sign-in link"]);
+    expect(toast?.actions?.map((a) => a.label)).toEqual(["Copy again", "Open sign-in link"]);
   });
 
   it("surfaces a sign-in link when there is no code", async () => {

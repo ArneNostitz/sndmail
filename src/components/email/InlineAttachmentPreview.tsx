@@ -163,6 +163,7 @@ function ImageThumbnail({
     <div ref={observerRef}>
       <Tooltip content={attachment.filename ?? "Image"}><button
         onClick={onClick}
+        aria-label={attachment.filename ?? "Image"}
         className="block rounded-md overflow-hidden border border-border-secondary hover:border-accent transition-colors"
 
       >

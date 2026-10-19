@@ -76,9 +76,9 @@ describe("ContactSidebar", () => {
     render(<ContactSidebar {...defaultProps} />);
 
     await waitFor(() => {
-      expect(screen.getByTitle("Send email")).toBeInTheDocument();
-      expect(screen.getByTitle("Copy email")).toBeInTheDocument();
-      expect(screen.getByTitle("Mark as VIP")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Send email" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Copy email" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Mark as VIP" })).toBeInTheDocument();
     });
   });
 
@@ -180,7 +180,7 @@ describe("ContactSidebar", () => {
     render(<ContactSidebar {...defaultProps} />);
 
     await waitFor(() => {
-      expect(screen.getByTitle("Remove VIP")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Remove VIP" })).toBeInTheDocument();
     });
   });
 

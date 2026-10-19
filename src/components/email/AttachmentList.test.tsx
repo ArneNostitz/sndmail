@@ -223,7 +223,7 @@ describe("AttachmentList", () => {
       />,
     );
 
-    fireEvent.click(screen.getByTitle("Save to Downloads — ⌘-click to choose a folder"));
+    fireEvent.click(screen.getByRole("button", { name: "Save to Downloads — ⌘-click to choose a folder" }));
 
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("save_attachment", {

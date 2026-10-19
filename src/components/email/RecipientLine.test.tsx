@@ -19,16 +19,16 @@ describe("RecipientLine", () => {
 
   it("opens and closes without touching anything else", () => {
     render(<RecipientLine toAddresses={MANY} />);
-    fireEvent.click(screen.getByTitle("Show every recipient"));
+    fireEvent.click(screen.getByRole("button", { name: "Show every recipient" }));
     expect(screen.getByText("250 recipients")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByTitle("Hide the recipient list"));
+    fireEvent.click(screen.getByRole("button", { name: "Hide the recipient list" }));
     expect(screen.getByText(/\+247 more/)).toBeInTheDocument();
   });
 
   it("counts Cc towards the total", () => {
     render(<RecipientLine toAddresses="a@x.com, b@x.com" ccAddresses="c@x.com, d@x.com" />);
-    fireEvent.click(screen.getByTitle("Show every recipient"));
+    fireEvent.click(screen.getByRole("button", { name: "Show every recipient" }));
     expect(screen.getByText("4 recipients")).toBeInTheDocument();
     expect(screen.getByText(/Cc: c@x.com, d@x.com/)).toBeInTheDocument();
   });
@@ -52,7 +52,7 @@ describe("RecipientLine inside a clickable header", () => {
         <RecipientLine toAddresses={MANY} />
       </div>,
     );
-    fireEvent.click(screen.getByTitle("Show every recipient"));
+    fireEvent.click(screen.getByRole("button", { name: "Show every recipient" }));
     expect(screen.getByText("250 recipients")).toBeInTheDocument();
     expect(onHeaderClick).not.toHaveBeenCalled();
   });
@@ -64,8 +64,8 @@ describe("RecipientLine inside a clickable header", () => {
         <RecipientLine toAddresses={MANY} />
       </div>,
     );
-    fireEvent.click(screen.getByTitle("Show every recipient"));
-    fireEvent.click(screen.getByTitle("Hide the recipient list"));
+    fireEvent.click(screen.getByRole("button", { name: "Show every recipient" }));
+    fireEvent.click(screen.getByRole("button", { name: "Hide the recipient list" }));
     expect(onHeaderClick).not.toHaveBeenCalled();
   });
 });

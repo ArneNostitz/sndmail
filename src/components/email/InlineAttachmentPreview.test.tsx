@@ -107,7 +107,7 @@ describe("InlineAttachmentPreview", () => {
     );
 
     // Should have an image button (thumbnail container)
-    expect(screen.getByTitle("photo.png")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "photo.png" })).toBeInTheDocument();
   });
 
   it("renders PDF cards for PDF attachments", () => {
@@ -190,7 +190,7 @@ describe("InlineAttachmentPreview", () => {
     );
 
     await waitFor(() => {
-      const thumbnail = screen.getByTitle("photo.png");
+      const thumbnail = screen.getByRole("button", { name: "photo.png" });
       thumbnail.click();
     });
 

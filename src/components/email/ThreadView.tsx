@@ -12,7 +12,7 @@ import { useContextMenuStore } from "@/stores/contextMenuStore";
 import { markThreadRead, spamThread } from "@/services/emailActions";
 import { getSetting } from "@/services/db/settings";
 import { getAllowlistedSenders } from "@/services/db/imageAllowlist";
-import { VolumeX, Merge } from "lucide-react";
+import { VolumeX, Merge, Sparkles } from "lucide-react";
 import { escapeHtml, sanitizeHtml } from "@/utils/sanitize";
 import { isNoReplyAddress } from "@/utils/noReply";
 import { recipientHeadersFromMessages } from "@/utils/resolveFromAddress";
@@ -21,6 +21,7 @@ import { ThreadSummary } from "./ThreadSummary";
 import { ChatThread } from "./ChatThread";
 import { PastConversations } from "./PastConversations";
 import { useOwnAddresses } from "@/hooks/useOwnAddresses";
+import { useThreadSummary } from "@/hooks/useThreadSummary";
 import { latestIncomingMessage, resolveReplyRecipients } from "@/utils/replyRecipients";
 import { SmartReplySuggestions } from "./SmartReplySuggestions";
 import { InlineReply } from "./InlineReply";
@@ -30,6 +31,8 @@ import { TaskSidebar } from "@/components/tasks/TaskSidebar";
 import { AiTaskExtractDialog } from "@/components/tasks/AiTaskExtractDialog";
 import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 import { MessageSkeleton } from "@/components/ui/Skeleton";
+import { Button } from "@/components/ui/Button";
+import { Spinner } from "@/components/ui/Spinner";
 import { RawMessageModal } from "./RawMessageModal";
 import { formatDateTime } from "@/utils/date";
 import { getBodySearchTerms } from "@/utils/searchHighlight";
@@ -529,6 +532,7 @@ export function ThreadView({ thread }: ThreadViewProps) {
   // their past conversations does not swap it out from under the user.
   // Must sit above the early return below — hooks cannot be conditional.
   const pinnedContact = useUIStore((s) => s.pinnedContact);
+  const summary = useThreadSummary({ threadId: thread.id, accountId: threadAccountId, messages });
 
   if (loadError) {
     return <div className="p-6" role="alert"><p>Could not open this email</p><p className="text-sm text-text-secondary">{loadError}</p><button className="mt-3 text-accent underline" onClick={() => setLoadAttempt((n) => n + 1)}>Retry</button></div>;
@@ -616,28 +620,45 @@ export function ThreadView({ thread }: ThreadViewProps) {
         )}
 
         {/* Thread subject */}
-        <div className="px-5 py-4 border-b border-border-secondary">
-          <h1 className="text-xl font-semibold tracking-tight text-text-primary flex items-center gap-2">
-            {thread.subject ?? "(No subject)"}
-            {thread.isMuted && (
-              <Tooltip content="Muted"><span className="text-text-secondary shrink-0" >
-                <VolumeX size={16} />
-              </span></Tooltip>
-            )}
-          </h1>
-          <div className="text-xs text-text-tertiary mt-1">
-            {messages.length} message{messages.length !== 1 ? "s" : ""} in this thread
+        <div className="px-5 py-4 border-b border-border-secondary flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-xl font-semibold tracking-tight text-text-primary flex items-center gap-2">
+              {thread.subject ?? "(No subject)"}
+              {thread.isMuted && (
+                <Tooltip content="Muted"><span className="text-text-secondary shrink-0" >
+                  <VolumeX size={16} />
+                </span></Tooltip>
+              )}
+            </h1>
+            <div className="text-xs text-text-tertiary mt-1">
+              {messages.length} message{messages.length !== 1 ? "s" : ""} in this thread
+            </div>
           </div>
+          {/* Summaries are made when asked for, never on open — see useThreadSummary */}
+          {summary.canRequest && (
+            <Tooltip content="Summarize this thread (z)"><Button
+              type="button"
+              variant="secondary"
+              size="xs"
+              onClick={summary.request}
+              className="shrink-0 gap-1 border border-accent/30 bg-accent/5 text-accent hover:bg-accent/10 hover:text-accent"
+            >
+              {summary.loading && !summary.summary
+                ? <Spinner size={12} label="Summarizing…" />
+                : <Sparkles size={12} />}
+              Summarize
+            </Button></Tooltip>
+          )}
         </div>
 
         {/* AI Summary */}
-        {threadAccountId && (
-          <ThreadSummary
-            threadId={thread.id}
-            accountId={threadAccountId}
-            messages={messages}
-          />
-        )}
+        <ThreadSummary
+          summary={summary.summary}
+          loading={summary.loading}
+          collapsed={summary.collapsed}
+          onToggleCollapsed={summary.toggleCollapsed}
+          onRefresh={summary.refresh}
+        />
 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto">

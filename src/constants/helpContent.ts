@@ -904,9 +904,10 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         title: "Thread summaries",
         summary: "AI-generated summary of long conversations.",
         description:
-          "For threads with many messages, click the summary button to get a concise AI-generated overview. The summary captures the key points, decisions, and action items from the entire conversation, saving you from reading through dozens of messages. Summaries are cached locally so you only pay for the API call once. Especially useful for threads you were CC'd on or need to catch up on after being away.",
+          "For threads with many messages, click Summarize in the thread header — or press z — to get a concise AI-generated overview. Nothing is summarized until you ask, so opening a thread never costs an API call. The summary captures the key points, decisions, and action items from the entire conversation, saving you from reading through dozens of messages. Summaries are cached locally so you only pay for the API call once, and a cached summary reappears the moment you reopen the thread.",
         tips: [
-          { text: "Click the summary icon in the thread view header." },
+          { text: "Summarize the open thread", shortcutId: "action.summarizeThread" },
+          { text: "The Summarize button sits in the thread view header." },
           { text: "Summaries are cached — subsequent views are instant and free." },
           { text: "Best for long threads with 5+ messages." },
           { text: "Captures key decisions, action items, and takeaways." },

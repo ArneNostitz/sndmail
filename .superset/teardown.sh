@@ -8,12 +8,29 @@
 #
 set -uo pipefail
 
-WORKSPACE="${SUPERSET_WORKSPACE_PATH:-$PWD}"
-HERE="$WORKSPACE/.superset"
-PIDFILE="$HERE/dev-server.pid"
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 step() { printf '\n\033[1m→ %s\033[0m\n' "$1"; }
 note() { printf '   %s\n' "$1"; }
+
+ROOT="${SUPERSET_ROOT_PATH:-}"
+if [ -z "$ROOT" ] || [ ! -f "$ROOT/package.json" ]; then
+  ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+fi
+
+WORKSPACE=""
+for candidate in "$PWD" "${SUPERSET_WORKSPACE_PATH:-}"; do
+  if [ -n "$candidate" ] &&
+     [ -f "$candidate/package.json" ] &&
+     [ -d "$candidate/.superset" ] &&
+     [ "$candidate" != "$ROOT" ]; then
+    WORKSPACE="$candidate"
+    break
+  fi
+done
+[ -n "$WORKSPACE" ] || WORKSPACE="$PWD"
+
+PIDFILE="$WORKSPACE/.superset/dev-server.pid"
 
 # ------------------------------------------------------- dev server processes
 kill_tree() {

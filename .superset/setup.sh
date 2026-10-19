@@ -14,13 +14,33 @@
 #
 set -euo pipefail
 
-WORKSPACE="${SUPERSET_WORKSPACE_PATH:-$PWD}"
-ROOT="${SUPERSET_ROOT_PATH:-$(git -C "$WORKSPACE" rev-parse --show-toplevel)}"
-NAME="${SUPERSET_WORKSPACE_NAME:-$(basename "$WORKSPACE")}"
-HERE="$WORKSPACE/.superset"
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 step() { printf '\n\033[1m→ %s\033[0m\n' "$1"; }
 note() { printf '   %s\n' "$1"; }
+
+# --------------------------------------------------------------- locations
+ROOT="${SUPERSET_ROOT_PATH:-}"
+if [ -z "$ROOT" ] || [ ! -f "$ROOT/package.json" ]; then
+  ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+fi
+
+# The workspace is the worktree this script runs in. Superset runs the scripts
+# in the workspace directory, so the current directory wins; SUPERSET_WORKSPACE_PATH
+# is the fallback. Neither is trusted blindly (a stale env var must not point the
+# setup at another worktree).
+WORKSPACE=""
+for candidate in "$PWD" "${SUPERSET_WORKSPACE_PATH:-}"; do
+  if [ -n "$candidate" ] &&
+     [ -f "$candidate/package.json" ] &&
+     [ -d "$candidate/.superset" ] &&
+     [ "$candidate" != "$ROOT" ]; then
+    WORKSPACE="$candidate"
+    break
+  fi
+done
+[ -n "$WORKSPACE" ] || WORKSPACE="$PWD"
+NAME="${SUPERSET_WORKSPACE_NAME:-$(basename "$WORKSPACE")}"
 
 cd "$WORKSPACE"
 
@@ -51,8 +71,7 @@ copy_one() {
   copied=$((copied + 1))
 }
 
-if [ -d "$ROOT/.git" ] || [ -f "$ROOT/.git" ]; then
-  # untracked files (not ignored) + ignored files (.env, *.key, ...)
+if [ -e "$ROOT/.git" ]; then
   while IFS= read -r -d '' rel; do
     case "$rel" in
       node_modules/* | */node_modules/*) continue ;;

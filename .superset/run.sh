@@ -17,11 +17,29 @@
 #
 set -euo pipefail
 
-WORKSPACE="${SUPERSET_WORKSPACE_PATH:-$PWD}"
-HERE="$WORKSPACE/.superset"
-cd "$WORKSPACE"
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 step() { printf '\n\033[1m→ %s\033[0m\n' "$1"; }
+
+# --------------------------------------------------------------- locations
+ROOT="${SUPERSET_ROOT_PATH:-}"
+if [ -z "$ROOT" ] || [ ! -f "$ROOT/package.json" ]; then
+  ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+fi
+
+WORKSPACE=""
+for candidate in "$PWD" "${SUPERSET_WORKSPACE_PATH:-}"; do
+  if [ -n "$candidate" ] &&
+     [ -f "$candidate/package.json" ] &&
+     [ -d "$candidate/.superset" ] &&
+     [ "$candidate" != "$ROOT" ]; then
+    WORKSPACE="$candidate"
+    break
+  fi
+done
+[ -n "$WORKSPACE" ] || WORKSPACE="$PWD"
+
+cd "$WORKSPACE"
 
 # ------------------------------------------------------------------- port
 PORT="$(node "$HERE/lib/ports.mjs" get --workspace "$WORKSPACE")"
@@ -45,7 +63,7 @@ if [ "$MODE" = "auto" ]; then
   fi
 fi
 
-PIDFILE="$HERE/dev-server.pid"
+PIDFILE="$WORKSPACE/.superset/dev-server.pid"
 echo $$ > "$PIDFILE"
 cleanup() { rm -f "$PIDFILE"; }
 trap cleanup EXIT INT TERM

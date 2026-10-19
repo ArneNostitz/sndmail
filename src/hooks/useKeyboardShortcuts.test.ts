@@ -40,6 +40,7 @@ const defaultKeyMap = {
   "app.help": "?",
   "action.selectAll": "Ctrl+A",
   "action.archive": "e",
+  "action.summarizeThread": "z",
   "nav.escape": "Escape",
 };
 let shortcutKeyMap = { ...defaultKeyMap };
@@ -225,6 +226,21 @@ describe("useKeyboardShortcuts", () => {
     expect(listener).not.toHaveBeenCalled();
 
     window.removeEventListener("sndmail-toggle-ask-inbox", listener);
+  });
+
+  it("asks the open reading pane to summarize on 'z'", () => {
+    renderHook(() => useKeyboardShortcuts());
+
+    const listener = vi.fn();
+    window.addEventListener("sndmail-summarize-thread", listener);
+
+    window.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "z", bubbles: true }),
+    );
+
+    expect(listener).toHaveBeenCalledTimes(1);
+
+    window.removeEventListener("sndmail-summarize-thread", listener);
   });
 
   it("selects every thread on Ctrl+A in the mail list", () => {

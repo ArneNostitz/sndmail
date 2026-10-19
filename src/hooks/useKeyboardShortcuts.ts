@@ -15,6 +15,7 @@ import { getMessagesForThread } from "@/services/db/messages";
 import { parseUnsubscribeUrl } from "@/components/email/MessageItem";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { refreshMail } from "@/services/refreshMail";
+import { SUMMARIZE_THREAD_EVENT } from "@/hooks/useThreadSummary";
 
 /**
  * Parse a key binding string and check if it matches a keyboard event.
@@ -533,6 +534,12 @@ async function executeAction(actionId: string): Promise<void> {
       if (selectedId) {
         window.dispatchEvent(new CustomEvent("sndmail-extract-task", { detail: { threadId: selectedId } }));
       }
+      break;
+    }
+    case "action.summarizeThread": {
+      // The open reading pane owns summarisation and answers this event; with
+      // no thread open there is nothing to summarise.
+      window.dispatchEvent(new Event(SUMMARIZE_THREAD_EVENT));
       break;
     }
     case "action.moveToFolder": {

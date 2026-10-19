@@ -1,0 +1,172 @@
+{
+  "ports": [
+    {
+      "port": 1420,
+      "label": "Vite dev server (default)"
+    },
+    {
+      "port": 1421,
+      "label": "Vite HMR (default)"
+    },
+    {
+      "port": 4300,
+      "label": "Workspace dev server (Vite)"
+    },
+    {
+      "port": 4301,
+      "label": "Workspace dev server (Vite)"
+    },
+    {
+      "port": 4302,
+      "label": "Workspace dev server (Vite)"
+    },
+    {
+      "port": 4303,
+      "label": "Workspace dev server (Vite)"
+    },
+    {
+      "port": 4304,
+      "label": "Workspace dev server (Vite)"
+    },
+    {
+      "port": 4305,
+      "label": "Workspace dev server (Vite)"
+    },
+    {
+      "port": 4306,
+      "label": "Workspace dev server (Vite)"
+    },
+    {
+      "port": 4307,
+      "label": "Workspace dev server (Vite)"
+    },
+    {
+      "port": 4308,
+      "label": "Workspace dev server (Vite)"
+    },
+    {
+      "port": 4309,
+      "label": "Workspace dev server (Vite)"
+    },
+    {
+      "port": 4310,
+      "label": "Workspace dev server (Vite)"
+    },
+    {
+      "port": 4311,
+      "label": "Workspace dev server (Vite)"
+    },
+    {
+      "port": 4312,
+      "label": "Workspace dev server (Vite)"
+    },
+    {
+      "port": 4313,
+      "label": "Workspace dev server (Vite)"
+    },
+    {
+      "port": 4314,
+      "label": "Workspace dev server (Vite)"
+    },
+    {
+      "port": 4315,
+      "label": "Workspace dev server (Vite)"
+    },
+    {
+      "port": 4316,
+      "label": "Workspace dev server (Vite)"
+    },
+    {
+      "port": 4317,
+      "label": "Workspace dev server (Vite)"
+    },
+    {
+      "port": 4318,
+      "label": "Workspace dev server (Vite)"
+    },
+    {
+      "port": 4319,
+      "label": "Workspace dev server (Vite)"
+    },
+    {
+      "port": 4320,
+      "label": "Workspace dev server (Vite)"
+    },
+    {
+      "port": 4321,
+      "label": "Workspace dev server (Vite)"
+    },
+    {
+      "port": 4322,
+      "label": "Workspace dev server (Vite)"
+    },
+    {
+      "port": 4323,
+      "label": "Workspace dev server (Vite)"
+    },
+    {
+      "port": 4324,
+      "label": "Workspace dev server (Vite)"
+    },
+    {
+      "port": 4325,
+      "label": "Workspace dev server (Vite)"
+    },
+    {
+      "port": 4326,
+      "label": "Workspace dev server (Vite)"
+    },
+    {
+      "port": 4327,
+      "label": "Workspace dev server (Vite)"
+    },
+    {
+      "port": 4328,
+      "label": "Workspace dev server (Vite)"
+    },
+    {
+      "port": 4329,
+      "label": "Workspace dev server (Vite)"
+    },
+    {
+      "port": 4330,
+      "label": "Workspace dev server (Vite)"
+    },
+    {
+      "port": 4331,
+      "label": "Workspace dev server (Vite)"
+    },
+    {
+      "port": 4332,
+      "label": "Workspace dev server (Vite)"
+    },
+    {
+      "port": 4333,
+      "label": "Workspace dev server (Vite)"
+    },
+    {
+      "port": 4334,
+      "label": "Workspace dev server (Vite)"
+    },
+    {
+      "port": 4335,
+      "label": "Workspace dev server (Vite)"
+    },
+    {
+      "port": 4336,
+      "label": "Workspace dev server (Vite)"
+    },
+    {
+      "port": 4337,
+      "label": "Workspace dev server (Vite)"
+    },
+    {
+      "port": 4338,
+      "label": "Workspace dev server (Vite)"
+    },
+    {
+      "port": 4339,
+      "label": "Workspace dev server (Vite)"
+    }
+  ]
+}

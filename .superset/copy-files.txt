@@ -1,0 +1,5 @@
+# Extra files to copy from the main checkout into every new workspace.
+# One relative path per line, `#` starts a comment.
+#
+# Example:
+# src-tauri/sndmail.key

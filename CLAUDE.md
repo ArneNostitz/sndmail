@@ -2,10 +2,31 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Branch model
+
+| Branch | Role |
+| --- | --- |
+| `staging` | Integration branch and the default branch on GitHub — every new branch and every Superset workspace is cut from it |
+| `main` | Release branch — `release-please` cuts a version and the release workflow runs on a push here |
+| `production` | Released code, fast-forwarded from `main` by `.github/workflows/promote-production.yml` |
+
+Work on a feature branch cut from `staging`, open pull requests against `staging`,
+and never commit directly to `main` or `production`. Promotion is one-way:
+`feature → staging → main → production`.
+
+## Superset workspaces
+
+`.superset/config.json` wires the workspace lifecycle: `setup` installs the
+dependencies, copies the untracked files (`.env` and friends) from the main
+checkout into the new workspace and reserves a free dev-server port for it;
+`run` starts the dev server on that port (`VITE_DEV_PORT`, so parallel
+workspaces do not collide on 1420); `teardown` stops it and frees the port.
+Details in `.superset/README.md`.
+
 ## Commands
 
 ```bash
-# Development — starts Tauri app with Vite dev server (port 1420)
+# Development — starts Tauri app with Vite dev server (port 1420, or $VITE_DEV_PORT)
 npm run tauri dev
 
 # Build production app

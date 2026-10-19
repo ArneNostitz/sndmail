@@ -4,14 +4,38 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 
 ## Delivery workflow
 
-- By default, always complete delivery after implementation and relevant tests pass: commit task-specific work, push the branch to `origin`, create a pull request, merge it into `main`, and update the main checkout. Do not stop after building or leave completed work only in a checkout/worktree, and do not ask for separate approval for these routine steps.
+- By default, always complete delivery after implementation and relevant tests pass: commit task-specific work, push the branch to `origin`, create a pull request **against `staging`**, merge it, and update the `staging` checkout. Do not stop after building or leave completed work only in a checkout/worktree, and do not ask for separate approval for these routine steps.
 - Keep unrelated or incomplete changes out of commits and pull requests. Never push to `upstream`.
 - An explicit user boundary such as “plan only,” “PR only,” “do not merge,” or “do not push” overrides the default; honor it and stop at that boundary.
+
+## Branch model
+
+Three long-lived branches, all on `origin`:
+
+| Branch | Role | Who touches it |
+| --- | --- | --- |
+| `staging` | Integration branch — the default branch on GitHub, and the base every new branch (and every Superset workspace) is cut from | everyone, all day |
+| `main` | Release branch — `release-please` cuts a version and the release workflow runs on a push here | release only |
+| `production` | Released code — fast-forwarded from `main` by `.github/workflows/promote-production.yml` after each release | nobody works here |
+
+- Work on a feature branch cut from `staging`; open the PR against `staging`. Never commit directly to `main` or `production`.
+- Promotion is one-way: `feature → staging → main → production`. Nothing flows back from `main`/`production` into `staging`; fixes for a released version are made on `staging` and re-released.
+
+## Superset workspaces
+
+The repository is set up for [Superset](https://superset.sh) workspaces (`.superset/config.json`):
+
+- `setup` — `npm ci`, copies the untracked/ignored files of the main checkout (`.env` and friends) into the new workspace, and reserves a free dev-server port for it.
+- `run` — starts the dev server on that reserved port (`VITE_DEV_PORT`), so parallel workspaces never collide on 1420.
+- `teardown` — stops the dev server of that workspace and releases its port.
+
+Create a workspace with `superset workspaces create --project <id> --name <name> --branch <branch> --base-branch staging --local`. See `.superset/README.md` for details.
+
 
 ## Commands
 
 ```bash
-# Development — starts Tauri app with Vite dev server (port 1420)
+# Development — starts Tauri app with Vite dev server (port 1420, or $VITE_DEV_PORT)
 npm run tauri dev
 
 # Build the signed app and install it into /Applications (quits the running app, relaunches)

@@ -45,6 +45,7 @@ export function RecipientLine({ toAddresses, ccAddresses }: RecipientLineProps) 
     return (
       <Tooltip content="Show every recipient"><button
         onClick={(e) => { e.stopPropagation(); setExpanded(true); }}
+        aria-label="Show every recipient"
         className="mt-1 flex items-start gap-1 text-xs text-text-tertiary hover:text-text-secondary transition-colors text-left w-full"
 
       >
@@ -61,6 +62,7 @@ export function RecipientLine({ toAddresses, ccAddresses }: RecipientLineProps) 
     <div className="mt-1 text-xs text-text-tertiary">
       <Tooltip content="Hide the recipient list"><button
         onClick={(e) => { e.stopPropagation(); setExpanded(false); }}
+        aria-label="Hide the recipient list"
         className="flex items-center gap-1 hover:text-text-secondary transition-colors"
 
       >

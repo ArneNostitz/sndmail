@@ -65,6 +65,11 @@ debug-*.mjs
 # Coverage
 coverage/
 
+# Superset (local, per-machine workspace state)
+.superset/config.local.json
+.superset/dev-server.pid
+.superset/workspace.json
+
 # Temporary files
 *.tmp
 *.temp

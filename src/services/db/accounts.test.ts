@@ -3,6 +3,7 @@ import {
   getAccount,
   getAccountByEmail,
   insertImapAccount,
+  insertOAuthImapAccount,
   insertAccount,
   deleteAccount,
   updateAccountTokens,
@@ -12,6 +13,11 @@ import { createMockGmailAccount, createMockImapAccount } from "@/test/mocks";
 
 const mockExecute = vi.fn();
 const mockSelect = vi.fn();
+const mockInvoke = vi.fn(() => Promise.resolve(undefined));
+
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: (...args: unknown[]) => mockInvoke(...args),
+}));
 
 vi.mock("./connection", () => ({
   getDb: vi.fn(() => ({
@@ -135,9 +141,7 @@ describe("accounts", () => {
   });
 
   describe("insertImapAccount", () => {
-    it("inserts IMAP account with encrypted password", async () => {
-      mockExecute.mockResolvedValue(undefined);
-
+    it("creates the mailbox through the backend IPC command", async () => {
       await insertImapAccount({
         id: "new-imap",
         email: "user@fastmail.com",
@@ -153,31 +157,31 @@ describe("accounts", () => {
         password: "my-app-password",
       });
 
-      expect(mockExecute).toHaveBeenCalledTimes(1);
-      const [sql, params] = mockExecute.mock.calls[0] as [string, unknown[]];
-      expect(sql).toContain("INSERT INTO accounts");
-      expect(sql).toContain("'imap'");
-      expect(params).toEqual([
-        "new-imap",
-        "user@fastmail.com",
-        "Fastmail User",
-        null,
-        "imap.fastmail.com",
-        993,
-        "ssl",
-        "smtp.fastmail.com",
-        465,
-        "ssl",
-        "password",
-        "enc:my-app-password", // encrypted
-        null, // imap_username
-        0, // accept_invalid_certs
-      ]);
+      // One writer: the backend validates, encrypts and inserts. The frontend
+      // must not touch the accounts table itself.
+      expect(mockExecute).not.toHaveBeenCalled();
+      expect(mockInvoke).toHaveBeenCalledTimes(1);
+      expect(mockInvoke).toHaveBeenCalledWith("account_add_imap", {
+        account: {
+          id: "new-imap",
+          email: "user@fastmail.com",
+          display_name: "Fastmail User",
+          avatar_url: null,
+          imap_host: "imap.fastmail.com",
+          imap_port: 993,
+          imap_security: "ssl",
+          smtp_host: "smtp.fastmail.com",
+          smtp_port: 465,
+          smtp_security: "ssl",
+          auth_method: "password",
+          password: "my-app-password",
+          imap_username: null,
+          accept_invalid_certs: false,
+        },
+      });
     });
 
-    it("inserts IMAP account with custom username", async () => {
-      mockExecute.mockResolvedValue(undefined);
-
+    it("passes a custom login username and certificate override through", async () => {
       await insertImapAccount({
         id: "new-imap-2",
         email: "user@example.com",
@@ -188,39 +192,70 @@ describe("accounts", () => {
         imapSecurity: "ssl",
         smtpHost: "smtp.example.com",
         smtpPort: 465,
-        smtpSecurity: "ssl",
-        authMethod: "password",
-        password: "pass",
-        imapUsername: "custom-login-id",
-      });
-
-      expect(mockExecute).toHaveBeenCalledTimes(1);
-      const [sql, params] = mockExecute.mock.calls[0] as [string, unknown[]];
-      expect(sql).toContain("imap_username");
-      expect(params).toContain("custom-login-id");
-    });
-
-    it("sets access_token and refresh_token to NULL for IMAP accounts", async () => {
-      mockExecute.mockResolvedValue(undefined);
-
-      await insertImapAccount({
-        id: "imap-1",
-        email: "test@test.com",
-        displayName: null,
-        avatarUrl: null,
-        imapHost: "imap.test.com",
-        imapPort: 993,
-        imapSecurity: "tls",
-        smtpHost: "smtp.test.com",
-        smtpPort: 587,
         smtpSecurity: "starttls",
         authMethod: "password",
         password: "pass",
+        imapUsername: "custom-login-id",
+        acceptInvalidCerts: true,
       });
 
-      const [sql] = mockExecute.mock.calls[0] as [string, unknown[]];
-      expect(sql).toContain("NULL, NULL");
-      expect(sql).toContain("'imap'");
+      const [, args] = mockInvoke.mock.calls[0] as [string, { account: Record<string, unknown> }];
+      expect(args.account.imap_username).toBe("custom-login-id");
+      expect(args.account.accept_invalid_certs).toBe(true);
+      expect(args.account.smtp_security).toBe("starttls");
+    });
+
+    it("surfaces a backend rejection to the caller", async () => {
+      mockInvoke.mockRejectedValueOnce("Email address is not valid");
+
+      await expect(
+        insertImapAccount({
+          id: "bad",
+          email: "not-an-address",
+          displayName: null,
+          avatarUrl: null,
+          imapHost: "imap.example.com",
+          imapPort: 993,
+          imapSecurity: "ssl",
+          smtpHost: "smtp.example.com",
+          smtpPort: 465,
+          smtpSecurity: "ssl",
+          authMethod: "password",
+          password: "pass",
+        }),
+      ).rejects.toBe("Email address is not valid");
+    });
+  });
+
+  describe("insertOAuthImapAccount", () => {
+    it("sends OAuth credentials to the backend instead of encrypting them here", async () => {
+      await insertOAuthImapAccount({
+        id: "imap-oauth",
+        email: "user@example.com",
+        displayName: null,
+        avatarUrl: null,
+        imapHost: "imap.example.com",
+        imapPort: 993,
+        imapSecurity: "ssl",
+        smtpHost: "smtp.example.com",
+        smtpPort: 465,
+        smtpSecurity: "ssl",
+        accessToken: "access",
+        refreshToken: "refresh",
+        tokenExpiresAt: 1_700_000_000,
+        oauthProvider: "google",
+        oauthClientId: "client-id",
+        oauthClientSecret: null,
+      });
+
+      expect(mockExecute).not.toHaveBeenCalled();
+      const [, args] = mockInvoke.mock.calls[0] as [string, { account: Record<string, unknown> }];
+      expect(args.account.auth_method).toBe("oauth2");
+      expect(args.account.access_token).toBe("access");
+      expect(args.account.refresh_token).toBe("refresh");
+      expect(args.account.token_expires_at).toBe(1_700_000_000);
+      expect(args.account.oauth_provider).toBe("google");
+      expect(args.account.password).toBeUndefined();
     });
   });
 

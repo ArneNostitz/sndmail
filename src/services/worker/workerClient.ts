@@ -80,7 +80,10 @@ export async function wakeBackgroundWorkerAndWait(accountIds: string[]): Promise
     );
   }
   await wakeBackgroundWorker();
-  await waitForWorkerSync(accountIds, true);
+  // We just queued rows in `worker_sync_requests`. Waiting on the resync queue
+  // polled a table nothing was going to empty, so a manual refresh could look
+  // finished while the helper was still fetching.
+  await waitForWorkerSync(accountIds, false);
 }
 
 type WorkerMailStatus = { phase: string | null; error: string | null; account_id: string | null; updated_at: number | null };

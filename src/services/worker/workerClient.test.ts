@@ -71,6 +71,23 @@ describe("background worker sync waiting", () => {
     await expect(finished).resolves.toBeUndefined();
   });
 
+  it("waits on the sync request it queued, not the resync queue", async () => {
+    const finished = wakeBackgroundWorkerAndWait(["account-1"]);
+    let settled = false;
+    void finished.then(() => { settled = true; }, () => { settled = true; });
+    await vi.advanceTimersByTimeAsync(500);
+    // The helper reports itself idle between accounts while the queued row is
+    // still there. Polling the wrong table used to resolve right here.
+    state.status = { phase: "ready", error: null, account_id: null, updated_at: 3 };
+    state.accountPhase = "ready";
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(settled).toBe(false);
+
+    state.pendingSyncs = 0;
+    await vi.advanceTimersByTimeAsync(500);
+    await expect(finished).resolves.toBeUndefined();
+  });
+
   it("surfaces a helper-reported failure", async () => {
     const finished = wakeBackgroundWorkerAndWait(["account-1"]);
     const rejection = expect(finished).rejects.toThrow("mailbox unavailable");

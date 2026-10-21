@@ -1,3 +1,16 @@
+/**
+ * @deprecated Fallback IMAP IDLE watcher — not the ingestion owner.
+ *
+ * The bundled Rust helper (`sndmail-worker`) owns IMAP ingestion on macOS: it
+ * holds the IDLE sockets in `src-tauri/src/imap/idle.rs` and turns its own
+ * doorbell into a sync without the app window. This module is kept for hosts
+ * where the worker cannot run (development builds without an installed helper,
+ * and non-macOS targets).
+ *
+ * It must never open sockets beside the worker: `startIdleWatchers()` and
+ * `reconnectAccount()` return early whenever `backgroundWorkerOwnsSync()` is
+ * true. Do not add new callers.
+ */
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { getAllAccounts, type DbAccount } from "@/services/db/accounts";
@@ -5,6 +18,7 @@ import { getSetting } from "@/services/db/settings";
 import { buildImapConfig } from "./imapConfigBuilder";
 import { useIdleStatusStore, explainIdleFailure } from "@/stores/idleStatusStore";
 import { reportError } from "@/stores/toastStore";
+import { backgroundWorkerOwnsSync, wakeBackgroundWorker } from "@/services/worker/workerClient";
 
 /**
  * Let the mail server say when something changed, instead of asking it.
@@ -127,6 +141,14 @@ function idleConfigFor(account: DbAccount, accessToken?: string) {
  * this.
  */
 export async function startIdleWatchers(): Promise<void> {
+  if (backgroundWorkerOwnsSync()) {
+    // The helper already holds one IDLE connection per mailbox while it owns
+    // ingestion. A second set here would open duplicate sockets and deliver
+    // every doorbell twice; waking it is how a settings change reaches it.
+    await wakeBackgroundWorker().catch(() => {});
+    return;
+  }
+
   const enabled = (await getSetting("imap_idle")) !== "false";
   if (!enabled) {
     await stopIdleWatchers();
@@ -176,6 +198,11 @@ async function startIdleWatcher(account: DbAccount): Promise<void> {
  * for the four that were fine.
  */
 export async function reconnectAccount(accountId: string): Promise<void> {
+  if (backgroundWorkerOwnsSync()) {
+    // The worker's watcher is its own; asking it to run a cycle reconnects it.
+    await wakeBackgroundWorker().catch(() => {});
+    return;
+  }
   const enabled = (await getSetting("imap_idle")) !== "false";
   if (!enabled) return;
   await attachListeners();

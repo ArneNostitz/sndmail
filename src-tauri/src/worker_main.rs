@@ -4,6 +4,8 @@
 #[path = "imap/mod.rs"]
 mod imap;
 #[cfg(target_os = "macos")]
+mod credentials;
+#[cfg(target_os = "macos")]
 mod worker;
 
 #[cfg(target_os = "macos")]

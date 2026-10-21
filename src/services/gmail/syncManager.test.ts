@@ -45,23 +45,43 @@ vi.mock("../db/calendarEvents", () => ({
   upsertCalendarEvent: vi.fn(),
   deleteEventByRemoteId: vi.fn(),
 }));
+vi.mock("../worker/workerClient", () => ({
+  backgroundWorkerOwnsSync: vi.fn(() => false),
+  wakeBackgroundWorkerAndWait: vi.fn(),
+  requestWorkerResync: vi.fn(),
+}));
 
 // Import after mocks
 import {
   syncAccount,
   startInitialSync,
   triggerSync,
+  forceFullSync,
+  resyncAccount,
   onSyncStatus,
   onSyncBatchComplete,
 } from "./syncManager";
-import { getAccount } from "../db/accounts";
+import { getAccount, clearAccountHistoryId } from "../db/accounts";
 import { getGmailClient } from "./tokenManager";
 import { initialSync, deltaSync } from "./sync";
+import { deleteAllThreadsForAccount } from "../db/threads";
+import { deleteAllMessagesForAccount } from "../db/messages";
+import {
+  backgroundWorkerOwnsSync,
+  wakeBackgroundWorkerAndWait,
+  requestWorkerResync,
+} from "../worker/workerClient";
 
 const mockGetAccount = vi.mocked(getAccount);
 const mockGetGmailClient = vi.mocked(getGmailClient);
 const mockInitialSync = vi.mocked(initialSync);
 const mockDeltaSync = vi.mocked(deltaSync);
+const mockWorkerOwnsSync = vi.mocked(backgroundWorkerOwnsSync);
+const mockWakeWorkerAndWait = vi.mocked(wakeBackgroundWorkerAndWait);
+const mockRequestWorkerResync = vi.mocked(requestWorkerResync);
+const mockClearHistoryId = vi.mocked(clearAccountHistoryId);
+const mockDeleteThreads = vi.mocked(deleteAllThreadsForAccount);
+const mockDeleteMessages = vi.mocked(deleteAllMessagesForAccount);
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -102,6 +122,9 @@ describe("syncManager", () => {
     );
     mockInitialSync.mockResolvedValue();
     mockDeltaSync.mockResolvedValue();
+    mockWorkerOwnsSync.mockReturnValue(false);
+    mockWakeWorkerAndWait.mockResolvedValue();
+    mockRequestWorkerResync.mockResolvedValue();
   });
 
   describe("syncAccount", () => {
@@ -212,6 +235,44 @@ describe("syncManager", () => {
       unsub();
 
       expect(completions).toEqual([["a1", "a2", "a3"]]);
+    });
+  });
+
+  describe("single ingestion owner", () => {
+    beforeEach(() => {
+      mockWorkerOwnsSync.mockReturnValue(true);
+      mockGetAccount.mockResolvedValue(makeGmailAccount("a1", "100"));
+    });
+
+    it("forwards a UI sync request to the helper instead of syncing here", async () => {
+      await syncAccount("a1");
+      await triggerSync(["a1", "a2"]);
+
+      expect(mockWakeWorkerAndWait).toHaveBeenNthCalledWith(1, ["a1"]);
+      expect(mockWakeWorkerAndWait).toHaveBeenNthCalledWith(2, ["a1", "a2"]);
+      // The TypeScript engines must not run beside the worker.
+      expect(mockInitialSync).not.toHaveBeenCalled();
+      expect(mockDeltaSync).not.toHaveBeenCalled();
+    });
+
+    it("forwards the startup catch-up without starting a second loop", async () => {
+      startInitialSync(["a1"]);
+      await wait(10);
+
+      expect(mockWakeWorkerAndWait).toHaveBeenCalledWith(["a1"]);
+      expect(mockDeltaSync).not.toHaveBeenCalled();
+    });
+
+    it("asks the worker for a full resync rather than deleting rows under it", async () => {
+      await forceFullSync(["a1"]);
+      await resyncAccount("a1");
+
+      expect(mockRequestWorkerResync).toHaveBeenNthCalledWith(1, ["a1"]);
+      expect(mockRequestWorkerResync).toHaveBeenNthCalledWith(2, ["a1"]);
+      expect(mockClearHistoryId).not.toHaveBeenCalled();
+      expect(mockDeleteThreads).not.toHaveBeenCalled();
+      expect(mockDeleteMessages).not.toHaveBeenCalled();
+      expect(mockDeltaSync).not.toHaveBeenCalled();
     });
   });
 

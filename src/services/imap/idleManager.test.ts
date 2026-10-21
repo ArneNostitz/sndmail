@@ -23,6 +23,12 @@ vi.mock("@/services/oauth/oauthTokenManager", () => ({
 vi.mock("./imapConfigBuilder", () => ({
   buildImapConfig: () => ({ host: "imap.example.com", port: 993 }),
 }));
+const mockWorkerOwnsSync = vi.fn(() => false);
+const mockWakeWorker = vi.fn(() => Promise.resolve());
+vi.mock("@/services/worker/workerClient", () => ({
+  backgroundWorkerOwnsSync: () => mockWorkerOwnsSync(),
+  wakeBackgroundWorker: () => mockWakeWorker(),
+}));
 
 import { startIdleWatchers, stopIdleWatchers, accountsWithoutIdle, reconnectAccount } from "./idleManager";
 
@@ -36,6 +42,20 @@ describe("startIdleWatchers", () => {
     accounts = [];
     await stopIdleWatchers();
     vi.clearAllMocks();
+    mockWorkerOwnsSync.mockReturnValue(false);
+    mockWakeWorker.mockResolvedValue();
+  });
+
+  it("opens no second IDLE socket while the background helper owns ingestion", async () => {
+    mockWorkerOwnsSync.mockReturnValue(true);
+    accounts = [gmail, imap];
+
+    await startIdleWatchers();
+    await reconnectAccount("g1");
+
+    // The helper holds the watchers; the app only asks it to pick up changes.
+    expect(mockInvoke).not.toHaveBeenCalledWith("imap_start_idle", expect.anything());
+    expect(mockWakeWorker).toHaveBeenCalled();
   });
 
   it("points a Gmail account at Gmail's IMAP endpoint with its token", async () => {
@@ -102,6 +122,20 @@ describe("startIdleWatchers - what it tells the status store", () => {
     accounts = [];
     await stopIdleWatchers();
     vi.clearAllMocks();
+    mockWorkerOwnsSync.mockReturnValue(false);
+    mockWakeWorker.mockResolvedValue();
+  });
+
+  it("opens no second IDLE socket while the background helper owns ingestion", async () => {
+    mockWorkerOwnsSync.mockReturnValue(true);
+    accounts = [gmail, imap];
+
+    await startIdleWatchers();
+    await reconnectAccount("g1");
+
+    // The helper holds the watchers; the app only asks it to pick up changes.
+    expect(mockInvoke).not.toHaveBeenCalledWith("imap_start_idle", expect.anything());
+    expect(mockWakeWorker).toHaveBeenCalled();
   });
 
   it("marks an account connecting once the watcher is asked for", async () => {
@@ -141,6 +175,20 @@ describe("recovering from a stopped watcher", () => {
     accounts = [];
     await stopIdleWatchers();
     vi.clearAllMocks();
+    mockWorkerOwnsSync.mockReturnValue(false);
+    mockWakeWorker.mockResolvedValue();
+  });
+
+  it("opens no second IDLE socket while the background helper owns ingestion", async () => {
+    mockWorkerOwnsSync.mockReturnValue(true);
+    accounts = [gmail, imap];
+
+    await startIdleWatchers();
+    await reconnectAccount("g1");
+
+    // The helper holds the watchers; the app only asks it to pick up changes.
+    expect(mockInvoke).not.toHaveBeenCalledWith("imap_start_idle", expect.anything());
+    expect(mockWakeWorker).toHaveBeenCalled();
   });
 
   it("reconnects with a freshly minted token after Rust gives up", async () => {
@@ -205,6 +253,20 @@ describe("reconnectAccount", () => {
     accounts = [];
     await stopIdleWatchers();
     vi.clearAllMocks();
+    mockWorkerOwnsSync.mockReturnValue(false);
+    mockWakeWorker.mockResolvedValue();
+  });
+
+  it("opens no second IDLE socket while the background helper owns ingestion", async () => {
+    mockWorkerOwnsSync.mockReturnValue(true);
+    accounts = [gmail, imap];
+
+    await startIdleWatchers();
+    await reconnectAccount("g1");
+
+    // The helper holds the watchers; the app only asks it to pick up changes.
+    expect(mockInvoke).not.toHaveBeenCalledWith("imap_start_idle", expect.anything());
+    expect(mockWakeWorker).toHaveBeenCalled();
   });
 
   it("restarts only the account that was asked for", async () => {

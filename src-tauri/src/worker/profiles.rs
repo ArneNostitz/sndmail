@@ -319,11 +319,11 @@ fn normalize_account_ids(mut account_ids: Vec<String>) -> Result<Vec<String>, St
     Ok(account_ids)
 }
 
-/// Serializes tests that set the process-global worker fixture env vars.
-/// Held by the crypto test in `worker::mail` too — parallel tests would
-/// otherwise point each other at a temp dir that gets deleted.
+/// Serialises tests that mutate the process-global fixture environment;
+/// parallel tests would otherwise point each other at a temp dir that gets
+/// deleted. Held by the credential round-trip test in `credentials` too.
 #[cfg(test)]
-pub(crate) static FIXTURE_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+pub(crate) use crate::credentials::FIXTURE_ENV_LOCK;
 
 #[cfg(test)]
 mod tests {

@@ -1,3 +1,4 @@
+import { invoke } from "@tauri-apps/api/core";
 import { getDb, selectFirstBy } from "./connection";
 import { encryptValue, decryptValue, isEncrypted } from "@/utils/crypto";
 
@@ -181,6 +182,47 @@ export async function deleteAccount(id: string): Promise<void> {
   await db.execute("DELETE FROM accounts WHERE id = $1", [id]);
 }
 
+/**
+ * Create an IMAP/SMTP mailbox through the backend.
+ *
+ * Account setup used to be three TypeScript writes (row, credentials, secrets)
+ * against a database the background worker also opens. Validation, AES-GCM
+ * encryption and the single INSERT now happen in `src-tauri/src/account_setup.rs`
+ * — the same key and `iv:ciphertext` format `utils/crypto.ts` uses — so there is
+ * one writer and a rejected mailbox never reaches the store. The backend also
+ * wakes the worker, which performs the first sync.
+ */
+/**
+ * The request the backend validates and stores. Field names are the
+ * snake_case ones `src-tauri/src/account_setup.rs` declares.
+ */
+export interface ImapAccountSetupPayload {
+  id: string;
+  email: string;
+  display_name: string | null;
+  avatar_url: string | null;
+  imap_host: string;
+  imap_port: number;
+  imap_security: string;
+  smtp_host: string;
+  smtp_port: number;
+  smtp_security: string;
+  auth_method: string;
+  password?: string;
+  access_token?: string;
+  refresh_token?: string;
+  token_expires_at?: number;
+  oauth_provider?: string;
+  oauth_client_id?: string;
+  oauth_client_secret?: string | null;
+  imap_username: string | null;
+  accept_invalid_certs: boolean;
+}
+
+async function createImapAccountOverIpc(account: ImapAccountSetupPayload): Promise<void> {
+  await invoke("account_add_imap", { account });
+}
+
 export async function insertImapAccount(account: {
   id: string;
   email: string;
@@ -197,28 +239,22 @@ export async function insertImapAccount(account: {
   imapUsername?: string | null;
   acceptInvalidCerts?: boolean;
 }): Promise<void> {
-  const db = await getDb();
-  const encPassword = await encryptValue(account.password);
-  await db.execute(
-    `INSERT INTO accounts (id, email, display_name, avatar_url, access_token, refresh_token, provider, imap_host, imap_port, imap_security, smtp_host, smtp_port, smtp_security, auth_method, imap_password, imap_username, accept_invalid_certs)
-     VALUES ($1, $2, $3, $4, NULL, NULL, 'imap', $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
-    [
-      account.id,
-      account.email,
-      account.displayName,
-      account.avatarUrl,
-      account.imapHost,
-      account.imapPort,
-      account.imapSecurity,
-      account.smtpHost,
-      account.smtpPort,
-      account.smtpSecurity,
-      account.authMethod,
-      encPassword,
-      account.imapUsername || null,
-      account.acceptInvalidCerts ? 1 : 0,
-    ],
-  );
+  await createImapAccountOverIpc({
+    id: account.id,
+    email: account.email,
+    display_name: account.displayName,
+    avatar_url: account.avatarUrl,
+    imap_host: account.imapHost,
+    imap_port: account.imapPort,
+    imap_security: account.imapSecurity,
+    smtp_host: account.smtpHost,
+    smtp_port: account.smtpPort,
+    smtp_security: account.smtpSecurity,
+    auth_method: account.authMethod,
+    password: account.password,
+    imap_username: account.imapUsername ?? null,
+    accept_invalid_certs: account.acceptInvalidCerts ?? false,
+  });
 }
 
 export async function insertCalDavAccount(account: {
@@ -307,34 +343,25 @@ export async function insertOAuthImapAccount(account: {
   imapUsername?: string | null;
   acceptInvalidCerts?: boolean;
 }): Promise<void> {
-  const db = await getDb();
-  const encAccessToken = await encryptValue(account.accessToken);
-  const encRefreshToken = await encryptValue(account.refreshToken);
-  const encClientSecret = account.oauthClientSecret
-    ? await encryptValue(account.oauthClientSecret)
-    : null;
-  await db.execute(
-    `INSERT INTO accounts (id, email, display_name, avatar_url, access_token, refresh_token, token_expires_at, provider, imap_host, imap_port, imap_security, smtp_host, smtp_port, smtp_security, auth_method, imap_password, oauth_provider, oauth_client_id, oauth_client_secret, imap_username, accept_invalid_certs)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, 'imap', $8, $9, $10, $11, $12, $13, 'oauth2', NULL, $14, $15, $16, $17, $18)`,
-    [
-      account.id,
-      account.email,
-      account.displayName,
-      account.avatarUrl,
-      encAccessToken,
-      encRefreshToken,
-      account.tokenExpiresAt,
-      account.imapHost,
-      account.imapPort,
-      account.imapSecurity,
-      account.smtpHost,
-      account.smtpPort,
-      account.smtpSecurity,
-      account.oauthProvider,
-      account.oauthClientId,
-      encClientSecret,
-      account.imapUsername || null,
-      account.acceptInvalidCerts ? 1 : 0,
-    ],
-  );
+  await createImapAccountOverIpc({
+    id: account.id,
+    email: account.email,
+    display_name: account.displayName,
+    avatar_url: account.avatarUrl,
+    imap_host: account.imapHost,
+    imap_port: account.imapPort,
+    imap_security: account.imapSecurity,
+    smtp_host: account.smtpHost,
+    smtp_port: account.smtpPort,
+    smtp_security: account.smtpSecurity,
+    auth_method: "oauth2",
+    access_token: account.accessToken,
+    refresh_token: account.refreshToken,
+    token_expires_at: account.tokenExpiresAt,
+    oauth_provider: account.oauthProvider,
+    oauth_client_id: account.oauthClientId,
+    oauth_client_secret: account.oauthClientSecret,
+    imap_username: account.imapUsername ?? null,
+    accept_invalid_certs: account.acceptInvalidCerts ?? false,
+  });
 }

@@ -10,12 +10,12 @@ use async_imap::extensions::idle::IdleResponse;
 use base64::Engine;
 use chrono::{Datelike, Duration as ChronoDuration, Utc};
 use futures::StreamExt;
-use ring::aead::{self, Aad, LessSafeKey, Nonce, UnboundKey};
 use serde_json::Value;
 use sqlx::sqlite::SqliteConnectOptions;
 use sqlx::{Connection, Row, SqliteConnection};
 
 use super::WorkerContext;
+use crate::credentials::{decrypt, encrypt};
 mod otp;
 use crate::imap::{
     client as imap,
@@ -463,79 +463,6 @@ async fn load_accounts(db: &mut SqliteConnection) -> Result<Vec<Account>, String
         });
     }
     Ok(result)
-}
-
-fn encryption_key() -> Result<Vec<u8>, String> {
-    // Fixtures must never read the user's real keychain, even if the test
-    // process runs under the same login session.
-    let fixture = std::env::var("SNDMAIL_WORKER_FIXTURE").as_deref() == Ok("1");
-    let stored = if fixture { None } else {
-        keyring::Entry::new("com.anydaysomething.sndmail", "db-encryption-key")
-            .ok().and_then(|entry| entry.get_password().ok())
-    };
-    let encoded = if let Some(stored) = stored { stored } else {
-        // Use only sndmail's canonical fallback file. Never create a new key here:
-        // a wrong key would make existing credentials appear corrupt.
-        let directory = if std::env::var("SNDMAIL_WORKER_FIXTURE").as_deref() == Ok("1") {
-            std::env::var_os("SNDMAIL_WORKER_DATA_DIR").map(std::path::PathBuf::from)
-        } else {
-            let home = std::env::var_os("HOME").map(std::path::PathBuf::from);
-            #[cfg(target_os = "macos")]
-            let base = home.map(|home| home.join("Library/Application Support"));
-            #[cfg(target_os = "linux")]
-            let base = std::env::var_os("XDG_DATA_HOME").map(std::path::PathBuf::from)
-                .or_else(|| home.map(|home| home.join(".local/share")));
-            #[cfg(target_os = "windows")]
-            let base = std::env::var_os("APPDATA").map(std::path::PathBuf::from)
-                .or_else(|| home.map(|home| home.join("AppData/Roaming")));
-            base.map(|base| base.join("com.anydaysomething.sndmail"))
-        }.ok_or("encryption key unavailable")?;
-        std::fs::read_to_string(directory.join("sndmail.key"))
-            .map_err(|_| "encryption key unavailable")?
-    };
-    base64::engine::general_purpose::STANDARD
-        .decode(encoded.trim())
-        .map_err(|_| "invalid encryption key".to_string())
-}
-
-fn decrypt(value: &str) -> Result<String, String> {
-    let Some((iv, ciphertext)) = value.split_once(':') else {
-        return Ok(value.to_owned());
-    };
-    let decoder = base64::engine::general_purpose::STANDARD;
-    let Ok(iv) = decoder.decode(iv) else {
-        return Ok(value.to_owned());
-    };
-    if iv.len() != 12 {
-        return Ok(value.to_owned());
-    }
-    let mut ciphertext = decoder
-        .decode(ciphertext)
-        .map_err(|_| "invalid encrypted credential".to_string())?;
-    let key = encryption_key()?;
-    let unbound = UnboundKey::new(&aead::AES_256_GCM, &key)
-        .map_err(|_| "invalid encryption key".to_string())?;
-    let nonce = Nonce::try_assume_unique_for_key(&iv)
-        .map_err(|_| "invalid encrypted credential".to_string())?;
-    let plaintext = LessSafeKey::new(unbound)
-        .open_in_place(nonce, Aad::empty(), &mut ciphertext)
-        .map_err(|_| "cannot decrypt account credential".to_string())?;
-    String::from_utf8(plaintext.to_vec()).map_err(|_| "invalid credential encoding".to_string())
-}
-
-fn encrypt(value: &str) -> Result<String, String> {
-    let key = encryption_key()?;
-    let unbound = UnboundKey::new(&aead::AES_256_GCM, &key)
-        .map_err(|_| "invalid encryption key".to_string())?;
-    let mut iv = [0u8; 12];
-    getrandom::getrandom(&mut iv).map_err(|_| "cannot generate token nonce".to_string())?;
-    let nonce = Nonce::assume_unique_for_key(iv);
-    let mut bytes = value.as_bytes().to_vec();
-    LessSafeKey::new(unbound)
-        .seal_in_place_append_tag(nonce, Aad::empty(), &mut bytes)
-        .map_err(|_| "cannot encrypt refreshed token".to_string())?;
-    let encoder = base64::engine::general_purpose::STANDARD;
-    Ok(format!("{}:{}", encoder.encode(iv), encoder.encode(bytes)))
 }
 
 async fn setting(db: &mut SqliteConnection, key: &str) -> Result<Option<String>, String> {
@@ -2029,34 +1956,5 @@ mod tests {
             }]
         });
         assert!(find_gmail_body_part(&attached_text_only, "text/plain").is_none());
-    }
-
-    #[test]
-    fn frontend_aes_gcm_credential_format_roundtrips_and_rejects_wrong_key() {
-        // Same lock the worker-profiles fixture tests take: these env vars
-        // are process-global and parallel tests would delete each other's dir.
-        let _guard = crate::worker::profiles::FIXTURE_ENV_LOCK
-            .lock()
-            .unwrap_or_else(|poison| poison.into_inner());
-        let dir = std::env::temp_dir().join(format!("sndmail-worker-crypto-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let old_fixture = std::env::var_os("SNDMAIL_WORKER_FIXTURE");
-        let old_data = std::env::var_os("SNDMAIL_WORKER_DATA_DIR");
-        std::env::set_var("SNDMAIL_WORKER_FIXTURE", "1");
-        std::env::set_var("SNDMAIL_WORKER_DATA_DIR", &dir);
-        let key = [23_u8; 32];
-        std::fs::write(dir.join("sndmail.key"), base64::engine::general_purpose::STANDARD.encode(key)).unwrap();
-        let encoded = encrypt("refresh-token-μ").unwrap();
-        let (iv, body) = encoded.split_once(':').unwrap();
-        assert_eq!(base64::engine::general_purpose::STANDARD.decode(iv).unwrap().len(), 12);
-        assert!(base64::engine::general_purpose::STANDARD.decode(body).unwrap().len() > 16);
-        assert_eq!(decrypt(&encoded).unwrap(), "refresh-token-μ");
-        std::fs::write(dir.join("sndmail.key"), base64::engine::general_purpose::STANDARD.encode([42_u8; 32])).unwrap();
-        assert!(decrypt(&encoded).is_err());
-        let _ = std::fs::remove_dir_all(dir);
-        if let Some(value) = old_fixture { std::env::set_var("SNDMAIL_WORKER_FIXTURE", value); }
-        else { std::env::remove_var("SNDMAIL_WORKER_FIXTURE"); }
-        if let Some(value) = old_data { std::env::set_var("SNDMAIL_WORKER_DATA_DIR", value); }
-        else { std::env::remove_var("SNDMAIL_WORKER_DATA_DIR"); }
     }
 }

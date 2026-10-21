@@ -5,6 +5,7 @@ import { getSetting } from "@/services/db/settings";
 import { buildImapConfig } from "./imapConfigBuilder";
 import { useIdleStatusStore, explainIdleFailure } from "@/stores/idleStatusStore";
 import { reportError } from "@/stores/toastStore";
+import { backgroundWorkerOwnsSync, wakeBackgroundWorker } from "@/services/worker/workerClient";
 
 /**
  * Let the mail server say when something changed, instead of asking it.
@@ -127,6 +128,14 @@ function idleConfigFor(account: DbAccount, accessToken?: string) {
  * this.
  */
 export async function startIdleWatchers(): Promise<void> {
+  if (backgroundWorkerOwnsSync()) {
+    // The helper already holds one IDLE connection per mailbox while it owns
+    // ingestion. A second set here would open duplicate sockets and deliver
+    // every doorbell twice; waking it is how a settings change reaches it.
+    await wakeBackgroundWorker().catch(() => {});
+    return;
+  }
+
   const enabled = (await getSetting("imap_idle")) !== "false";
   if (!enabled) {
     await stopIdleWatchers();
@@ -176,6 +185,11 @@ async function startIdleWatcher(account: DbAccount): Promise<void> {
  * for the four that were fine.
  */
 export async function reconnectAccount(accountId: string): Promise<void> {
+  if (backgroundWorkerOwnsSync()) {
+    // The worker's watcher is its own; asking it to run a cycle reconnects it.
+    await wakeBackgroundWorker().catch(() => {});
+    return;
+  }
   const enabled = (await getSetting("imap_idle")) !== "false";
   if (!enabled) return;
   await attachListeners();

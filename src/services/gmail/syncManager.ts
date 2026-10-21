@@ -1,5 +1,9 @@
 import { getGmailClient } from "./tokenManager";
-import { initialSync, deltaSync, type SyncProgress } from "./sync";
+import {
+  initialSync,
+  deltaSync,
+  type SyncProgress,
+} from "./sync";
 import { getAccount, clearAccountHistoryId } from "../db/accounts";
 import { getSetting } from "../db/settings";
 import { getThreadCountForAccount, deleteAllThreadsForAccount } from "../db/threads";
@@ -7,6 +11,11 @@ import { deleteAllMessagesForAccount } from "../db/messages";
 import { imapInitialSync, imapDeltaSync } from "../imap/imapSync";
 import { clearAllFolderSyncStates } from "../db/folderSyncState";
 import { ensureFreshToken } from "../oauth/oauthTokenManager";
+import {
+  backgroundWorkerOwnsSync,
+  requestWorkerResync,
+  wakeBackgroundWorkerAndWait,
+} from "../worker/workerClient";
 
 /** Map IMAP sync phases to the SyncProgress phases the UI understands. */
 function mapImapPhase(phase: string): "labels" | "threads" | "messages" | "done" {
@@ -182,6 +191,16 @@ async function syncAccountInternal(accountId: string): Promise<boolean> {
 }
 
 async function runSync(accountIds: string[]): Promise<void> {
+  // The native helper is the single ingestion owner whenever it is installed
+  // and holds the mail database. Running the TypeScript engines beside it would
+  // write the same messages from two processes, duplicate notifications and
+  // race the worker's credential refreshes — so a request from the UI (manual
+  // refresh, retry, account switch) is forwarded to the worker instead.
+  if (backgroundWorkerOwnsSync()) {
+    await wakeBackgroundWorkerAndWait(accountIds);
+    return;
+  }
+
   if (syncPromise) {
     // Queue these accounts, merging with any already-pending IDs
     const existing = new Set(pendingAccountIds ?? []);
@@ -225,7 +244,9 @@ export async function syncAccount(accountId: string): Promise<void> {
  * by the push relay and IDLE notifications, with manual refresh as fallback.
  */
 export function startInitialSync(accountIds: string[]): void {
-  void runSync(accountIds);
+  void runSync(accountIds).catch((error) => {
+    console.warn("[syncManager] Catch-up sync did not complete:", error);
+  });
 }
 
 /**
@@ -241,6 +262,11 @@ export async function triggerSync(accountIds: string[]): Promise<void> {
  * This re-downloads all threads from scratch.
  */
 export async function forceFullSync(accountIds: string[]): Promise<void> {
+  if (backgroundWorkerOwnsSync()) {
+    // A durable worker resync request is the worker's own full reconciliation.
+    await requestWorkerResync(accountIds);
+    return;
+  }
   for (const id of accountIds) {
     await clearAccountHistoryId(id);
   }
@@ -253,6 +279,11 @@ export async function forceFullSync(accountIds: string[]): Promise<void> {
  * then runs a fresh initial sync.
  */
 export async function resyncAccount(accountId: string): Promise<void> {
+  if (backgroundWorkerOwnsSync()) {
+    // Never delete rows underneath a running worker; ask it to reconcile.
+    await requestWorkerResync([accountId]);
+    return;
+  }
   await deleteAllThreadsForAccount(accountId);
   await deleteAllMessagesForAccount(accountId);
   await clearAccountHistoryId(accountId);

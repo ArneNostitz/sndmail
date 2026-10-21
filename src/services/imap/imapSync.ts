@@ -1,3 +1,16 @@
+/**
+ * @deprecated Fallback IMAP sync engine — not the ingestion owner.
+ *
+ * The bundled Rust helper (`sndmail-worker`) owns IMAP ingestion on macOS: it
+ * holds the IDLE sockets in `src-tauri/src/imap/idle.rs`, fetches, threads and
+ * stores messages, and runs without the app window. This module is kept for
+ * hosts where the worker cannot run (development builds without an installed
+ * helper, and non-macOS targets).
+ *
+ * It must never run beside the worker: `syncManager.runSync()` forwards every
+ * request to the worker whenever `backgroundWorkerOwnsSync()` is true. Do not
+ * add new callers.
+ */
 import type { ImapConfig, ImapMessage, DeltaCheckRequest, DeltaCheckResult } from "./tauriCommands";
 import {
   imapListFolders,

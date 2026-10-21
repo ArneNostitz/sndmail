@@ -7,6 +7,8 @@ use tauri::{Emitter, Manager};
 use tauri_plugin_autostart::MacosLauncher;
 
 mod commands;
+mod account_setup;
+mod credentials;
 mod files;
 mod imap;
 mod keychain;
@@ -70,6 +72,28 @@ fn worker_wake() -> Result<(), String> {
 #[tauri::command]
 fn worker_reconfigure_relay() -> Result<(), String> {
     worker_send_control("relay_reconfigure")
+}
+
+/// Create a mailbox from the account form.
+///
+/// Validation, credential encryption and the database write all happen here so
+/// the worker and the app agree on what is stored and only one process writes
+/// it. A created account is announced to the worker so its first sync starts
+/// without the UI having to drive one.
+#[tauri::command]
+async fn account_add_imap(
+    app: tauri::AppHandle,
+    account: account_setup::ImapAccountSetup,
+) -> Result<(), String> {
+    let directory = app
+        .path()
+        .app_config_dir()
+        .map_err(|error| format!("find sndmail data directory: {error}"))?;
+    account_setup::insert_imap_account(&directory.join("sndmail.db"), account).await?;
+    // The worker reloads accounts on every wake. A missing helper is not a
+    // setup failure: the mailbox is stored and the next app launch syncs it.
+    let _ = worker_send_control("wake");
+    Ok(())
 }
 
 fn worker_send_control(op: &str) -> Result<(), String> {
@@ -286,6 +310,7 @@ pub fn run() {
             keychain::keychain_available,
             net::unsubscribe_one_click,
             files::save_attachment,
+            account_add_imap,
             files::quicklook_attachment,
             set_tray_tooltip,
             close_splashscreen,

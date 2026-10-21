@@ -1,3 +1,17 @@
+/**
+ * @deprecated Fallback Gmail sync engine — not the ingestion owner.
+ *
+ * The bundled Rust helper (`sndmail-worker`, `src-tauri/src/worker/mail.rs`) is
+ * the single ingestion owner on macOS: it runs the Gmail History/IDLE and IMAP
+ * IDLE loops, refreshes credentials, writes messages and posts notifications,
+ * and it keeps doing that while the app window is closed.
+ *
+ * This module survives only for hosts where the worker cannot run (development
+ * builds without an installed helper, and non-macOS targets). It must never run
+ * beside the worker: `syncManager.runSync()` routes every request to the worker
+ * whenever `backgroundWorkerOwnsSync()` is true, which is the only supported
+ * way to call it. Do not add new callers.
+ */
 import { GmailClient } from "./client";
 import { reportError } from "@/stores/toastStore";
 import { parseGmailMessage, type ParsedMessage } from "./messageParser";

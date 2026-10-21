@@ -1,3 +1,16 @@
+/**
+ * @deprecated Fallback IMAP IDLE watcher — not the ingestion owner.
+ *
+ * The bundled Rust helper (`sndmail-worker`) owns IMAP ingestion on macOS: it
+ * holds the IDLE sockets in `src-tauri/src/imap/idle.rs` and turns its own
+ * doorbell into a sync without the app window. This module is kept for hosts
+ * where the worker cannot run (development builds without an installed helper,
+ * and non-macOS targets).
+ *
+ * It must never open sockets beside the worker: `startIdleWatchers()` and
+ * `reconnectAccount()` return early whenever `backgroundWorkerOwnsSync()` is
+ * true. Do not add new callers.
+ */
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { getAllAccounts, type DbAccount } from "@/services/db/accounts";

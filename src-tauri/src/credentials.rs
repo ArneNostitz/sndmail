@@ -50,30 +50,90 @@ pub(crate) fn app_data_dir() -> Result<std::path::PathBuf, String> {
     Ok(base.join(KEYCHAIN_SERVICE))
 }
 
-/// Resolve the base64 AES key shared with `src/utils/crypto.ts`.
+/// The key held by the OS credential store, if any.
 ///
 /// Fixtures never read the user's real keychain, even when the test process
 /// runs under the same login session.
-pub(crate) fn encryption_key() -> Result<Vec<u8>, String> {
-    let stored = if fixture_mode() {
-        None
-    } else {
-        keyring::Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT)
-            .ok()
-            .and_then(|entry| entry.get_password().ok())
-    };
-    let encoded = if let Some(stored) = stored {
-        stored
-    } else {
-        // Use only sndmail's canonical fallback file. Never create a new key
-        // here: a wrong key would make existing credentials appear corrupt.
-        let directory = app_data_dir()?;
-        std::fs::read_to_string(directory.join("sndmail.key"))
-            .map_err(|_| "encryption key unavailable".to_string())?
-    };
+fn keychain_secret() -> Option<String> {
+    if fixture_mode() {
+        return None;
+    }
+    keyring::Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT)
+        .ok()
+        .and_then(|entry| entry.get_password().ok())
+}
+
+fn decode_key(encoded: &str) -> Result<Vec<u8>, String> {
     base64::engine::general_purpose::STANDARD
         .decode(encoded.trim())
         .map_err(|_| "invalid encryption key".to_string())
+}
+
+fn key_file_path() -> Result<std::path::PathBuf, String> {
+    Ok(app_data_dir()?.join("sndmail.key"))
+}
+
+/// Resolve the base64 AES key shared with `src/utils/crypto.ts`.
+///
+/// Read-only on purpose: the worker also compiles this module, and a process
+/// that invented a key would make every stored credential look corrupt. The app
+/// calls [`ensure_key`] before it writes anything.
+pub(crate) fn encryption_key() -> Result<Vec<u8>, String> {
+    let encoded = if let Some(stored) = keychain_secret() {
+        stored
+    } else {
+        // Use only sndmail's canonical fallback file.
+        std::fs::read_to_string(key_file_path()?)
+            .map_err(|_| "encryption key unavailable".to_string())?
+    };
+    decode_key(&encoded)
+}
+
+/// Make sure an encryption key exists, generating and persisting one on first
+/// use. Mirrors `resolveRawKey()` in `src/utils/crypto.ts`:
+///
+///   1. OS credential store
+///   2. `sndmail.key` on disk, adopted into the store and then removed
+///   3. freshly generated → store (or the key file when no store is reachable)
+///
+/// Only the app calls this. A fresh install has no key at all, and account
+/// setup used to fail with "encryption key unavailable" because it only ever
+/// read one.
+pub(crate) fn ensure_key() -> Result<Vec<u8>, String> {
+    if let Some(stored) = keychain_secret() {
+        // A key that is present but malformed must not be replaced: the rows it
+        // protects would become unreadable.
+        return decode_key(&stored);
+    }
+
+    let path = key_file_path()?;
+    if let Ok(encoded) = std::fs::read_to_string(&path) {
+        let key = decode_key(&encoded)?;
+        if !fixture_mode()
+            && keyring::Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT)
+                .and_then(|entry| entry.set_password(encoded.trim()))
+                .is_ok()
+        {
+            let _ = std::fs::remove_file(&path);
+        }
+        return Ok(key);
+    }
+
+    let mut raw = [0u8; 32];
+    getrandom::getrandom(&mut raw).map_err(|_| "cannot generate an encryption key".to_string())?;
+    let encoded = base64::engine::general_purpose::STANDARD.encode(raw);
+    let stored = !fixture_mode()
+        && keyring::Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT)
+            .and_then(|entry| entry.set_password(&encoded))
+            .is_ok();
+    if !stored {
+        let directory = app_data_dir()?;
+        std::fs::create_dir_all(&directory)
+            .map_err(|error| format!("create the sndmail data directory: {error}"))?;
+        std::fs::write(&path, &encoded)
+            .map_err(|error| format!("store the encryption key in {}: {error}", path.display()))?;
+    }
+    Ok(raw.to_vec())
 }
 
 /// Decrypt a stored value, passing through anything that is not in the
@@ -195,5 +255,38 @@ mod tests {
     #[test]
     fn plaintext_rows_pass_through_decrypt() {
         assert_eq!(decrypt("app-password").unwrap(), "app-password");
+    }
+
+    #[test]
+    fn ensure_key_generates_and_persists_a_key_when_none_exists() {
+        // A fresh install: no credential-store entry and no sndmail.key. The
+        // fixture mode also hides the real keychain, so this is exactly the
+        // state account setup starts from on a new machine.
+        let _guard = FIXTURE_ENV_LOCK
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner());
+        let fixture = Fixture::install();
+        let path = fixture.directory.join("sndmail.key");
+        let _ = std::fs::remove_file(&path);
+        assert!(
+            encryption_key().is_err(),
+            "the read-only path must not invent a key"
+        );
+
+        let key = ensure_key().expect("a key is generated");
+        assert_eq!(key.len(), 32, "AES-256 needs 32 bytes");
+        let stored = std::fs::read_to_string(&path).expect("fallback key file written");
+        assert_eq!(
+            base64::engine::general_purpose::STANDARD
+                .decode(stored.trim())
+                .unwrap(),
+            key
+        );
+
+        // A second call reuses the persisted key instead of replacing it, or
+        // credentials written by the first call would stop decrypting.
+        assert_eq!(ensure_key().unwrap(), key);
+        let encoded = encrypt("app-password").unwrap();
+        assert_eq!(decrypt(&encoded).unwrap(), "app-password");
     }
 }

@@ -16,7 +16,7 @@ use serde::Deserialize;
 use sqlx::sqlite::SqliteConnectOptions;
 use sqlx::{Connection, SqliteConnection};
 
-use crate::credentials::encrypt;
+use crate::credentials::{encrypt, ensure_key};
 
 /// The security modes the account form stores. The UI shows "SSL/TLS",
 /// "STARTTLS" and "None"; the database keeps these identifiers.
@@ -232,6 +232,9 @@ pub async fn insert_imap_account(
         return Err("The mail database is not initialized yet. Restart sndmail and try again.".to_string());
     }
 
+    // First use on a fresh install has no key: the TS path this replaced
+    // generated and persisted one, and the worker's read-only resolution cannot.
+    ensure_key()?;
     let password = encrypted(account.password.as_deref())?;
     let access_token = encrypted(account.access_token.as_deref())?;
     let refresh_token = encrypted(account.refresh_token.as_deref())?;
@@ -354,26 +357,42 @@ mod tests {
         assert!(valid.password.is_none());
     }
 
-    #[tokio::test]
-    async fn writes_an_account_whose_password_decrypts_with_the_shared_key() {
-        let _guard = FIXTURE_ENV_LOCK.lock().unwrap_or_else(|poison| poison.into_inner());
-        let directory = std::env::temp_dir().join(format!(
-            "sndmail-account-setup-{}",
-            std::process::id()
-        ));
-        let _ = std::fs::remove_dir_all(&directory);
-        std::fs::create_dir_all(&directory).unwrap();
-        let old_fixture = std::env::var_os("SNDMAIL_WORKER_FIXTURE");
-        let old_data = std::env::var_os("SNDMAIL_WORKER_DATA_DIR");
-        std::env::set_var("SNDMAIL_WORKER_FIXTURE", "1");
-        std::env::set_var("SNDMAIL_WORKER_DATA_DIR", &directory);
-        let key = base64::engine::general_purpose::STANDARD.encode([7_u8; 32]);
-        std::fs::write(directory.join("sndmail.key"), key).unwrap();
+    /// A throwaway mail store plus the process-global fixture environment.
+    struct Store {
+        directory: std::path::PathBuf,
+        database: std::path::PathBuf,
+        old_fixture: Option<std::ffi::OsString>,
+        old_data: Option<std::ffi::OsString>,
+    }
 
-        let database = directory.join("sndmail.db");
-        {
+    impl Store {
+        fn install() -> Self {
+            let directory = std::env::temp_dir().join(format!(
+                "sndmail-account-setup-{}",
+                std::process::id()
+            ));
+            let _ = std::fs::remove_dir_all(&directory);
+            std::fs::create_dir_all(&directory).unwrap();
+            let old_fixture = std::env::var_os("SNDMAIL_WORKER_FIXTURE");
+            let old_data = std::env::var_os("SNDMAIL_WORKER_DATA_DIR");
+            std::env::set_var("SNDMAIL_WORKER_FIXTURE", "1");
+            std::env::set_var("SNDMAIL_WORKER_DATA_DIR", &directory);
+            Self {
+                directory: directory.clone(),
+                database: directory.join("sndmail.db"),
+                old_fixture,
+                old_data,
+            }
+        }
+
+        fn write_key(&self, byte: u8) {
+            let key = base64::engine::general_purpose::STANDARD.encode([byte; 32]);
+            std::fs::write(self.directory.join("sndmail.key"), key).unwrap();
+        }
+
+        async fn create_schema(&self) {
             let options = SqliteConnectOptions::new()
-                .filename(&database)
+                .filename(&self.database)
                 .create_if_missing(true);
             let mut db = SqliteConnection::connect_with(&options).await.unwrap();
             sqlx::query(
@@ -383,10 +402,32 @@ mod tests {
             .await
             .unwrap();
         }
+    }
 
-        insert_imap_account(&database, candidate()).await.expect("account is stored");
+    impl Drop for Store {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.directory);
+            match self.old_fixture.take() {
+                Some(value) => std::env::set_var("SNDMAIL_WORKER_FIXTURE", value),
+                None => std::env::remove_var("SNDMAIL_WORKER_FIXTURE"),
+            }
+            match self.old_data.take() {
+                Some(value) => std::env::set_var("SNDMAIL_WORKER_DATA_DIR", value),
+                None => std::env::remove_var("SNDMAIL_WORKER_DATA_DIR"),
+            }
+        }
+    }
 
-        let options = SqliteConnectOptions::new().filename(&database);
+    #[tokio::test]
+    async fn writes_an_account_whose_password_decrypts_with_the_shared_key() {
+        let _guard = FIXTURE_ENV_LOCK.lock().unwrap_or_else(|poison| poison.into_inner());
+        let store = Store::install();
+        store.write_key(7);
+        store.create_schema().await;
+
+        insert_imap_account(&store.database, candidate()).await.expect("account is stored");
+
+        let options = SqliteConnectOptions::new().filename(&store.database);
         let mut db = SqliteConnection::connect_with(&options).await.unwrap();
         let row: (String, String, Option<String>, Option<String>, Option<String>) = sqlx::query_as(
             "SELECT email, provider, imap_password, oauth_provider, imap_username FROM accounts WHERE id = ?",
@@ -407,18 +448,39 @@ mod tests {
         );
 
         // The same address cannot be connected twice.
-        let duplicate = insert_imap_account(&database, candidate()).await;
+        let duplicate = insert_imap_account(&store.database, candidate()).await;
         assert!(duplicate.unwrap_err().contains("already connected"));
+    }
 
-        drop(db);
-        let _ = std::fs::remove_dir_all(&directory);
-        match old_fixture {
-            Some(value) => std::env::set_var("SNDMAIL_WORKER_FIXTURE", value),
-            None => std::env::remove_var("SNDMAIL_WORKER_FIXTURE"),
-        }
-        match old_data {
-            Some(value) => std::env::set_var("SNDMAIL_WORKER_DATA_DIR", value),
-            None => std::env::remove_var("SNDMAIL_WORKER_DATA_DIR"),
-        }
+    #[tokio::test]
+    async fn first_setup_without_a_key_generates_one_instead_of_failing() {
+        // A fresh install has no credential-store entry and no sndmail.key.
+        // Account setup used to reach `encrypt()` directly and fail with
+        // "encryption key unavailable".
+        let _guard = FIXTURE_ENV_LOCK.lock().unwrap_or_else(|poison| poison.into_inner());
+        let store = Store::install();
+        assert!(!store.directory.join("sndmail.key").exists());
+        store.create_schema().await;
+
+        insert_imap_account(&store.database, candidate())
+            .await
+            .expect("a mailbox can be added on a fresh install");
+
+        assert!(
+            store.directory.join("sndmail.key").exists(),
+            "the generated key must be persisted for the next launch"
+        );
+        let options = SqliteConnectOptions::new().filename(&store.database);
+        let mut db = SqliteConnection::connect_with(&options).await.unwrap();
+        let stored: Option<String> =
+            sqlx::query_scalar("SELECT imap_password FROM accounts WHERE id = ?")
+                .bind("acc-1")
+                .fetch_one(&mut db)
+                .await
+                .unwrap();
+        assert_eq!(
+            crate::credentials::decrypt(&stored.expect("password stored")).unwrap(),
+            "app-password"
+        );
     }
 }

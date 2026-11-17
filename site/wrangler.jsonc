@@ -1,0 +1,15 @@
+// Small static site for sndmail.anydaysomething.com: home, privacy policy and
+// terms — the pages Google's OAuth consent screen links to.
+// Deploy: npx wrangler deploy (from this folder).
+{
+  "name": "sndmail-site",
+  "compatibility_date": "2026-11-01",
+  "assets": {
+    "directory": "./public",
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "404-page"
+  },
+  "routes": [
+    { "pattern": "sndmail.anydaysomething.com", "custom_domain": true }
+  ]
+}

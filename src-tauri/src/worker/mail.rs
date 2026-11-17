@@ -31,16 +31,6 @@ const RETRY_INTERVAL: Duration = Duration::from_secs(5 * 60);
 const GMAIL_GET_SPACING: Duration = Duration::from_millis(500);
 const GMAIL_MAX_RETRIES: u32 = 5;
 const GMAIL_MAX_BACKOFF_MS: u64 = 32_000;
-// The relay currently sends no heartbeat. Reopen a quiet stream periodically
-// so a half-open connection cannot suppress push forever.
-const RELAY_INACTIVITY: Duration = Duration::from_secs(10 * 60);
-
-enum RelayExit {
-    Shutdown,
-    Reconfigure,
-    Inactive,
-}
-
 #[derive(Clone)]
 struct Account {
     id: String,
@@ -71,13 +61,9 @@ pub(crate) async fn run(context: &WorkerContext) -> Result<(), String> {
     ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let shutdown = context.shutdown();
     let mut idle_watchers: HashMap<String, tokio::task::JoinHandle<()>> = HashMap::new();
-    let relay_context = context.clone();
-    let relay_task = tokio::spawn(async move {
-        watch_gmail_relay(relay_context).await;
-    });
     loop {
         tokio::select! {
-            _ = shutdown.cancelled() => { relay_task.abort(); return Ok(()); },
+            _ = shutdown.cancelled() => return Ok(()),
             _ = ticker.tick() => {},
             _ = context.wait_for_mail_change() => {},
         }
@@ -86,180 +72,6 @@ pub(crate) async fn run(context: &WorkerContext) -> Result<(), String> {
             persist_file_status(context, "error", None, Some(error_category(&error)));
         }
     }
-}
-
-async fn watch_gmail_relay(context: WorkerContext) {
-    let shutdown = context.shutdown();
-    let stream_client = match reqwest::Client::builder()
-        .connect_timeout(Duration::from_secs(30))
-        .build()
-    {
-        Ok(client) => client,
-        Err(_) => return,
-    };
-    loop {
-        if shutdown.is_cancelled() {
-            return;
-        }
-        match relay_session(&context, &stream_client).await {
-            Ok(RelayExit::Shutdown) => return,
-            Ok(RelayExit::Reconfigure) => {
-                // Settings or account membership changed. Reload all registrations
-                // and reconcile History without waiting for a timer.
-                context.notify_mail_changed(String::new());
-            }
-            Ok(RelayExit::Inactive) => tokio::select! {
-                _ = shutdown.cancelled() => return,
-                _ = context.wait_for_relay_change() => {},
-                _ = tokio::time::sleep(RETRY_INTERVAL) => {},
-            },
-            Err(error) => {
-                log::warn!("Gmail relay reconnecting: {}", error_category(&error));
-                // A missed stream event is repaired by the authoritative History API.
-                context.notify_mail_changed(String::new());
-                tokio::select! {
-                    _ = shutdown.cancelled() => return,
-                    _ = context.wait_for_relay_change() => {},
-                    _ = tokio::time::sleep(Duration::from_secs(60)) => {},
-                }
-            }
-        }
-    }
-}
-
-async fn relay_session(context: &WorkerContext, http: &reqwest::Client) -> Result<RelayExit, String> {
-    let Some(path) = database_path(context)? else {
-        return Ok(RelayExit::Inactive);
-    };
-    let mut db = SqliteConnection::connect_with(
-        &SqliteConnectOptions::new()
-            .filename(path)
-            .create_if_missing(false),
-    )
-    .await
-    .map_err(db_error)?;
-    let Some(base) = setting(&mut db, "gmail_push_relay_url").await? else {
-        return Ok(RelayExit::Inactive);
-    };
-    let Some(secret) = secure_setting(&mut db, "gmail_push_relay_secret").await? else {
-        return Ok(RelayExit::Inactive);
-    };
-    let Some(topic) = setting(&mut db, "gmail_push_topic_name").await? else {
-        return Ok(RelayExit::Inactive);
-    };
-    if base.trim().is_empty() || secret.is_empty() || topic.trim().is_empty() {
-        return Ok(RelayExit::Inactive);
-    }
-    let base = base.trim().trim_end_matches('/');
-    let parsed = reqwest::Url::parse(base).map_err(|_| "invalid relay URL".to_string())?;
-    if parsed.scheme() != "https"
-        && !(parsed.scheme() == "http"
-            && parsed
-                .host_str()
-                .is_some_and(|h| h == "localhost" || h == "127.0.0.1"))
-    {
-        return Err("relay URL must use HTTPS".into());
-    }
-    let mut accounts: HashMap<String, Account> = load_accounts(&mut db)
-        .await?
-        .into_iter()
-        .filter(|a| a.provider == "gmail_api")
-        .map(|a| (a.email.to_ascii_lowercase(), a))
-        .collect();
-    for account in accounts.values_mut() {
-        if let Err(error) = register_relay(&mut db, http, base, &secret, &topic, account).await {
-            log::warn!(
-                "Gmail relay registration failed: {}",
-                error_category(&error)
-            );
-        }
-    }
-    let response = http
-        .get(format!("{base}/events"))
-        .header("Accept", "text/event-stream")
-        .bearer_auth(&secret)
-        .send()
-        .await
-        .map_err(|e| format!("connect Gmail relay: {e}"))?;
-    if !response.status().is_success() {
-        return Err(format!("Gmail relay returned HTTP {}", response.status()));
-    }
-    let mut bytes = response.bytes_stream();
-    let mut buffer = String::new();
-    let shutdown = context.shutdown();
-    loop {
-        let next = tokio::select! {
-            _ = shutdown.cancelled() => return Ok(RelayExit::Shutdown),
-            _ = context.wait_for_relay_change() => return Ok(RelayExit::Reconfigure),
-            _ = tokio::time::sleep(RELAY_INACTIVITY) => return Err("Gmail relay stream inactive".into()),
-            value = bytes.next() => value,
-        };
-        let Some(chunk) = next else {
-            return Err("Gmail relay stream closed".into());
-        };
-        let chunk = chunk.map_err(|e| format!("Gmail relay stream: {e}"))?;
-        buffer.push_str(&String::from_utf8_lossy(&chunk));
-        if buffer.len() > 64 * 1024 {
-            return Err("Gmail relay event exceeds size limit".into());
-        }
-        while let Some(end) = buffer.find("\n\n") {
-            let event = buffer[..end].to_owned();
-            buffer.drain(..end + 2);
-            let Some(line) = event.lines().find_map(|line| line.strip_prefix("data: ")) else {
-                continue;
-            };
-            let Ok(payload) = serde_json::from_str::<Value>(line) else {
-                continue;
-            };
-            let Some(email) = payload["email"].as_str() else {
-                continue;
-            };
-            let Some(account) = accounts.get_mut(&email.to_ascii_lowercase()) else {
-                continue;
-            };
-            match payload["type"].as_str() {
-                Some("gmail-history") => context.notify_mail_changed(account.id.clone()),
-                Some("renew-required") => {
-                    if let Err(error) =
-                        register_relay(&mut db, http, base, &secret, &topic, account).await
-                    {
-                        log::warn!(
-                            "Gmail relay renewal failed: {}",
-                            error_category(&error)
-                        );
-                    }
-                }
-                _ => {}
-            }
-        }
-    }
-}
-
-async fn register_relay(
-    db: &mut SqliteConnection,
-    http: &reqwest::Client,
-    base: &str,
-    secret: &str,
-    topic: &str,
-    account: &mut Account,
-) -> Result<(), String> {
-    let access = gmail_token(db, http, account).await?;
-    let response = http
-        .post(format!("{base}/register"))
-        .bearer_auth(secret)
-        .json(
-            &serde_json::json!({"email": account.email, "accessToken": access, "topicName": topic}),
-        )
-        .send()
-        .await
-        .map_err(|e| format!("Gmail relay registration: {e}"))?;
-    if !response.status().is_success() {
-        return Err(format!(
-            "Gmail relay registration HTTP {}",
-            response.status()
-        ));
-    }
-    Ok(())
 }
 
 async fn sync_cycle(
@@ -312,7 +124,10 @@ async fn sync_cycle(
     let known_account_ids: HashSet<String> = accounts.iter().map(|account| account.id.clone()).collect();
     context.set_mail_ready(true);
     set_status(context, &mut db, "ready", None, None).await?;
-    let mut active_imap = HashSet::new();
+    // "Instant delivery" in Settings → Accounts. Off means the timer only:
+    // no account gets an IDLE socket, and any open one is closed below.
+    let idle_enabled = setting(&mut db, "imap_idle").await?.as_deref() != Some("false");
+    let mut active_idle = HashSet::new();
     let mut failures = 0_usize;
     for mut account in accounts {
         let force_full: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM worker_resync_requests WHERE account_id = ?")
@@ -320,8 +135,8 @@ async fn sync_cycle(
         let force_full = force_full > 0;
         let rotate_idle = account.provider == "imap" && account.auth_method == "oauth2"
             && account.token_expires_at <= Utc::now().timestamp() + 300;
-        if account.provider == "imap" {
-            active_imap.insert(account.id.clone());
+        if idle_enabled && (account.provider == "imap" || account.provider == "gmail_api") {
+            active_idle.insert(account.id.clone());
         }
         let result = if account.provider == "imap" {
             set_status(context, &mut db, "syncing", Some(&account.id), None).await?;
@@ -372,18 +187,25 @@ async fn sync_cycle(
                 }
             }
         }
-        if account.provider == "imap" {
-            if rotate_idle {
-                if let Some(task) = idle_watchers.remove(&account.id) { task.abort(); }
-            }
-            if !idle_watchers.get(&account.id).is_some_and(|task| !task.is_finished()) {
-                if let Ok(config) = imap_config(&account) {
-                    let watcher_context = context.clone();
-                    let id = account.id.clone();
-                    idle_watchers.insert(id.clone(), tokio::spawn(async move {
-                        watch_imap_idle(watcher_context, id, config).await;
-                    }));
-                }
+        if rotate_idle {
+            if let Some(task) = idle_watchers.remove(&account.id) { task.abort(); }
+        }
+        if active_idle.contains(&account.id)
+            && !idle_watchers.get(&account.id).is_some_and(|task| !task.is_finished())
+        {
+            let source = if account.provider == "imap" {
+                imap_config(&account).ok().map(IdleSource::Imap)
+            } else if account.provider == "gmail_api" {
+                gmail_idle_endpoint().map(|endpoint| IdleSource::Gmail { endpoint, http: client.clone() })
+            } else {
+                None
+            };
+            if let Some(source) = source {
+                let watcher_context = context.clone();
+                let id = account.id.clone();
+                idle_watchers.insert(id.clone(), tokio::spawn(async move {
+                    watch_imap_idle(watcher_context, id, source).await;
+                }));
             }
         }
     }
@@ -394,7 +216,7 @@ async fn sync_cycle(
         }
     }
     idle_watchers.retain(|id, task| {
-        if active_imap.contains(id) {
+        if active_idle.contains(id) {
             true
         } else {
             task.abort();
@@ -487,6 +309,13 @@ fn truncate(value: &str, limit: usize) -> String {
     value.chars().take(limit).collect()
 }
 
+/// Shown verbatim on the account avatar and in the sync error toast, so it
+/// says what to do, not just what failed.
+const GMAIL_API_DISABLED: &str =
+    "The Gmail API is turned off in your Google Cloud project. Enable it at console.cloud.google.com/apis/library/gmail.googleapis.com, then refresh.";
+const GMAIL_ACCESS_NOT_GRANTED: &str =
+    "sndmail was not given access to Gmail. Re-authorize the account in Settings → Accounts and leave every permission ticked.";
+
 fn error_category(error: &str) -> &'static str {
     let lower = error.to_ascii_lowercase();
     if lower.contains("credential") || lower.contains("keychain") || lower.contains("encrypt") { return "credential unavailable"; }
@@ -495,6 +324,12 @@ fn error_category(error: &str) -> &'static str {
     if lower.contains("oauth invalid_grant") { return "provider OAuth invalid_grant"; }
     if lower.contains("oauth invalid_client") { return "provider OAuth invalid_client"; }
     if lower.contains("oauth unauthorized_client") { return "provider OAuth unauthorized_client"; }
+    if lower.contains("accessnotconfigured") || lower.contains("service_disabled") {
+        return GMAIL_API_DISABLED;
+    }
+    if lower.contains("insufficientpermissions") || lower.contains("access_token_scope_insufficient") {
+        return GMAIL_ACCESS_NOT_GRANTED;
+    }
     if lower.contains("token refresh") || lower.contains("gmail returned http") {
         for (code, category) in [
             (400, "provider HTTP 400"), (401, "provider HTTP 401"),
@@ -511,7 +346,7 @@ fn error_category(error: &str) -> &'static str {
         return "provider network unavailable";
     }
     if lower.contains("auth") || lower.contains("unauthorized") || lower.contains("401") { return "provider authentication failed"; }
-    if lower.contains("gmail") || lower.contains("imap") || lower.contains("relay") { return "mail provider unavailable"; }
+    if lower.contains("gmail") || lower.contains("imap") { return "mail provider unavailable"; }
     "background sync failed"
 }
 
@@ -536,16 +371,34 @@ async fn pace_gmail_get() {
     *next = Some(tokio::time::Instant::now() + GMAIL_GET_SPACING);
 }
 
-async fn gmail_rate_limited(response: reqwest::Response) -> bool {
+async fn gmail_error_body(response: reqwest::Response) -> Option<Value> {
     let mut stream = response.bytes_stream();
     let mut body = Vec::new();
     while let Some(chunk) = stream.next().await {
-        let Ok(chunk) = chunk else { return false; };
-        if body.len().saturating_add(chunk.len()) > 8_192 { return false; }
+        let chunk = chunk.ok()?;
+        if body.len().saturating_add(chunk.len()) > 8_192 { return None; }
         body.extend_from_slice(&chunk);
     }
-    let Ok(payload) = serde_json::from_slice::<Value>(&body) else { return false; };
-    is_gmail_rate_reason(&payload)
+    serde_json::from_slice::<Value>(&body).ok()
+}
+
+/// Google's machine-readable reason for a refusal, e.g. `accessNotConfigured`
+/// or `insufficientPermissions`. Only these identifiers are kept — never the
+/// free-text message, which can quote the project or account.
+fn gmail_error_reason(payload: &Value) -> Option<String> {
+    let reason = payload["error"]["errors"]
+        .as_array()
+        .and_then(|errors| errors.iter().find_map(|error| error["reason"].as_str()))
+        .or_else(|| {
+            payload["error"]["details"].as_array().and_then(|details| {
+                details.iter().find_map(|detail| detail["reason"].as_str())
+            })
+        })
+        .or_else(|| payload["error"]["status"].as_str())?;
+    reason
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '_')
+        .then(|| truncate(reason, 64))
 }
 
 fn is_gmail_rate_reason(payload: &Value) -> bool {
@@ -697,8 +550,11 @@ async fn gmail_token(
     let encrypted = encrypt(&token)?;
     let rotated = payload["refresh_token"].as_str().map(encrypt).transpose()?;
     sqlx::query("UPDATE accounts SET access_token = ?, refresh_token = COALESCE(?, refresh_token), token_expires_at = ?, updated_at = unixepoch() WHERE id = ?")
-        .bind(encrypted).bind(&rotated).bind(expires).bind(&account.id).execute(&mut *db).await.map_err(db_error)?;
-    account.access_token = Some(token.clone());
+        .bind(&encrypted).bind(&rotated).bind(expires).bind(&account.id).execute(&mut *db).await.map_err(db_error)?;
+    // Keep the field encrypted like every other copy: the next call decrypts
+    // it as `previous_access`, and a plaintext token there failed as a
+    // credential error on the 401 retry.
+    account.access_token = Some(encrypted);
     if let Some(rotated) = rotated { account.refresh_token = Some(rotated); }
     account.token_expires_at = expires;
     Ok(token)
@@ -729,8 +585,13 @@ async fn gmail_get(
             .get(reqwest::header::RETRY_AFTER)
             .and_then(|value| value.to_str().ok())
             .and_then(|value| value.parse::<u64>().ok());
+        let forbidden = if status == reqwest::StatusCode::FORBIDDEN {
+            gmail_error_body(response).await
+        } else {
+            None
+        };
         let rate_limited = status == reqwest::StatusCode::TOO_MANY_REQUESTS
-            || (status == reqwest::StatusCode::FORBIDDEN && gmail_rate_limited(response).await);
+            || forbidden.as_ref().is_some_and(is_gmail_rate_reason);
         if (rate_limited || status.is_server_error()) && attempt < GMAIL_MAX_RETRIES {
             let jitter = SystemTime::now().duration_since(UNIX_EPOCH)
                 .map(|duration| u64::from(duration.subsec_millis()) % 1_000).unwrap_or(0);
@@ -738,7 +599,11 @@ async fn gmail_get(
             continue;
         }
         if rate_limited { return Err("Gmail rate limited".into()); }
-        return Err(format!("Gmail returned HTTP {status}"));
+        // Keep Google's reason: a bare 403 cannot tell "the Gmail API is off
+        // in the Cloud project" from "the user unticked Gmail at sign-in",
+        // and those need different fixes.
+        let reason = forbidden.as_ref().and_then(gmail_error_reason).map(|r| format!(" ({r})")).unwrap_or_default();
+        return Err(format!("Gmail returned HTTP {status}{reason}"));
     }
     Err("Gmail rate limited".into())
 }
@@ -1340,13 +1205,100 @@ async fn fresh_imap_token(db: &mut SqliteConnection, http: &reqwest::Client, acc
     Ok(())
 }
 
-async fn watch_imap_idle(context: WorkerContext, account_id: String, config: ImapConfig) {
+/// Where an IDLE doorbell connects.
+///
+/// A Gmail account syncs over the Gmail API, but Gmail's own IMAP server is
+/// the cheapest way to learn that something arrived: one idle socket per
+/// account, dialled out, nothing hosted. The push is only a doorbell — the
+/// History API sync that follows decides what changed — so this replaced the
+/// Pub/Sub relay with no loss of speed and no server to run.
+enum IdleSource {
+    /// An IMAP mailbox; its config is rebuilt (and the watcher restarted) by
+    /// `sync_cycle` when an OAuth token nears expiry.
+    Imap(ImapConfig),
+    /// A Gmail API account. The access token is fetched on every connect, so
+    /// a reconnect hours after launch never offers an expired one.
+    Gmail { endpoint: (String, u16, String), http: reqwest::Client },
+}
+
+const GMAIL_IMAP_HOST: &str = "imap.gmail.com";
+const IDLE_RENEW: Duration = Duration::from_secs(25 * 60);
+const IDLE_MIN_BACKOFF: Duration = Duration::from_secs(30);
+const IDLE_MAX_BACKOFF: Duration = Duration::from_secs(10 * 60);
+
+/// Gmail's IMAP endpoint (host, port, security). Fixture runs point it at a
+/// local emulator or leave it unset, which turns the Gmail doorbell off so a
+/// test never dials Google.
+fn gmail_idle_endpoint() -> Option<(String, u16, String)> {
+    if std::env::var("SNDMAIL_WORKER_FIXTURE").as_deref() == Ok("1") {
+        let value = std::env::var("SNDMAIL_WORKER_GMAIL_IMAP").ok()?;
+        let (host, port) = value.rsplit_once(':')?;
+        if !matches!(host, "127.0.0.1" | "localhost") { return None; }
+        return Some((host.to_owned(), port.parse().ok()?, "none".to_owned()));
+    }
+    Some((GMAIL_IMAP_HOST.to_owned(), 993, "tls".to_owned()))
+}
+
+fn gmail_imap_config(endpoint: &(String, u16, String), email: &str, access_token: String) -> ImapConfig {
+    ImapConfig {
+        host: endpoint.0.clone(),
+        port: endpoint.1,
+        // The value `imap::connect` matches on — "tls", never the "ssl" the
+        // account form stores.
+        security: endpoint.2.clone(),
+        username: email.to_owned(),
+        password: access_token,
+        auth_method: "oauth2".into(),
+        accept_invalid_certs: false,
+    }
+}
+
+async fn open_db(context: &WorkerContext) -> Result<SqliteConnection, String> {
+    let path = database_path(context)?.ok_or("mail database unavailable")?;
+    SqliteConnection::connect_with(
+        &SqliteConnectOptions::new()
+            .filename(path)
+            .create_if_missing(false)
+            .busy_timeout(Duration::from_secs(5)),
+    )
+    .await
+    .map_err(db_error)
+}
+
+async fn idle_config(context: &WorkerContext, account_id: &str, source: &IdleSource) -> Result<ImapConfig, String> {
+    match source {
+        IdleSource::Imap(config) => Ok(config.clone()),
+        IdleSource::Gmail { endpoint, http } => {
+            let mut db = open_db(context).await?;
+            let mut account = load_accounts(&mut db)
+                .await?
+                .into_iter()
+                .find(|account| account.id == account_id)
+                .ok_or("Gmail account no longer active")?;
+            // Shares gmail_token's per-account lock with sync, so a rotating
+            // refresh token is never spent twice.
+            let token = gmail_token(&mut db, http, &mut account).await?;
+            Ok(gmail_imap_config(endpoint, &account.email, token))
+        }
+    }
+}
+
+fn idle_backoff(failures: u32) -> Duration {
+    IDLE_MIN_BACKOFF
+        .saturating_mul(1_u32 << failures.min(5))
+        .min(IDLE_MAX_BACKOFF)
+}
+
+async fn watch_imap_idle(context: WorkerContext, account_id: String, source: IdleSource) {
     let shutdown = context.shutdown();
+    let mut failures: u32 = 0;
     loop {
         if shutdown.is_cancelled() {
             return;
         }
+        let mut established = false;
         let outcome = async {
+            let config = idle_config(&context, &account_id, &source).await?;
             let mut session = imap::connect(&config).await?;
             session
                 .select("INBOX")
@@ -1358,7 +1310,8 @@ async fn watch_imap_idle(context: WorkerContext, account_id: String, config: Ima
                     .init()
                     .await
                     .map_err(|e| format!("IMAP IDLE start: {e}"))?;
-                let (wait, stop) = handle.wait_with_timeout(Duration::from_secs(25 * 60));
+                established = true;
+                let (wait, stop) = handle.wait_with_timeout(IDLE_RENEW);
                 let result = tokio::select! {
                     value = wait => Some(value),
                     _ = shutdown.cancelled() => { drop(stop); None },
@@ -1378,18 +1331,26 @@ async fn watch_imap_idle(context: WorkerContext, account_id: String, config: Ima
             }
         }
         .await;
-        if let Err(error) = outcome {
-            log::warn!(
-                "IMAP IDLE reconnecting: {}",
-                error_category(&error)
-            );
+        if shutdown.is_cancelled() {
+            return;
         }
-        // A dropped socket or laptop wake also gets a catch-up sync before
-        // IDLE is re-established. Backoff avoids hammering a refused server.
-        context.notify_mail_changed(account_id.clone());
+        if let Err(error) = outcome {
+            log::warn!("IMAP IDLE reconnecting: {}", error_category(&error));
+        }
+        if established {
+            // A dropped socket or laptop wake may have hidden an arrival:
+            // catch up once before IDLE is re-established.
+            failures = 0;
+            context.notify_mail_changed(account_id.clone());
+        } else {
+            // Never got as far as IDLE. The five-minute timer still syncs, so
+            // back off rather than hammer a server (or Google) that refuses.
+            failures = failures.saturating_add(1);
+        }
+        let delay = if established { IDLE_MIN_BACKOFF } else { idle_backoff(failures) };
         tokio::select! {
             _ = shutdown.cancelled() => return,
-            _ = tokio::time::sleep(Duration::from_secs(30)) => {},
+            _ = tokio::time::sleep(delay) => {},
         }
     }
 }
@@ -1891,7 +1852,7 @@ async fn store_imap_message(
 
 #[cfg(test)]
 mod tests {
-    use super::{decode_gmail_body, decrypt, encrypt, error_category, find_gmail_body_part, gmail_retry_delay, is_gmail_rate_reason, oauth_refresh_error};
+    use super::{decode_gmail_body, decrypt, encrypt, error_category, find_gmail_body_part, gmail_error_reason, gmail_imap_config, gmail_retry_delay, idle_backoff, is_gmail_rate_reason, oauth_refresh_error, GMAIL_ACCESS_NOT_GRANTED, GMAIL_API_DISABLED, IDLE_MAX_BACKOFF, IDLE_MIN_BACKOFF};
     use base64::Engine;
 
     #[test]
@@ -1956,5 +1917,38 @@ mod tests {
             }]
         });
         assert!(find_gmail_body_part(&attached_text_only, "text/plain").is_none());
+    }
+
+    #[test]
+    fn gmail_403_reason_is_kept_and_explained() {
+        let disabled = serde_json::json!({"error": {"code": 403, "message": "Gmail API has not been used in project 123", "errors": [{"reason": "accessNotConfigured"}], "status": "PERMISSION_DENIED"}});
+        let reason = gmail_error_reason(&disabled).unwrap();
+        assert_eq!(reason, "accessNotConfigured");
+        assert_eq!(error_category(&format!("Gmail returned HTTP 403 Forbidden ({reason})")), GMAIL_API_DISABLED);
+
+        let scope = serde_json::json!({"error": {"details": [{"reason": "ACCESS_TOKEN_SCOPE_INSUFFICIENT"}], "status": "PERMISSION_DENIED"}});
+        let reason = gmail_error_reason(&scope).unwrap();
+        assert_eq!(error_category(&format!("Gmail returned HTTP 403 Forbidden ({reason})")), GMAIL_ACCESS_NOT_GRANTED);
+
+        // Free text never becomes a reason, so nothing private reaches a status.
+        assert_eq!(gmail_error_reason(&serde_json::json!({"error": {"status": "has spaces: secret"}})), None);
+        assert_eq!(error_category("Gmail returned HTTP 403 Forbidden"), "provider HTTP 403");
+    }
+
+    #[test]
+    fn gmail_idle_uses_xoauth2_over_tls() {
+        let endpoint = ("imap.gmail.com".to_owned(), 993, "tls".to_owned());
+        let config = gmail_imap_config(&endpoint, "me@example.com", "token".into());
+        assert_eq!(config.security, "tls");
+        assert_eq!(config.auth_method, "oauth2");
+        assert_eq!(config.username, "me@example.com");
+        assert_eq!(config.password, "token");
+    }
+
+    #[test]
+    fn idle_backoff_grows_and_caps() {
+        assert_eq!(idle_backoff(0), IDLE_MIN_BACKOFF);
+        assert!(idle_backoff(2) > idle_backoff(1));
+        assert_eq!(idle_backoff(30), IDLE_MAX_BACKOFF);
     }
 }

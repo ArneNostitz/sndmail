@@ -12,7 +12,7 @@ import { removeClient, reauthorizeAccount } from "@/services/gmail/tokenManager"
 import { resyncAccount } from "@/services/gmail/syncManager";
 import {
   backgroundWorkerOwnsSync,
-  reconfigureBackgroundWorkerRelay,
+  wakeBackgroundWorker,
   requestWorkerResync,
 } from "@/services/worker/workerClient";
 import { listRelayProfiles, updateRelayAccounts } from "@/services/worker/relaySharing";
@@ -90,7 +90,7 @@ export function AccountDetail({ account, onBack }: { account: Account; onBack: (
     await deleteAccount(account.id);
     removeAccountFromStore(account.id);
     if (backgroundWorkerOwnsSync()) {
-      void reconfigureBackgroundWorkerRelay().catch((error) =>
+      void wakeBackgroundWorker().catch((error) =>
         console.warn("Could not refresh background worker account configuration:", error),
       );
     }

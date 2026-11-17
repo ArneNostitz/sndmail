@@ -50,11 +50,6 @@ export async function wakeBackgroundWorker(): Promise<void> {
   await invoke("worker_wake");
 }
 
-/** Reload Gmail push relay/account configuration and run one mail catch-up. */
-export async function reconfigureBackgroundWorkerRelay(): Promise<void> {
-  await invoke("worker_reconfigure_relay");
-}
-
 /** Queue a durable full reconciliation without starting a second sync owner. */
 export async function requestWorkerResync(accountIds: string[]): Promise<void> {
   if (accountIds.length === 0) return;

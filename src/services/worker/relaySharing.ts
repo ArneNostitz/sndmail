@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { reconfigureBackgroundWorkerRelay } from "./workerClient";
+import { wakeBackgroundWorker } from "./workerClient";
 
 /** Secret-free view of a stored Commonplace relay grant. */
 export interface RelayProfileSummary {
@@ -23,7 +23,7 @@ export async function updateRelayAccounts(
   accountIds: string[],
 ): Promise<void> {
   await invoke("worker_update_relay_accounts", { profileId, accountIds });
-  await reconfigureBackgroundWorkerRelay().catch(() => {
+  await wakeBackgroundWorker().catch(() => {
     // The grant is stored either way; a worker that is not running will pick
     // it up on its next start.
   });

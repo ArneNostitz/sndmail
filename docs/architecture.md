@@ -38,7 +38,7 @@ sndmail follows a **three-layer architecture** with clear separation of concerns
 
 ## Data Flow
 
-1. **Mail sync** -- On macOS, the separate background helper owns sync while enabled, including after the main app closes. Gmail push, IMAP IDLE, and periodic catch-up drive updates; the open app handles sync when the helper is disabled or cannot own sync. A registered helper retains ownership while starting or recovering, so the app does not race it. Gmail uses the History API (with a full-sync fallback when history expires), while IMAP uses UIDVALIDITY/last_uid tracking.
+1. **Mail sync** -- On macOS, the separate background helper owns sync while enabled, including after the main app closes. IMAP IDLE (Gmail accounts included, as a doorbell for the History API) and a periodic catch-up drive updates; the open app handles sync when the helper is disabled or cannot own sync. A registered helper retains ownership while starting or recovering, so the app does not race it. Gmail uses the History API (with a full-sync fallback when history expires), while IMAP uses UIDVALIDITY/last_uid tracking.
 2. **Storage** -- All messages, threads, labels, contacts, calendar events, and AI results stored in local SQLite (34 tables) with FTS5 full-text indexing.
 3. **State** -- Eight Zustand stores manage UI state. No middleware, no persistence needed -- ephemeral state rebuilds from SQLite on startup.
 4. **Rendering** -- Email HTML is sanitized with DOMPurify and rendered in sandboxed iframes. Remote images blocked by default.
@@ -204,7 +204,7 @@ Key tables: `accounts` (with `provider`, IMAP/SMTP fields), `messages` (with FTS
 2. Restore persisted settings (theme, sidebar, density, font scale, reading pane, etc.)
 3. Load custom keyboard shortcuts
 4. Initialize email providers for all accounts (Gmail API clients + IMAP providers), sync send-as aliases for Gmail accounts
-5. Check background-helper ownership; attach to its change feed when ready, otherwise start foreground mail sync. Run one catch-up and start Gmail push / IMAP IDLE as appropriate
+5. Check background-helper ownership; attach to its change feed when ready, otherwise start foreground mail sync. Run one catch-up and start IMAP IDLE as appropriate
 6. Start background checkers (snooze, scheduled send, follow-up, bundles, queue processor, attachment pre-cache)
 7. Initialize network status detection (online/offline listeners)
 8. Initialize OS notifications

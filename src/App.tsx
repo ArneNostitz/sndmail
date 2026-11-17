@@ -11,6 +11,7 @@ import { useUIStore } from "./stores/uiStore";
 import { useAccountStore } from "./stores/accountStore";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import { runMigrations } from "./services/db/migrations";
+import { seedBuiltInGoogleCredentials } from "./services/gmail/builtInCredentials";
 import { attachBackgroundWorker, backgroundWorkerOwnsSync, observeWorkerChanges, wakeBackgroundWorker } from "./services/worker/workerClient";
 import { getAllAccounts } from "./services/db/accounts";
 import { getSetting } from "./services/db/settings";
@@ -20,7 +21,6 @@ import {
   onSyncStatus,
   onSyncBatchComplete,
 } from "./services/gmail/syncManager";
-import { startGmailPushRelay, stopGmailPushRelay } from "./services/gmail/gmailPushRelay";
 import { initializeClients } from "./services/gmail/tokenManager";
 import {
   startSnoozeChecker,
@@ -284,6 +284,11 @@ export default function App() {
           throw err;
         }
 
+        // A build made with Google keys in .env needs no Cloud console setup.
+        await seedBuiltInGoogleCredentials().catch((err) =>
+          console.warn("Could not store the built-in Google client:", err),
+        );
+
         const ui = useUIStore.getState();
 
         // Restore persisted theme
@@ -459,11 +464,10 @@ export default function App() {
           workerChangeCleanupRef.current = observeWorkerChanges();
         }
 
-        // Catch up once, then let Gmail push / IMAP IDLE drive mail updates.
+        // Catch up once, then let IMAP IDLE drive mail updates.
         if (emailAccountIds.length > 0) {
           if (!backgroundWorker) {
             startInitialSync(emailAccountIds);
-            void startGmailPushRelay();
 
             // Let the servers say when something changed.
             const { startIdleWatchers } = await import("@/services/imap/idleManager");
@@ -518,7 +522,6 @@ export default function App() {
     init();
 
     return () => {
-      stopGmailPushRelay();
       import("@/services/imap/idleManager")
         .then(({ stopIdleWatchers }) => stopIdleWatchers())
         .catch(() => { /* shutting down anyway */ });

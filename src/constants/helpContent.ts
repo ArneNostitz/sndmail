@@ -136,11 +136,11 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         title: "Initial sync",
         summary: "First sync downloads your email history.",
         description:
-          "When you add a new account, the app performs an initial sync that downloads your last year of email (configurable). This builds a local database for fast offline search and browsing. Depending on your inbox size, this can take a few minutes. You can use the app normally while it runs. After that, Gmail push and IMAP IDLE notify sndmail when something changes; sndmail then fetches only the delta instead of polling every mailbox on a timer.",
+          "When you add a new account, the app performs an initial sync that downloads your last year of email (configurable). This builds a local database for fast offline search and browsing. Depending on your inbox size, this can take a few minutes. You can use the app normally while it runs. After that, IMAP IDLE — Gmail included — tells sndmail the moment something changes; sndmail then fetches only the delta instead of polling every mailbox on a timer.",
         tips: [
           { text: "Change the sync period (30 days to 1 year) in Settings > Accounts." },
           { text: "The app is fully usable during the initial sync." },
-          { text: "New mail is delivered by Gmail push or IMAP IDLE, without a periodic mailbox refresh." },
+          { text: "New mail — and login codes — arrive within seconds over IMAP IDLE, Gmail included. No server or setup needed." },
           { text: "Gmail: if sync history expires (~30 days offline), the app auto-falls back to a full sync." },
           { text: "IMAP: if folder UIDVALIDITY changes, the app resyncs that folder automatically." },
         ],
@@ -1325,7 +1325,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         title: "Refresh mail & account tooltip",
         summary: "Force a sync from the account avatar or with F5.",
         description:
-          "Hover the account avatar at the top of the sidebar and it turns into a refresh button — click it to manually check every mailbox the current list shows. Normal delivery is automatic through Gmail push or IMAP IDLE, so sndmail does not periodically refresh every account. The account tooltip shows live sync status; a spinning ring means work is in progress and turns red when it fails.",
+          "Hover the account avatar at the top of the sidebar and it turns into a refresh button — click it to manually check every mailbox the current list shows. Normal delivery is automatic through IMAP IDLE, so sndmail does not periodically refresh every account. The account tooltip shows live sync status; a spinning ring means work is in progress and turns red when it fails.",
         tips: [
           { text: "Refresh mail", shortcutId: "app.syncFolder" },
           { text: "Hover the avatar, then click the refresh icon to sync now." },
@@ -1340,7 +1340,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         title: "Multiple accounts",
         summary: "Manage Gmail and IMAP accounts side by side.",
         description:
-          "Add and manage multiple email accounts — mix Gmail (OAuth) and IMAP/SMTP accounts freely. Each account has its own inbox, labels, filters, and sync state. Switch between accounts using the account switcher at the top of the sidebar. New changes arrive through Gmail push or IMAP IDLE; when several mailboxes are checked together, the list refreshes once after the complete batch.",
+          "Add and manage multiple email accounts — mix Gmail (OAuth) and IMAP/SMTP accounts freely. Each account has its own inbox, labels, filters, and sync state. Switch between accounts using the account switcher at the top of the sidebar. New changes arrive through IMAP IDLE, Gmail included; when several mailboxes are checked together, the list refreshes once after the complete batch.",
         tips: [
           { text: "Click the account switcher at the top of the sidebar to switch." },
           { text: "Mix Gmail and IMAP accounts — they work side by side." },
@@ -1372,7 +1372,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         title: "Background mail helper",
         summary: "Sync mail at login, even while sndmail is closed.",
         description:
-          "On macOS, the helper starts at login and syncs mail without opening the sndmail window. Gmail push and IMAP IDLE can wake it sooner; a periodic catch-up checks for missed changes. Enable or disable the helper in Settings > General.",
+          "On macOS, the helper starts at login and syncs mail without opening the sndmail window. One quiet IMAP IDLE connection per mailbox — Gmail included — wakes it within seconds; a periodic catch-up checks for missed changes. Enable or disable the helper in Settings > General.",
         tips: [
           { text: "The helper is enabled by default on macOS." },
           { text: "Changing the setting relaunches sndmail to transfer sync ownership." },
@@ -1433,7 +1433,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
           "Press F5 to immediately check the current folder or label. Normal delivery is push-driven, but a manual check is useful after reconnecting or when a provider's push connection is unavailable. For Gmail, this fetches new History API changes; for IMAP, it checks for new UIDs.",
         tips: [
           { text: "Sync current folder", shortcutId: "app.syncFolder" },
-          { text: "Normal delivery is automatic through Gmail push or IMAP IDLE." },
+          { text: "Normal delivery is automatic through IMAP IDLE, Gmail included." },
           { text: "Manual sync is useful after reconnecting or as a fallback." },
         ],
       },

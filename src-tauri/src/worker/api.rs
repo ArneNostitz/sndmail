@@ -31,7 +31,6 @@ const MAX_SEARCH_QUERY_CHARS: usize = 256;
 trait ApiContext: Clone + Send + Sync + 'static {
     fn mail_ready(&self) -> bool;
     fn notify_mail_changed(&self, account_id: String);
-    fn notify_relay_changed(&self);
     fn subscribe_mail_changes(&self) -> broadcast::Receiver<String>;
     fn shutdown_token(&self) -> CancellationToken;
     fn revalidation_interval(&self) -> Duration {
@@ -46,9 +45,6 @@ impl ApiContext for WorkerContext {
     }
     fn notify_mail_changed(&self, account_id: String) {
         WorkerContext::notify_mail_changed(self, account_id)
-    }
-    fn notify_relay_changed(&self) {
-        WorkerContext::notify_relay_changed(self)
     }
     fn subscribe_mail_changes(&self) -> broadcast::Receiver<String> {
         WorkerContext::subscribe_mail_changes(self)
@@ -286,11 +282,6 @@ async fn dispatch<C: ApiContext>(
     if request.op == "wake" {
         context.notify_mail_changed("manual-wake".into());
         return Ok(json!({"woken":true}));
-    }
-    if request.op == "relay_reconfigure" {
-        context.notify_relay_changed();
-        context.notify_mail_changed("relay-reconfigured".into());
-        return Ok(json!({"reconfigured":true}));
     }
     let profile = authenticate(context, &request)?;
     if !profile.has_scope("metadata") {
@@ -831,7 +822,6 @@ mod tests {
         profiles: Arc<Mutex<Vec<Profile>>>,
         shutdown: CancellationToken,
         events: broadcast::Sender<String>,
-        relay_changes: Arc<std::sync::atomic::AtomicUsize>,
     }
 
     impl ApiContext for FixtureContext {
@@ -840,9 +830,6 @@ mod tests {
         }
         fn notify_mail_changed(&self, account_id: String) {
             let _ = self.events.send(account_id);
-        }
-        fn notify_relay_changed(&self) {
-            self.relay_changes.fetch_add(1, Ordering::SeqCst);
         }
         fn subscribe_mail_changes(&self) -> broadcast::Receiver<String> {
             self.events.subscribe()
@@ -872,24 +859,17 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn relay_reconfigure_is_separate_from_ordinary_wake() {
+    async fn wake_runs_one_mail_catch_up() {
         let (events, _) = broadcast::channel(8);
         let context = FixtureContext {
             profiles: Arc::new(Mutex::new(Vec::new())),
             shutdown: CancellationToken::new(),
             events: events.clone(),
-            relay_changes: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
         };
         let mut receiver = events.subscribe();
         let wake: Request = serde_json::from_value(json!({"op":"wake"})).unwrap();
         assert_eq!(dispatch(Path::new("unused"), &context, wake).await.unwrap()["woken"], true);
         assert_eq!(receiver.recv().await.unwrap(), "manual-wake");
-        assert_eq!(context.relay_changes.load(Ordering::SeqCst), 0);
-
-        let reconfigure: Request = serde_json::from_value(json!({"op":"relay_reconfigure"})).unwrap();
-        assert_eq!(dispatch(Path::new("unused"), &context, reconfigure).await.unwrap()["reconfigured"], true);
-        assert_eq!(receiver.recv().await.unwrap(), "relay-reconfigured");
-        assert_eq!(context.relay_changes.load(Ordering::SeqCst), 1);
     }
 
     async fn full_api_fixture() -> PathBuf {
@@ -1003,7 +983,6 @@ mod tests {
             profiles: profiles.clone(),
             shutdown: CancellationToken::new(),
             events,
-            relay_changes: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
         };
         let (stream, task, socket) = start_fixture_ipc(&database, &context).await;
         let (read, mut write) = stream.into_split();

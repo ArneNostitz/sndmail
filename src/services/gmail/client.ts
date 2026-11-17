@@ -45,11 +45,6 @@ export class GmailClient {
     return this.tokenInfo.accessToken;
   }
 
-  /** Return a current access token for trusted integrations such as the push relay. */
-  async getAccessToken(): Promise<string> {
-    return this.getValidToken();
-  }
-
   private async refreshToken(): Promise<void> {
     const tokens: TokenResponse = await refreshAccessToken(
       this.tokenInfo.refreshToken,

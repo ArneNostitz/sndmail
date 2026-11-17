@@ -14,6 +14,7 @@ import os
 from pathlib import Path
 import queue
 import signal
+import socketserver
 import socket
 import sqlite3
 import subprocess
@@ -131,57 +132,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.wfile.write(payload)
 
 
-class RelayHandler(http.server.BaseHTTPRequestHandler):
-    registrations = []
-    connections = 0
-    channels = []
-    lock = threading.Lock()
-
-    def log_message(self, *_args):
-        pass
-
-    def do_POST(self):
-        if self.path != "/register" or self.headers.get("Authorization") != "Bearer fixture-relay-secret":
-            self.send_error(403)
-            return
-        length = int(self.headers.get("Content-Length", "0"))
-        registration = json.loads(self.rfile.read(length))
-        with self.lock:
-            RelayHandler.registrations.append(registration)
-        self.send_response(200)
-        self.send_header("Content-Length", "2")
-        self.end_headers()
-        self.wfile.write(b"{}")
-
-    def do_GET(self):
-        if self.path != "/events" or self.headers.get("Authorization") != "Bearer fixture-relay-secret":
-            self.send_error(403)
-            return
-        channel = queue.Queue()
-        with self.lock:
-            RelayHandler.connections += 1
-            RelayHandler.channels.append(channel)
-        self.send_response(200)
-        self.send_header("Content-Type", "text/event-stream")
-        self.send_header("Cache-Control", "no-cache")
-        self.end_headers()
-        try:
-            self.wfile.write(b": connected\n\n")
-            self.wfile.flush()
-            while True:
-                payload = channel.get(timeout=60)
-                self.wfile.write(b"data: " + json.dumps(payload).encode() + b"\n\n")
-                self.wfile.flush()
-        except (BrokenPipeError, ConnectionResetError, queue.Empty):
-            return
-
-    @classmethod
-    def push(cls, payload):
-        with cls.lock:
-            for channel in cls.channels:
-                channel.put(payload)
-
-
 def database(path):
     db = sqlite3.connect(path)
     db.executescript("""
@@ -247,6 +197,79 @@ def await_mail(path, deadline=20):
     raise AssertionError("worker did not persist fixture message")
 
 
+class GmailImap(socketserver.StreamRequestHandler):
+    """Stands in for imap.gmail.com: XOAUTH2, SELECT INBOX, IDLE. The worker
+    uses it only as a doorbell, so nothing here serves mail."""
+    logins = []
+    idling = []
+    lock = threading.Lock()
+
+    def handle(self):
+        self.wfile.write(b"* OK fixture Gimap ready\r\n")
+        self.wfile.flush()
+        idle_tag = None
+        while True:
+            line = self.rfile.readline()
+            if not line:
+                return
+            line = line.decode(errors="replace").strip()
+            if idle_tag and line.upper() == "DONE":
+                self.reply(idle_tag, "OK IDLE terminated")
+                with GmailImap.lock:
+                    if self in GmailImap.idling:
+                        GmailImap.idling.remove(self)
+                idle_tag = None
+                continue
+            parts = line.split(" ", 3)
+            if len(parts) < 2:
+                continue
+            tag, command = parts[0], parts[1].upper()
+            if command == "CAPABILITY":
+                self.wfile.write(b"* CAPABILITY IMAP4rev1 IDLE AUTH=XOAUTH2 SASL-IR\r\n")
+            elif command == "AUTHENTICATE" and len(parts) >= 3 and parts[2].upper() == "XOAUTH2":
+                if len(parts) == 4:
+                    initial = parts[3]
+                else:
+                    # async-imap waits for a continuation before sending it.
+                    self.wfile.write(b"+ \r\n")
+                    self.wfile.flush()
+                    initial = self.rfile.readline().decode().strip()
+                fields = dict(
+                    item.split("=", 1) for item in base64.b64decode(initial).decode().split("\x01") if "=" in item
+                )
+                with GmailImap.lock:
+                    GmailImap.logins.append((fields.get("user"), fields.get("auth")))
+            elif command in ("SELECT", "EXAMINE"):
+                self.wfile.write(b"* 1 EXISTS\r\n* OK [UIDVALIDITY 1] valid\r\n")
+            elif command == "IDLE":
+                self.wfile.write(b"+ idling\r\n")
+                self.wfile.flush()
+                idle_tag = tag
+                with GmailImap.lock:
+                    GmailImap.idling.append(self)
+                continue
+            elif command == "LOGOUT":
+                self.wfile.write(b"* BYE\r\n")
+                self.reply(tag, "OK LOGOUT")
+                return
+            elif command != "NOOP":
+                self.reply(tag, "BAD unsupported")
+                continue
+            self.reply(tag, "OK completed")
+
+    def reply(self, tag, text):
+        self.wfile.write(f"{tag} {text}\r\n".encode())
+        self.wfile.flush()
+
+    @classmethod
+    def ring(cls):
+        with cls.lock:
+            for handler in cls.idling:
+                handler.wfile.write(b"* 2 EXISTS\r\n")
+                handler.wfile.flush()
+            return len(cls.idling)
+
+
 def wake(data):
     return request(data, {"op": "wake"})
 
@@ -269,18 +292,13 @@ def main():
         raise SystemExit(f"Build worker first: {WORKER}")
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
-    relay_server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), RelayHandler)
-    threading.Thread(target=relay_server.serve_forever, daemon=True).start()
+    gimap = socketserver.ThreadingTCPServer(("127.0.0.1", 0), GmailImap)
+    gimap.daemon_threads = True
+    threading.Thread(target=gimap.serve_forever, daemon=True).start()
     with tempfile.TemporaryDirectory(prefix="sndmail-worker-fixture-") as tmp:
         data = Path(tmp)
         data.joinpath("sndmail.key").write_text(base64.b64encode(os.urandom(32)).decode())
         database(data / "sndmail.db")
-        with sqlite3.connect(data / "sndmail.db") as db:
-            db.executemany("INSERT INTO settings(key,value) VALUES (?,?)", [
-                ("gmail_push_relay_url", f"http://127.0.0.1:{relay_server.server_port}"),
-                ("gmail_push_relay_secret", "fixture-relay-secret"),
-                ("gmail_push_topic_name", "fixture-topic-1"),
-            ])
         profile_token = "fixture-profile-token"
         profiles = [{"profile_id": "fixture", "token_sha256": hashlib.sha256(profile_token.encode()).hexdigest(),
                      "account_ids": ["a-fixture"], "scopes": ["metadata"]}]
@@ -289,7 +307,8 @@ def main():
         profile_path.chmod(0o600)
         env = dict(os.environ, SNDMAIL_WORKER_FIXTURE="1", SNDMAIL_WORKER_DATA_DIR=str(data),
                    SNDMAIL_WORKER_GMAIL_URL=f"http://127.0.0.1:{server.server_port}/gmail/v1/users/me",
-                   SNDMAIL_WORKER_TOKEN_URL=f"http://127.0.0.1:{server.server_port}/token")
+                   SNDMAIL_WORKER_TOKEN_URL=f"http://127.0.0.1:{server.server_port}/token",
+                   SNDMAIL_WORKER_GMAIL_IMAP=f"127.0.0.1:{gimap.server_address[1]}")
         process = subprocess.Popen([str(WORKER)], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         try:
             deadline = time.monotonic() + 10
@@ -297,16 +316,6 @@ def main():
                 time.sleep(0.05)
             assert request(data, {"op": "health"})["data"]["protocol"] == 1
             result = await_mail(data / "sndmail.db")
-            deadline = time.monotonic() + 10
-            while time.monotonic() < deadline:
-                with RelayHandler.lock:
-                    connected = RelayHandler.connections >= 1
-                    registered = any(r.get("topicName") == "fixture-topic-1" for r in RelayHandler.registrations)
-                if connected and registered:
-                    break
-                time.sleep(0.1)
-            else:
-                raise AssertionError("worker did not register and connect to local SSE relay")
             with sqlite3.connect(data / "sndmail.db") as db:
                 assert result == ("m-fixture-1", "t-fixture-1", "Your verification code is 581942")
                 assert db.execute("SELECT COUNT(*) FROM messages_fts WHERE messages_fts MATCH 'verification'").fetchone()[0] == 1
@@ -332,7 +341,20 @@ def main():
             cursor = changes["data"]["next_cursor"]
             Handler.delta = True
             Handler.rate_limit_next_history = 1
-            RelayHandler.push({"type": "gmail-history", "email": "reader@example.test"})
+            # The Gmail account's IDLE doorbell: XOAUTH2 with the refreshed
+            # token, then an EXISTS push must run the History delta.
+            deadline = time.monotonic() + 10
+            while time.monotonic() < deadline:
+                with GmailImap.lock:
+                    logged_in = ("reader@example.test", "Bearer fixture-access-new") in GmailImap.logins
+                    idling = len(GmailImap.idling) > 0
+                if logged_in and idling:
+                    break
+                time.sleep(0.1)
+            else:
+                raise AssertionError(f"Gmail account did not IDLE with its fresh token: {GmailImap.logins}")
+            assert Handler.refreshes == initial_refreshes, "IDLE connect refreshed a still-valid token"
+            assert GmailImap.ring() == 1
             deadline = time.monotonic() + (45 if HOLD_SECONDS else 20)
             while time.monotonic() < deadline:
                 with sqlite3.connect(data / "sndmail.db") as db:
@@ -343,27 +365,8 @@ def main():
                         break
                 time.sleep(0.1)
             else:
-                raise AssertionError("SSE push did not trigger Gmail History delta")
+                raise AssertionError("Gmail IDLE push did not trigger History delta")
             assert Handler.rate_limit_responses == 1, "transient Gmail 403 was not retried"
-            with RelayHandler.lock:
-                first_connections = RelayHandler.connections
-            wake(data)
-            time.sleep(0.4)
-            with RelayHandler.lock:
-                assert RelayHandler.connections == first_connections, "ordinary wake reconnected SSE"
-            with sqlite3.connect(data / "sndmail.db") as db:
-                db.execute("UPDATE settings SET value='fixture-topic-2' WHERE key='gmail_push_topic_name'")
-            assert request(data, {"op": "relay_reconfigure"})["data"]["reconfigured"]
-            deadline = time.monotonic() + 10
-            while time.monotonic() < deadline:
-                with RelayHandler.lock:
-                    reconnected = RelayHandler.connections > first_connections
-                    reregistered = any(r.get("topicName") == "fixture-topic-2" for r in RelayHandler.registrations)
-                if reconnected and reregistered:
-                    break
-                time.sleep(0.1)
-            else:
-                raise AssertionError("relay reconfigure did not reload topic and reopen SSE")
             if HOLD_SECONDS:
                 with sqlite3.connect(data / "sndmail.db") as db:
                     delivered = db.execute("SELECT delivered FROM worker_otp_notifications WHERE message_id='m-fixture-2'").fetchone()[0]
@@ -432,7 +435,7 @@ def main():
             process.send_signal(signal.SIGTERM)
             process.communicate(timeout=3)
             assert time.monotonic() - started < 3, "worker did not cancel a bounded retry wait"
-            print("PASS: separate worker encrypted OAuth refresh, SSE push/reconfigure, transient Gmail 403 recovery, bounded retry cancellation, baseline, history delta, force resync, API profile/replay, lock, SIGKILL recovery, OTP dedup")
+            print("PASS: separate worker encrypted OAuth refresh, Gmail IDLE doorbell (XOAUTH2, fresh token) → history delta, transient Gmail 403 recovery, bounded retry cancellation, baseline, history delta, force resync, API profile/replay, lock, SIGKILL recovery, OTP dedup")
         finally:
             process.send_signal(signal.SIGTERM)
             try:
@@ -441,7 +444,6 @@ def main():
                 process.kill()
                 process.communicate()
     server.shutdown()
-    relay_server.shutdown()
 
 
 if __name__ == "__main__":

@@ -1,7 +1,0 @@
-{
-  "name": "sndmail-gmail-push",
-  "private": true,
-  "type": "module",
-  "scripts": { "start": "node server.mjs" },
-  "dependencies": { "jose": "^6.1.0" }
-}

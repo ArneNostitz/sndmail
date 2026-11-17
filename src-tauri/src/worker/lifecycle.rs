@@ -15,7 +15,6 @@ use super::mail;
 pub(crate) struct WorkerContext {
     shutdown: CancellationToken,
     mail_changed: Arc<Notify>,
-    relay_changed: Arc<Notify>,
     mail_events: broadcast::Sender<String>,
     mail_ready: Arc<AtomicBool>,
 }
@@ -25,18 +24,10 @@ impl WorkerContext {
         self.shutdown.clone()
     }
 
-    /// Coalesce bursts of push/IDLE notifications into one sync wake-up.
+    /// Coalesce bursts of IDLE notifications into one sync wake-up.
     pub(crate) fn notify_mail_changed(&self, account_id: String) {
         self.mail_changed.notify_one();
         let _ = self.mail_events.send(account_id);
-    }
-
-    pub(crate) fn notify_relay_changed(&self) {
-        self.relay_changed.notify_one();
-    }
-
-    pub(crate) async fn wait_for_relay_change(&self) {
-        self.relay_changed.notified().await;
     }
 
     pub(crate) fn subscribe_mail_changes(&self) -> broadcast::Receiver<String> {
@@ -145,7 +136,6 @@ pub async fn run() -> Result<(), String> {
     let context = WorkerContext {
         shutdown: CancellationToken::new(),
         mail_changed: Arc::new(Notify::new()),
-        relay_changed: Arc::new(Notify::new()),
         mail_events,
         mail_ready: Arc::new(AtomicBool::new(false)),
     };

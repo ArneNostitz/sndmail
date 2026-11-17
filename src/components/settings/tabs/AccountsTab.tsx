@@ -12,6 +12,7 @@ import { forceFullSync, triggerSync } from "@/services/gmail/syncManager";
 import {
   backgroundWorkerOwnsSync,
   requestWorkerResync,
+  wakeBackgroundWorker,
   wakeBackgroundWorkerAndWait,
 } from "@/services/worker/workerClient";
 import { refreshAfterAccountAdded } from "@/services/accounts/accountLifecycle";
@@ -21,7 +22,6 @@ import { SettingRow } from "../SettingRow";
 import { SelectField } from "../SelectField";
 import { ToggleRow } from "../ToggleRow";
 import { AccountDetail, PROVIDER_LABELS } from "../AccountDetail";
-import { GmailPushRelaySection } from "../GmailPushRelaySection";
 import { SyncOfflineSection } from "../SyncOfflineSection";
 
 /**
@@ -185,12 +185,18 @@ export function AccountsTab() {
       <Section title="Instant delivery">
         <ToggleRow
           label="Let servers push new mail"
-          description="Hold a connection open so the server says the moment something arrives, instead of being asked every minute. Falls back to the timer wherever a server refuses. Status is shown in each account's detail."
+          description="Hold one quiet connection per mailbox so new mail — and login codes — show up within seconds, Gmail included. No server or setup needed. Falls back to the timer wherever a server refuses."
           checked={imapIdle}
           onToggle={async () => {
             const next = !imapIdle;
             setImapIdle(next);
             await setSetting("imap_idle", next ? "true" : "false");
+            if (backgroundWorkerOwnsSync()) {
+              // The helper reads the setting on its next cycle and opens or
+              // closes its IDLE sockets — Gmail and IMAP alike.
+              await wakeBackgroundWorker().catch(() => {});
+              return;
+            }
             const { startIdleWatchers, stopIdleWatchers } =
               await import("@/services/imap/idleManager");
             if (next) await startIdleWatchers();
@@ -229,8 +235,6 @@ export function AccountsTab() {
           </Button>
         </div>
       </Section>
-
-      <GmailPushRelaySection />
 
       <Section title="Sync">
         <div className="flex items-center justify-between">

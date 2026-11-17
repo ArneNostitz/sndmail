@@ -1,0 +1,56 @@
+:root {
+  --bg: #f6f8fb;
+  --surface: #ffffff;
+  --text: #121826;
+  --muted: #5b6475;
+  --border: #e3e8f0;
+  --accent: #2f8cf4;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d1220;
+    --surface: #151c2e;
+    --text: #e8ecf4;
+    --muted: #9aa3b5;
+    --border: #262f45;
+    --accent: #6cb4ff;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+}
+a { color: var(--accent); text-underline-offset: 2px; }
+.wrap { max-width: 720px; margin: 0 auto; padding: 0 20px; }
+header { padding: 28px 0; }
+header .wrap { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.brand { display: flex; align-items: center; gap: 10px; color: var(--text); text-decoration: none; font-weight: 650; font-size: 18px; }
+.brand img { width: 32px; height: 32px; border-radius: 8px; }
+nav { display: flex; gap: 18px; font-size: 15px; }
+nav a { color: var(--muted); text-decoration: none; }
+nav a:hover, nav a[aria-current="page"] { color: var(--text); }
+main { padding: 24px 0 64px; }
+.hero { text-align: center; padding: 40px 0 24px; }
+.hero img { width: 112px; height: 112px; border-radius: 26px; box-shadow: 0 12px 40px rgba(47, 140, 244, 0.28); }
+h1 { font-size: clamp(30px, 6vw, 42px); line-height: 1.15; letter-spacing: -0.02em; margin: 24px 0 12px; }
+.lead { font-size: 19px; color: var(--muted); max-width: 34em; margin: 0 auto 28px; }
+.button {
+  display: inline-block; padding: 12px 22px; border-radius: 10px;
+  background: var(--accent); color: #fff; text-decoration: none; font-weight: 600;
+}
+.points { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin: 48px 0 0; padding: 0; list-style: none; }
+.points li { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; }
+.points strong { display: block; margin-bottom: 4px; }
+.points span { color: var(--muted); font-size: 15px; }
+article h1 { font-size: 32px; margin-top: 8px; }
+article h2 { font-size: 20px; margin: 32px 0 8px; }
+article p, article li { color: var(--text); }
+article .updated { color: var(--muted); font-size: 14px; }
+footer { border-top: 1px solid var(--border); padding: 24px 0 40px; color: var(--muted); font-size: 14px; }
+footer .wrap { display: flex; flex-wrap: wrap; gap: 8px 18px; }
+footer a { color: var(--muted); }

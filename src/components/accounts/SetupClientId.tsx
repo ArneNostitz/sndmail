@@ -88,6 +88,13 @@ export function SetupClientId({ onComplete, onCancel, zIndex }: SetupClientIdPro
               {copied ? "Copied!" : REDIRECT_URI}
             </button></Tooltip>
           </li>
+          <li>
+            Under Google Auth Platform → Audience, press <em>Publish app</em>. Left in
+            “Testing”, Google blocks every address not listed as a test user
+            (“Access blocked … 403: access_denied”) and signs you out again
+            every 7 days. Unverified is fine for your own accounts: at sign-in
+            choose Advanced → Go to sndmail.
+          </li>
           <li>Copy the Client ID and Client Secret below</li>
         </ol>
 

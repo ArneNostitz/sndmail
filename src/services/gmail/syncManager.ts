@@ -241,7 +241,7 @@ export async function syncAccount(accountId: string): Promise<void> {
 
 /**
  * Catch up once when the app starts. Subsequent Gmail and IMAP work is driven
- * by the push relay and IDLE notifications, with manual refresh as fallback.
+ * by IMAP IDLE notifications, with manual refresh as fallback.
  */
 export function startInitialSync(accountIds: string[]): void {
   void runSync(accountIds).catch((error) => {

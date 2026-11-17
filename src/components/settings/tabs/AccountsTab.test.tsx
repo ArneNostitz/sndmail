@@ -17,9 +17,6 @@ vi.mock("../AccountDetail", () => ({
     </div>
   ),
 }));
-vi.mock("../GmailPushRelaySection", () => ({
-  GmailPushRelaySection: () => <div>gmail push relay</div>,
-}));
 vi.mock("../SyncOfflineSection", () => ({
   SyncOfflineSection: () => <div>sync and offline</div>,
 }));
@@ -61,7 +58,6 @@ describe("AccountsTab", () => {
     expect(screen.getByText("Gmail")).toBeInTheDocument();
     expect(screen.getByText("Instant delivery")).toBeInTheDocument();
     expect(screen.getByText("Google API")).toBeInTheDocument();
-    expect(screen.getByText("gmail push relay")).toBeInTheDocument();
     expect(screen.getByText("sync and offline")).toBeInTheDocument();
   });
 

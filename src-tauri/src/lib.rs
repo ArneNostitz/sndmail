@@ -69,11 +69,6 @@ fn worker_wake() -> Result<(), String> {
     worker_send_control("wake")
 }
 
-#[tauri::command]
-fn worker_reconfigure_relay() -> Result<(), String> {
-    worker_send_control("relay_reconfigure")
-}
-
 /// Create a mailbox from the account form.
 ///
 /// Validation, credential encryption and the database write all happen here so
@@ -325,7 +320,6 @@ pub fn run() {
             worker_list_relay_profiles,
             worker_update_relay_accounts,
             worker_wake,
-            worker_reconfigure_relay,
             semantic_search::semantic_search_status,
             semantic_search::semantic_search_set_enabled,
             semantic_search::semantic_search_download_model,
